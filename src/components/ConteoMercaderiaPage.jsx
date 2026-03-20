@@ -6,6 +6,7 @@ import { generateId } from '../utils/helpers';
 const EMPTY_FORM = {
     articulo: '',
     descripcion: '',
+    tipoTela: '',
     color: '',
     fechaIngreso: '',
     taller: '',
@@ -24,6 +25,11 @@ export default function ConteoMercaderiaPage() {
     const productos = state.config?.posProductos || [];
     const cortes = state.config?.cortes || [];
     const talleres = state.config?.talleres || [];
+    const telasActivas = (state.telas || [])
+        .filter((tela) => tela?.activo !== false)
+        .map((tela) => tela?.nombre || tela?.descripcion || '')
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [search, setSearch] = useState('');
 
@@ -64,7 +70,7 @@ export default function ConteoMercaderiaPage() {
         const q = search.trim().toLowerCase();
         if (!q) return conteos;
         return conteos.filter((item) =>
-            [item.articulo, item.codigoInterno, item.descripcion, item.color, item.taller]
+            [item.articulo, item.codigoInterno, item.descripcion, item.tipoTela, item.color, item.taller]
                 .some((value) => (value || '').toLowerCase().includes(q))
         );
     }, [conteos, search]);
@@ -100,6 +106,7 @@ export default function ConteoMercaderiaPage() {
             codigoInterno: articulo,
             articulo,
             descripcion: formData.descripcion || linkedArticle?.descripcion || articulo,
+            tipoTela: formData.tipoTela || '',
             taller: formData.taller || linkedArticle?.proveedor || '',
             cantidadOriginal: toNumber(formData.cantidadOriginal || linkedArticle?.stock),
             cantidadContada: toNumber(formData.cantidadContada),
@@ -138,6 +145,7 @@ export default function ConteoMercaderiaPage() {
                 codigoInterno: normalizeCode(item.articulo || item.codigoInterno),
                 articulo: normalizeCode(item.articulo || item.codigoInterno),
                 descripcion: item.descripcion || linkedArticle?.descripcion || '',
+                tipoTela: item.tipoTela || '',
                 productId: item.productId || productos.find((producto) => normalizeCode(producto.codigoInterno) === normalizeCode(item.articulo || item.codigoInterno))?.id || null
             };
         });
@@ -145,12 +153,13 @@ export default function ConteoMercaderiaPage() {
     };
 
     const exportCsv = () => {
-        const headers = ['Articulo', 'Descripcion', 'Color', 'Fecha ingreso', 'Taller', 'Cantidad original', 'Cantidad contada', 'Cantidad ellos', 'Fallado', 'Diferencia'];
+        const headers = ['Articulo', 'Descripcion', 'Tipo tela', 'Color', 'Fecha ingreso', 'Taller', 'Cantidad original', 'Cantidad contada', 'Cantidad ellos', 'Fallado', 'Diferencia'];
         const rows = conteos.map((item) => {
             const diferencia = toNumber(item.cantidadContada) - toNumber(item.cantidadOriginal);
             return [
                 item.articulo,
                 item.descripcion,
+                item.tipoTela,
                 item.color,
                 item.fechaIngreso,
                 item.taller,
@@ -183,7 +192,7 @@ export default function ConteoMercaderiaPage() {
                         <Boxes /> Conteo de Mercaderia
                     </h2>
                     <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                        Registro de stock contado por articulo, color y taller. El stock se consolida automaticamente en Articulos.
+                        Registro de stock contado por articulo, tela, color y taller. El stock se consolida automaticamente en Articulos.
                     </p>
                 </div>
                 <button className="btn btn-secondary" onClick={exportCsv}>
@@ -201,6 +210,7 @@ export default function ConteoMercaderiaPage() {
                         onChange={(e) => setFormData((prev) => autofillArticle(e.target.value, prev))}
                     />
                     <input className="form-input" placeholder="Descripcion" value={formData.descripcion} onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))} />
+                    <input className="form-input" list="conteo-telas" placeholder="Tipo de tela" value={formData.tipoTela} onChange={(e) => setFormData((prev) => ({ ...prev, tipoTela: e.target.value }))} />
                     <input className="form-input" placeholder="Color / modelo" value={formData.color} onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))} />
                     <input className="form-input" type="date" value={formData.fechaIngreso} onChange={(e) => setFormData((prev) => ({ ...prev, fechaIngreso: e.target.value }))} />
                     <input className="form-input" list="conteo-talleres" placeholder="Taller" value={formData.taller} onChange={(e) => setFormData((prev) => ({ ...prev, taller: e.target.value }))} />
@@ -216,6 +226,11 @@ export default function ConteoMercaderiaPage() {
                         </option>
                     ))}
                 </datalist>
+                <datalist id="conteo-telas">
+                    {telasActivas.map((tela) => (
+                        <option key={tela} value={tela} />
+                    ))}
+                </datalist>
                 <datalist id="conteo-talleres">
                     {talleres.map((taller) => (
                         <option key={taller} value={taller} />
@@ -225,7 +240,7 @@ export default function ConteoMercaderiaPage() {
                     <input
                         className="form-input"
                         style={{ maxWidth: 320 }}
-                        placeholder="Buscar por articulo, descripcion, color o taller..."
+                        placeholder="Buscar por articulo, tela, descripcion, color o taller..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
@@ -240,7 +255,7 @@ export default function ConteoMercaderiaPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
                         <thead>
                             <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                                {['Articulo', 'Descripcion', 'Color', 'Fecha ingreso', 'Taller', 'Original', 'Contada', 'Ellos', 'Fallado', 'Diferencia', 'Accion'].map((label) => (
+                                {['Articulo', 'Descripcion', 'Tela', 'Color', 'Fecha ingreso', 'Taller', 'Original', 'Contada', 'Ellos', 'Fallado', 'Diferencia', 'Accion'].map((label) => (
                                     <th key={label} style={{ padding: '12px 10px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)' }}>{label}</th>
                                 ))}
                             </tr>
@@ -252,6 +267,7 @@ export default function ConteoMercaderiaPage() {
                                     <tr key={item.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
                                         <td style={{ padding: 10 }}><input className="form-input" list="conteo-articulos" value={item.articulo || ''} onChange={(e) => handleCellChange(item.id, 'articulo', e.target.value)} /></td>
                                         <td style={{ padding: 10 }}><input className="form-input" value={item.descripcion || ''} onChange={(e) => handleCellChange(item.id, 'descripcion', e.target.value)} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-telas" value={item.tipoTela || ''} onChange={(e) => handleCellChange(item.id, 'tipoTela', e.target.value)} /></td>
                                         <td style={{ padding: 10 }}><input className="form-input" value={item.color || ''} onChange={(e) => handleCellChange(item.id, 'color', e.target.value)} /></td>
                                         <td style={{ padding: 10 }}><input className="form-input" type="date" value={item.fechaIngreso || ''} onChange={(e) => handleCellChange(item.id, 'fechaIngreso', e.target.value)} /></td>
                                         <td style={{ padding: 10 }}><input className="form-input" list="conteo-talleres" value={item.taller || ''} onChange={(e) => handleCellChange(item.id, 'taller', e.target.value)} /></td>

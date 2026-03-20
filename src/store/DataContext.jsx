@@ -15,6 +15,7 @@ const normalizeText = (value) => (value || '').toString().trim();
 const sanitizeStockBreakdown = (entries = []) =>
     entries
         .map((entry) => ({
+            tipoTela: normalizeText(entry.tipoTela),
             color: normalizeText(entry.color),
             taller: normalizeText(entry.taller),
             fechaIngreso: normalizeText(entry.fechaIngreso),
@@ -23,7 +24,7 @@ const sanitizeStockBreakdown = (entries = []) =>
             cantidadEllos: Number.parseInt(entry.cantidadEllos || 0, 10) || 0,
             fallado: Number.parseInt(entry.fallado || 0, 10) || 0
         }))
-        .filter((entry) => entry.color || entry.taller || entry.cantidadOriginal || entry.cantidadContada || entry.cantidadEllos || entry.fallado);
+        .filter((entry) => entry.tipoTela || entry.color || entry.taller || entry.cantidadOriginal || entry.cantidadContada || entry.cantidadEllos || entry.fallado);
 
 const upsertPosProducts = (existingProducts = [], incomingProducts = []) => {
     const merged = [...existingProducts];
@@ -73,6 +74,7 @@ const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = [
 
         const group = groupedByCode.get(code);
         const descripcion = normalizeText(item.descripcion);
+        const tipoTela = normalizeText(item.tipoTela);
         const taller = normalizeText(item.taller);
         const color = normalizeText(item.color);
         const fechaIngreso = normalizeText(item.fechaIngreso);
@@ -86,6 +88,7 @@ const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = [
         if (taller) group.proveedor = taller;
         group.stock += stockDisponible;
         group.stockPorColor.push({
+            tipoTela,
             color,
             taller,
             fechaIngreso,
@@ -702,6 +705,7 @@ function dataReducer(state, action) {
                 codigoInterno: normalizeProductCode(item.codigoInterno || item.articulo),
                 articulo: normalizeProductCode(item.codigoInterno || item.articulo),
                 descripcion: normalizeText(item.descripcion),
+                tipoTela: normalizeText(item.tipoTela),
                 color: normalizeText(item.color),
                 taller: normalizeText(item.taller),
                 fechaIngreso: normalizeText(item.fechaIngreso),
@@ -742,6 +746,7 @@ function dataReducer(state, action) {
                     current.proveedor = item.taller || current.proveedor;
                     current.stock += stockDisponible;
                     current.stockPorColor = [...(current.stockPorColor || []), {
+                        tipoTela: item.tipoTela,
                         color: item.color,
                         taller: item.taller,
                         fechaIngreso: item.fechaIngreso,
