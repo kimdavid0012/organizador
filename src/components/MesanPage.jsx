@@ -12,13 +12,13 @@ export default function MesanPage() {
     const [concepto, setConcepto] = useState('');
     const [categoria, setCategoria] = useState(CATEGORIES[0]);
     const [monto, setMonto] = useState('');
-    const [ventasDia, setVentasDia] = useState('');
 
     if (user.role !== 'admin') {
         return <div style={{ padding: 'var(--sp-4)' }}>Solo visible para administrador.</div>;
     }
 
     const movimientos = state.config.mesanMovimientos || [];
+    const ventasDiarias = state.config.mesanVentasDiarias || [];
     const gastosPosDia = (state.config.posGastos || [])
         .filter((item) => (item.fecha || '').slice(0, 10) === fecha)
         .map((item) => ({
@@ -27,9 +27,11 @@ export default function MesanPage() {
             concepto: item.concepto,
             categoria: item.tipo,
             monto: Number(item.monto || 0),
-            ventasDia: 0,
             syncedFromPos: true
         }));
+
+    const legacyVentaDia = movimientos.find((item) => item.fecha === fecha && Number(item.ventasDia || 0) > 0)?.ventasDia || 0;
+    const ventaDelDia = ventasDiarias.find((item) => item.fecha === fecha)?.monto || legacyVentaDia || 0;
     const movimientosDia = [...gastosPosDia, ...movimientos.filter((item) => item.fecha === fecha)];
 
     const weeklySummary = useMemo(() => {
@@ -49,14 +51,26 @@ export default function MesanPage() {
                     fecha,
                     concepto: concepto.trim(),
                     categoria,
-                    monto: Number(monto),
-                    ventasDia: Number(ventasDia || 0)
+                    monto: Number(monto)
                 },
                 ...movimientos
             ]
         });
         setConcepto('');
         setMonto('');
+    };
+
+    const updateVentaDia = (value) => {
+        const nextEntries = ventasDiarias.filter((item) => item.fecha !== fecha);
+        updateConfig({
+            mesanVentasDiarias: [
+                ...nextEntries,
+                {
+                    fecha,
+                    monto: Number(value || 0)
+                }
+            ]
+        });
     };
 
     return (
@@ -71,11 +85,18 @@ export default function MesanPage() {
             </div>
 
             <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, alignItems: 'end' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(220px, 1fr)', gap: 12, alignItems: 'end', marginBottom: 16 }}>
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">Fecha</label>
                         <input type="date" className="form-input" value={fecha} onChange={(event) => setFecha(event.target.value)} />
                     </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Venta total del dia</label>
+                        <input type="number" className="form-input" value={ventaDelDia} onChange={(event) => updateVentaDia(event.target.value)} />
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, alignItems: 'end' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">Categoria</label>
                         <select className="form-select" value={categoria} onChange={(event) => setCategoria(event.target.value)}>
@@ -89,10 +110,6 @@ export default function MesanPage() {
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">Gasto</label>
                         <input type="number" className="form-input" value={monto} onChange={(event) => setMonto(event.target.value)} />
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Venta total dia</label>
-                        <input type="number" className="form-input" value={ventasDia} onChange={(event) => setVentasDia(event.target.value)} />
                     </div>
                     <button className="btn btn-primary" onClick={addMovement}><Plus size={16} /> Agregar</button>
                 </div>
@@ -108,7 +125,7 @@ export default function MesanPage() {
                                     <div style={{ fontWeight: 'var(--fw-semibold)' }}>{item.concepto}</div>
                                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.categoria}{item.syncedFromPos ? ' · POS' : ''}</div>
                                 </div>
-                                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Venta dia: ${Number(item.ventasDia || 0).toLocaleString('es-AR')}</div>
+                                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Venta dia: ${Number(ventaDelDia || 0).toLocaleString('es-AR')}</div>
                                 <div style={{ color: '#fca5a5', fontWeight: 'var(--fw-bold)' }}>-${Number(item.monto || 0).toLocaleString('es-AR')}</div>
                             </div>
                         ))}
