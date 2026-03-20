@@ -40,7 +40,19 @@ export default function EmpleadosPage() {
     const [newEmpName, setNewEmpName] = useState('');
     const [newEmpPuesto, setNewEmpPuesto] = useState('');
 
-    const baseEmployees = (state.config.empleados || []).length ? state.config.empleados : DEFAULT_EMPLOYEES;
+    const baseEmployees = useMemo(() => {
+        const merged = new Map();
+
+        [...DEFAULT_EMPLOYEES, ...(state.config.empleados || [])].forEach((employee) => {
+            const key = (employee.nombre || '').trim().toLowerCase() || employee.id;
+            merged.set(key, {
+                ...(merged.get(key) || {}),
+                ...employee
+            });
+        });
+
+        return Array.from(merged.values());
+    }, [state.config.empleados]);
     const asistencia = state.config.asistencia || [];
     const isAdminOwner = user?.email === ADMIN_EMAIL;
 
@@ -212,7 +224,7 @@ export default function EmpleadosPage() {
                 })}
             </div>
 
-            {(user?.role === 'admin' || user?.role === 'encargada') && (
+            {isAdminOwner && (
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <h3 style={{ marginBottom: 12 }}>Agregar empleado fijo</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12 }}>
