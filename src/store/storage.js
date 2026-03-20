@@ -48,6 +48,7 @@ export const DEFAULT_DATA = {
         cortes: [],
         empleados: [],
         asistencia: [],
+        clientes: [],
         pedidosOnline: [],
         posPermissions: { encargadaCanCloseZ: false, encargadaCanAddExpenses: false },
         posCerradoZ: [],
@@ -64,6 +65,18 @@ export const DEFAULT_DATA = {
             wooKey: '',
             wooSecret: '',
             openaiKey: ''
+        },
+        marketingCache: {
+            accountInsights: null,
+            campaigns: [],
+            adSets: {},
+            aiReport: '',
+            lastSyncedAt: null
+        },
+        paginaWebCache: {
+            allProducts: [],
+            productStatsById: {},
+            lastLoadedAt: null
         }
     }
 };
@@ -85,6 +98,7 @@ export function normalizeData(parsed) {
             cortes: parsed.config?.cortes || [],
             empleados: parsed.config?.empleados || [],
             asistencia: parsed.config?.asistencia || [],
+            clientes: parsed.config?.clientes || [],
             pedidosOnline: parsed.config?.pedidosOnline || [],
             posPermissions: parsed.config?.posPermissions || { encargadaCanCloseZ: false, encargadaCanAddExpenses: false },
             posCerradoZ: parsed.config?.posCerradoZ || [],
@@ -94,6 +108,14 @@ export function normalizeData(parsed) {
             marketing: {
                 ...DEFAULT_DATA.config.marketing,
                 ...parsed.config?.marketing,
+            },
+            marketingCache: {
+                ...DEFAULT_DATA.config.marketingCache,
+                ...parsed.config?.marketingCache
+            },
+            paginaWebCache: {
+                ...DEFAULT_DATA.config.paginaWebCache,
+                ...parsed.config?.paginaWebCache
             }
         }
     };

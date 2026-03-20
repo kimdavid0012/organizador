@@ -135,17 +135,18 @@ REGLAS DE ANÁLISIS:
 - Respondé siempre en español, tono profesional pero directo.`;
 
 export default function MarketingSection() {
-    const { state } = useData();
+    const { state, setMarketingCache } = useData();
     const { config } = state;
     const marketing = config.marketing || {};
+    const marketingCache = config.marketingCache || {};
 
     const [loading, setLoading] = useState(false);
-    const [accountInsights, setAccountInsights] = useState(null);
-    const [campaigns, setCampaigns] = useState(null);
+    const [accountInsights, setAccountInsights] = useState(marketingCache.accountInsights || null);
+    const [campaigns, setCampaigns] = useState(marketingCache.campaigns?.length ? marketingCache.campaigns : null);
     const [expandedCampaign, setExpandedCampaign] = useState(null);
-    const [adSets, setAdSets] = useState({});
+    const [adSets, setAdSets] = useState(marketingCache.adSets || {});
     const [loadingAdSets, setLoadingAdSets] = useState(null);
-    const [aiReport, setAiReport] = useState('');
+    const [aiReport, setAiReport] = useState(marketingCache.aiReport || '');
     const [loadingAiReport, setLoadingAiReport] = useState(false);
 
     // Campaign detail view
@@ -153,6 +154,24 @@ export default function MarketingSection() {
     const [dailyInsights, setDailyInsights] = useState(null);
     const [loadingDaily, setLoadingDaily] = useState(false);
     const canvasRef = useRef(null);
+
+    useEffect(() => {
+        setAccountInsights(marketingCache.accountInsights || null);
+        setCampaigns(marketingCache.campaigns?.length ? marketingCache.campaigns : null);
+        setAdSets(marketingCache.adSets || {});
+        setAiReport(marketingCache.aiReport || '');
+    }, [marketingCache.accountInsights, marketingCache.campaigns, marketingCache.adSets, marketingCache.aiReport]);
+
+    const persistMarketingCache = (overrides = {}) => {
+        setMarketingCache({
+            accountInsights,
+            campaigns: campaigns || [],
+            adSets,
+            aiReport,
+            lastSyncedAt: marketingCache.lastSyncedAt || new Date().toISOString(),
+            ...overrides
+        });
+    };
 
     // ============ SCORING & RECOMMENDATIONS ENGINE ============
     const scoreCampaign = (campaign) => {
@@ -237,6 +256,13 @@ export default function MarketingSection() {
             ]);
             setAccountInsights(insights);
             setCampaigns(camps);
+            persistMarketingCache({
+                accountInsights: insights,
+                campaigns: camps,
+                adSets,
+                aiReport,
+                lastSyncedAt: new Date().toISOString()
+            });
         } catch (err) {
             alert(`❌ Error al conectar con Meta: ${err.message}`);
         } finally {
@@ -254,10 +280,14 @@ export default function MarketingSection() {
             setLoadingAdSets(campaignId);
             try {
                 const sets = await metaService.fetchAdSets(config, campaignId);
-                setAdSets(prev => ({ ...prev, [campaignId]: sets }));
+                const nextAdSets = { ...adSets, [campaignId]: sets };
+                setAdSets(nextAdSets);
+                persistMarketingCache({ adSets: nextAdSets });
             } catch (err) {
                 console.error('Error loading ad sets:', err);
-                setAdSets(prev => ({ ...prev, [campaignId]: [] }));
+                const nextAdSets = { ...adSets, [campaignId]: [] };
+                setAdSets(nextAdSets);
+                persistMarketingCache({ adSets: nextAdSets });
             } finally {
                 setLoadingAdSets(null);
             }
@@ -507,7 +537,9 @@ export default function MarketingSection() {
                 throw new Error(result.error?.message || 'No se pudo generar el reporte IA.');
             }
 
-            setAiReport(result.choices?.[0]?.message?.content || 'No se recibió contenido del modelo.');
+            const reportText = result.choices?.[0]?.message?.content || 'No se recibió contenido del modelo.';
+            setAiReport(reportText);
+            persistMarketingCache({ aiReport: reportText });
         } catch (err) {
             console.error('Error generating AI marketing report:', err);
             alert(`Error generando reporte IA: ${err.message}`);

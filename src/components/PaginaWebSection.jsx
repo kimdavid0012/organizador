@@ -4,12 +4,13 @@ import { useData } from '../store/DataContext';
 import { wooService } from '../utils/wooService';
 
 export default function PaginaWebSection() {
-    const { state } = useData();
+    const { state, setPaginaWebCache } = useData();
     const { config } = state;
     const marketing = config.marketing || {};
+    const paginaWebCache = config.paginaWebCache || {};
 
     const [loading, setLoading] = useState(false);
-    const [allProducts, setAllProducts] = useState(null);
+    const [allProducts, setAllProducts] = useState(paginaWebCache.allProducts?.length ? paginaWebCache.allProducts : null);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState('itemsSold'); // itemsSold, netRevenue, productName, ordersCount
     const [sortDir, setSortDir] = useState('desc');
@@ -20,6 +21,19 @@ export default function PaginaWebSection() {
     const [loadingStats, setLoadingStats] = useState(false);
 
     const canvasRef = useRef(null);
+
+    useEffect(() => {
+        setAllProducts(paginaWebCache.allProducts?.length ? paginaWebCache.allProducts : null);
+    }, [paginaWebCache.allProducts]);
+
+    const persistPaginaWebCache = (overrides = {}) => {
+        setPaginaWebCache({
+            allProducts: allProducts || [],
+            productStatsById: paginaWebCache.productStatsById || {},
+            lastLoadedAt: paginaWebCache.lastLoadedAt || new Date().toISOString(),
+            ...overrides
+        });
+    };
 
     const handleLoadAll = async () => {
         setLoading(true);
@@ -38,6 +52,10 @@ export default function PaginaWebSection() {
                 variations: tp.extended_info?.variations || []
             }));
             setAllProducts(mapped);
+            persistPaginaWebCache({
+                allProducts: mapped,
+                lastLoadedAt: new Date().toISOString()
+            });
         } catch (err) {
             alert(`❌ Error al cargar productos: ${err.message}`);
         } finally {
@@ -47,14 +65,32 @@ export default function PaginaWebSection() {
 
     const handleSelectProduct = async (product) => {
         setSelectedProduct(product);
+        const cachedStats = paginaWebCache.productStatsById?.[product.productId];
+        if (cachedStats) {
+            setProductStats(cachedStats);
+            return;
+        }
         setLoadingStats(true);
         setProductStats(null);
         try {
             const stats = await wooService.fetchProductStats(config, product.productId);
             setProductStats(stats);
+            persistPaginaWebCache({
+                productStatsById: {
+                    ...(paginaWebCache.productStatsById || {}),
+                    [product.productId]: stats
+                }
+            });
         } catch (err) {
             console.error('Error loading product stats:', err);
-            setProductStats({ intervals: [], totals: {} });
+            const emptyStats = { intervals: [], totals: {} };
+            setProductStats(emptyStats);
+            persistPaginaWebCache({
+                productStatsById: {
+                    ...(paginaWebCache.productStatsById || {}),
+                    [product.productId]: emptyStats
+                }
+            });
         } finally {
             setLoadingStats(false);
         }

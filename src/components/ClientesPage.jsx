@@ -34,13 +34,14 @@ const ARGENTINA_PROVINCES = {
 
 const normalizeWooPhone = (phone) => {
     if (!phone) return '';
-    return phone.toString().replace(/\s+/g, ' ').trim();
+    return phone.toString().replace(/\s+/g, ' ').replace(/[^\d+\-() ]/g, '').trim();
 };
 
-const normalizeWooProvince = (billing = {}) => {
-    const stateCode = (billing.state || '').trim().toUpperCase();
-    const province = ARGENTINA_PROVINCES[stateCode] || billing.state || '';
-    const city = (billing.city || '').trim();
+const normalizeWooProvince = (billing = {}, shipping = {}) => {
+    const rawState = (billing.state || shipping.state || '').trim();
+    const stateCode = rawState.toUpperCase();
+    const province = ARGENTINA_PROVINCES[stateCode] || rawState || '';
+    const city = (billing.city || shipping.city || '').trim();
 
     if (province && city && city.toLowerCase() !== province.toLowerCase()) {
         return `${province} - ${city}`;
@@ -69,8 +70,12 @@ export default function ClientesPage() {
         try {
             const wooCustomers = await wooService.fetchCustomers(state.config);
             let imported = 0;
+            let updated = 0;
             wooCustomers.forEach(wc => {
                 const nombre = `${wc.first_name || ''} ${wc.last_name || ''}`.trim() || wc.email || 'Sin nombre';
+                const telefono = normalizeWooPhone(wc.billing?.phone || wc.shipping?.phone || '');
+                const provincia = normalizeWooProvince(wc.billing, wc.shipping);
+                const direccion = wc.billing?.address_1 || wc.shipping?.address_1 || '';
                 // Check if already exists by email
                 const exists = clientes.find(c => 
                     c.email === wc.email || 
@@ -81,21 +86,37 @@ export default function ClientesPage() {
                         id: generateId(),
                         nombre,
                         email: wc.email || '',
-                        telefono: normalizeWooPhone(wc.billing?.phone),
+                        telefono,
                         cuit: '',
-                        provincia: normalizeWooProvince(wc.billing),
+                        provincia,
                         expreso: '',
                         descuento: 0,
-                        direccion: wc.billing?.address_1 || '',
+                        direccion,
                         origen: 'WooCommerce',
                         wooId: wc.id,
                         totalCompras: parseFloat(wc.total_spent || 0),
                         cantidadPedidos: parseInt(wc.orders_count || 0)
                     });
                     imported++;
+                } else if (exists) {
+                    const changes = {};
+                    if (!exists.telefono && telefono) changes.telefono = telefono;
+                    if (!exists.provincia && provincia) changes.provincia = provincia;
+                    if (!exists.direccion && direccion) changes.direccion = direccion;
+                    if (!exists.wooId) changes.wooId = wc.id;
+                    if (wc.total_spent && Number(exists.totalCompras || 0) !== Number(wc.total_spent || 0)) {
+                        changes.totalCompras = parseFloat(wc.total_spent || 0);
+                    }
+                    if (wc.orders_count && Number(exists.cantidadPedidos || 0) !== Number(wc.orders_count || 0)) {
+                        changes.cantidadPedidos = parseInt(wc.orders_count || 0, 10);
+                    }
+                    if (Object.keys(changes).length > 0) {
+                        updateCliente(exists.id, changes);
+                        updated++;
+                    }
                 }
             });
-            alert(`✅ Se importaron ${imported} clientes nuevos de WooCommerce (${wooCustomers.length} encontrados, ${wooCustomers.length - imported} ya existían).`);
+            alert(`✅ WooCommerce sincronizado: ${imported} clientes nuevos, ${updated} clientes completados/actualizados, ${wooCustomers.length} encontrados en total.`);
         } catch (err) {
             alert(`❌ Error al importar clientes: ${err.message}`);
         } finally {

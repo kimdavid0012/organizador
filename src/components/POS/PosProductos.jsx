@@ -25,7 +25,7 @@ const DEFAULT_PRODUCT = {
 };
 
 export default function PosProductos() {
-    const { state, addPosProduct, updatePosProduct, deletePosProduct, importPosProducts } = useData();
+    const { state, addPosProduct, updatePosProduct, deletePosProduct, importPosProducts, fetchWooProducts } = useData();
     const productos = state.config.posProductos || [];
 
     const [search, setSearch] = useState('');
@@ -36,6 +36,7 @@ export default function PosProductos() {
 
     const fileInputRef = useRef(null);
     const [dragActive, setDragActive] = useState(false);
+    const [importingWoo, setImportingWoo] = useState(false);
 
     const formatCurrency = (value) => {
         const amount = Number(value || 0);
@@ -194,6 +195,19 @@ export default function PosProductos() {
         reader.readAsArrayBuffer(file);
     };
 
+    const handleImportFromWeb = async () => {
+        setImportingWoo(true);
+        try {
+            const count = await fetchWooProducts();
+            alert(`✅ Se importaron/actualizaron ${count} artículos desde WooCommerce con sus precios.`);
+        } catch (error) {
+            console.error(error);
+            alert(`❌ Error al importar artículos desde la web: ${error.message}`);
+        } finally {
+            setImportingWoo(false);
+        }
+    };
+
     return (
         <div className="pos-productos">
             <div className="pos-header-actions">
@@ -210,6 +224,11 @@ export default function PosProductos() {
                     <button className="btn btn-secondary" onClick={handleActivateAll}>
                         ✅ Activar Todos
                     </button>
+                    {state.config.marketing?.wooUrl && (
+                        <button className="btn btn-secondary" onClick={handleImportFromWeb} disabled={importingWoo}>
+                            <Upload size={16} /> {importingWoo ? 'Importando Web...' : 'Importar de la Web'}
+                        </button>
+                    )}
                     <button className="btn btn-secondary" onClick={() => setIsExcelModalOpen(true)}>
                         <FileSpreadsheet size={16} /> Importar Excel
                     </button>

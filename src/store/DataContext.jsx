@@ -75,7 +75,9 @@ const ACTION_TYPES = {
     IMPORT_WOO_ORDERS: 'IMPORT_WOO_ORDERS',
     IMPORT_WOO_PRODUCTS: 'IMPORT_WOO_PRODUCTS',
     SET_META_ADS_DATA: 'SET_META_ADS_DATA',
-    SET_WOO_ANALYTICS_DATA: 'SET_WOO_ANALYTICS_DATA'
+    SET_WOO_ANALYTICS_DATA: 'SET_WOO_ANALYTICS_DATA',
+    SET_MARKETING_CACHE: 'SET_MARKETING_CACHE',
+    SET_PAGINA_WEB_CACHE: 'SET_PAGINA_WEB_CACHE'
 };
 
 function dataReducer(state, action) {
@@ -500,6 +502,36 @@ function dataReducer(state, action) {
                 config: {
                     ...state.config,
                     wooAnalyticsTop: action.payload
+                }
+            };
+        }
+
+        case ACTION_TYPES.SET_MARKETING_CACHE: {
+            return {
+                ...state,
+                config: {
+                    ...state.config,
+                    marketingCache: {
+                        ...(state.config.marketingCache || {}),
+                        ...action.payload
+                    }
+                }
+            };
+        }
+
+        case ACTION_TYPES.SET_PAGINA_WEB_CACHE: {
+            return {
+                ...state,
+                config: {
+                    ...state.config,
+                    paginaWebCache: {
+                        ...(state.config.paginaWebCache || {}),
+                        ...action.payload,
+                        productStatsById: {
+                            ...((state.config.paginaWebCache || {}).productStatsById || {}),
+                            ...(action.payload.productStatsById || {})
+                        }
+                    }
                 }
             };
         }
@@ -940,6 +972,8 @@ export function DataProvider({ children }) {
         addCliente: (cliente) => dispatch({ type: ACTION_TYPES.ADD_CLIENTE, payload: cliente }),
         updateCliente: (id, changes) => dispatch({ type: ACTION_TYPES.UPDATE_CLIENTE, payload: { id, changes } }),
         deleteCliente: (id) => dispatch({ type: ACTION_TYPES.DELETE_CLIENTE, payload: id }),
+        setMarketingCache: (cache) => dispatch({ type: ACTION_TYPES.SET_MARKETING_CACHE, payload: cache }),
+        setPaginaWebCache: (cache) => dispatch({ type: ACTION_TYPES.SET_PAGINA_WEB_CACHE, payload: cache }),
 
         // Reservas de Ticket
         saveReservation: (reserva) => dispatch({ type: ACTION_TYPES.SAVE_RESERVATION, payload: reserva }),
