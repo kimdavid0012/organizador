@@ -51,12 +51,17 @@
         height: auto;
     }
     .pos-nav {
+        position: sticky;
+        top: 0;
+        z-index: 20;
         flex-direction: row;
         overflow-x: auto;
         gap: 4px;
         padding: 8px;
         border-bottom: 1px solid var(--border-color);
         border-right: none;
+        background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+        backdrop-filter: blur(12px);
     }
     .pos-nav-btn {
         font-size: 11px;
@@ -65,7 +70,7 @@
         flex-shrink: 0;
     }
     .pos-content {
-        padding: 8px;
+        padding: 8px 8px 84px;
         overflow-y: auto;
     }
 }

@@ -8,6 +8,21 @@ import { metaService } from '../utils/metaService';
 
 const DataContext = createContext(null);
 
+const parseWooPrice = (...values) => {
+    for (const value of values) {
+        if (value === null || value === undefined || value === '') continue;
+        const normalized = value
+            .toString()
+            .trim()
+            .replace(/[^\d,.-]/g, '')
+            .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+            .replace(',', '.');
+        const parsed = Number.parseFloat(normalized);
+        if (!Number.isNaN(parsed)) return parsed;
+    }
+    return 0;
+};
+
 const ACTION_TYPES = {
     SET_DATA: 'SET_DATA',
     ADD_MOLDE: 'ADD_MOLDE',
@@ -834,28 +849,42 @@ export function DataProvider({ children }) {
             const currentConfig = stateRef.current.config;
             try {
                 const products = await wooService.fetchProducts(currentConfig);
-                const mapped = products.map(p => ({
-                    id: generateId(),
-                    wooId: p.id,
-                    codigoInterno: p.sku || '',
-                    detalleCorto: p.name || '',
-                    detalleLargo: p.short_description?.replace(/<[^>]*>?/gm, '') || '',
-                    precioVentaL1: parseFloat(p.price) || parseFloat(p.regular_price) || 0,
-                    precioVentaWeb: parseFloat(p.price) || 0,
-                    stock: p.manage_stock ? (p.stock_quantity || 0) : 999,
-                    categoria: p.categories[0]?.name || '',
-                    activo: p.status === 'publish',
-                    moneda: 'PESOS',
-                    proveedor: 'WooCommerce',
-                    imagenes: p.images?.map(img => ({ id: img.id, url: img.src })) || [],
-                    dimensiones: p.dimensions || {},
-                    precioCosto: 0,
-                    alertaStockMinimo: 0,
-                    precioVentaL2: 0,
-                    precioVentaL3: 0,
-                    precioVentaL4: 0,
-                    precioVentaL5: 0
-                }));
+                const mapped = products.map(p => {
+                    const price = parseWooPrice(
+                        p.price,
+                        p.sale_price,
+                        p.regular_price,
+                        p.prices?.price,
+                        p.prices?.sale_price,
+                        p.prices?.regular_price
+                    );
+                    const regularPrice = parseWooPrice(p.regular_price, p.prices?.regular_price, price);
+                    const salePrice = parseWooPrice(p.sale_price, p.prices?.sale_price, price);
+                    const displayPrice = salePrice || price || regularPrice;
+
+                    return {
+                        id: generateId(),
+                        wooId: p.id,
+                        codigoInterno: p.sku || '',
+                        detalleCorto: p.name || '',
+                        detalleLargo: p.short_description?.replace(/<[^>]*>?/gm, '') || '',
+                        precioVentaL1: displayPrice,
+                        precioVentaL2: regularPrice || displayPrice,
+                        precioVentaL3: regularPrice || displayPrice,
+                        precioVentaL4: regularPrice || displayPrice,
+                        precioVentaL5: regularPrice || displayPrice,
+                        precioVentaWeb: displayPrice,
+                        stock: p.manage_stock ? (p.stock_quantity || 0) : 999,
+                        categoria: p.categories[0]?.name || '',
+                        activo: p.status === 'publish',
+                        moneda: 'PESOS',
+                        proveedor: 'WooCommerce',
+                        imagenes: p.images?.map(img => ({ id: img.id, url: img.src })) || [],
+                        dimensiones: p.dimensions || {},
+                        precioCosto: 0,
+                        alertaStockMinimo: 0
+                    };
+                });
                 dispatch({ type: ACTION_TYPES.IMPORT_WOO_PRODUCTS, payload: mapped });
                 return mapped.length;
             } catch (err) {

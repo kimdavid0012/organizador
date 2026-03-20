@@ -41,6 +41,7 @@
 .pos-btn-group {
     display: flex;
     gap: var(--sp-2);
+    flex-wrap: wrap;
 }
 
 .pos-table-container {
@@ -162,22 +163,114 @@
     background: rgba(99, 102, 241, 0.1);
     color: var(--text-primary);
 }
+
+.pos-product-cards {
+    display: none;
+    gap: var(--sp-3);
+}
+
+.pos-product-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--sp-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+}
+
+.pos-product-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sp-3);
+}
+
+.pos-product-card-top h3 {
+    margin: 4px 0 0;
+    font-size: var(--fs-md);
+    color: var(--text-primary);
+}
+
+.pos-product-card-code {
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+}
+
+.pos-product-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.pos-product-card-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.pos-product-card-price {
+    color: var(--accent);
+}
+
+.pos-product-card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-2);
+}
+
+.pos-product-empty {
+    background: var(--bg-card);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--sp-5);
+    text-align: center;
+    color: var(--text-muted);
+}
 /* ---- Mobile POS Productos ---- */
 @media (max-width: 768px) {
+    .pos-productos {
+        padding: var(--sp-2);
+        gap: var(--sp-3);
+    }
+
     .pos-header-actions {
         flex-direction: column;
+        align-items: stretch;
         gap: 8px;
     }
+
+    .pos-search {
+        max-width: none;
+        width: 100%;
+    }
+
     .pos-btn-group {
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: 1fr;
+        width: 100%;
     }
+
+    .pos-btn-group .btn {
+        justify-content: center;
+        width: 100%;
+    }
+
     .pos-table-container {
-        overflow-x: auto;
+        display: none;
     }
-    .pos-table {
-        min-width: 600px;
-        font-size: 11px;
+
+    .pos-product-cards {
+        display: grid;
     }
+
+    .pos-product-card-actions {
+        grid-template-columns: 1fr;
+    }
+
     .pos-modal {
         width: 100% !important;
         max-width: 100% !important;
@@ -186,7 +279,15 @@
     }
     .pos-modal-body {
         grid-template-columns: 1fr !important;
+        padding-bottom: 84px;
     }
+
+    .pos-modal-footer {
+        position: sticky;
+        bottom: 0;
+        background: var(--bg-card);
+    }
+
     .excel-drop-zone {
         padding: 20px !important;
     }

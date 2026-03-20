@@ -37,6 +37,15 @@ export default function PosProductos() {
     const fileInputRef = useRef(null);
     const [dragActive, setDragActive] = useState(false);
 
+    const formatCurrency = (value) => {
+        const amount = Number(value || 0);
+        return new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency: 'ARS',
+            maximumFractionDigits: 0
+        }).format(amount);
+    };
+
     const filteredProducts = productos.filter(p =>
         (p.detalleCorto || '').toLowerCase().includes(search.toLowerCase()) ||
         (p.codigoInterno || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -263,6 +272,58 @@ export default function PosProductos() {
                         )}
                     </tbody>
                 </table>
+            </div>
+
+            <div className="pos-product-cards">
+                {filteredProducts.map(p => (
+                    <article key={`card-${p.id}`} className="pos-product-card">
+                        <div className="pos-product-card-top">
+                            <div>
+                                <div className="pos-product-card-code">{p.codigoInterno || 'Sin codigo'}</div>
+                                <h3>{p.detalleCorto}</h3>
+                            </div>
+                            <span className={`status-badge ${p.activo ? 'status-active' : 'status-inactive'}`}>
+                                {p.activo ? 'Activo' : 'Inactivo'}
+                            </span>
+                        </div>
+
+                        <div className="pos-product-card-grid">
+                            <div>
+                                <span className="pos-product-card-label">Stock</span>
+                                <strong style={{ color: p.stock <= p.alertaStockMinimo ? 'var(--danger)' : 'var(--text-primary)' }}>
+                                    {p.stock}
+                                </strong>
+                            </div>
+                            <div>
+                                <span className="pos-product-card-label">Costo</span>
+                                <strong>{formatCurrency(p.precioCosto)}</strong>
+                            </div>
+                            <div>
+                                <span className="pos-product-card-label">Lista 1</span>
+                                <strong className="pos-product-card-price">{formatCurrency(p.precioVentaL1)}</strong>
+                            </div>
+                            <div>
+                                <span className="pos-product-card-label">Web</span>
+                                <strong>{formatCurrency(p.precioVentaWeb)}</strong>
+                            </div>
+                        </div>
+
+                        <div className="pos-product-card-actions">
+                            <button className="btn btn-secondary" onClick={() => handleOpenModal(p)}>
+                                <Edit2 size={16} /> Editar
+                            </button>
+                            <button className="btn btn-ghost btn-danger" onClick={() => handleDelete(p.id)}>
+                                <Trash2 size={16} /> Eliminar
+                            </button>
+                        </div>
+                    </article>
+                ))}
+
+                {filteredProducts.length === 0 && (
+                    <div className="pos-product-empty">
+                        No se encontraron productos. Anade uno nuevo o importa desde Excel.
+                    </div>
+                )}
             </div>
 
             {/* Product Edit/Create Modal */}
