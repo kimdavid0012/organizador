@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Boxes, Plus, Trash2, Download, Upload } from 'lucide-react';
 import { useData } from '../store/DataContext';
+import { useAuth } from '../store/AuthContext';
 import { generateId } from '../utils/helpers';
 import * as XLSX from 'xlsx';
 
@@ -11,6 +12,7 @@ const EMPTY_FORM = {
     color: '',
     fechaIngreso: '',
     taller: '',
+    responsable: '',
     cantidadOriginal: '',
     cantidadContada: '',
     cantidadEllos: '',
@@ -68,6 +70,7 @@ const formatExcelDate = (value) => {
 };
 
 export default function ConteoMercaderiaPage() {
+    const { user } = useAuth();
     const { state, saveMercaderiaConteos } = useData();
     const conteos = state.config?.mercaderiaConteos || [];
     const productos = state.config?.posProductos || [];
@@ -81,6 +84,10 @@ export default function ConteoMercaderiaPage() {
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [search, setSearch] = useState('');
     const fileInputRef = useRef(null);
+    const normalizedEmail = (user?.email || '').toLowerCase();
+    const isNadiaController = normalizedEmail === 'nadia@celavie.com';
+    const canEditInventoryRows = user?.role === 'admin' || normalizedEmail === 'naara@celavie.com' || normalizedEmail === 'juan@celavie.com';
+    const responsableOptions = ['Juan', 'Naara'];
 
     const articleOptions = useMemo(() => {
         const map = new Map();
@@ -184,10 +191,15 @@ export default function ConteoMercaderiaPage() {
             descripcion: formData.descripcion || linkedArticle?.descripcion || articulo,
             tipoTela: formData.tipoTela || '',
             taller: formData.taller || linkedArticle?.proveedor || '',
+            responsable: formData.responsable || (normalizedEmail === 'juan@celavie.com' ? 'Juan' : normalizedEmail === 'naara@celavie.com' ? 'Naara' : ''),
             cantidadOriginal: toNumber(formData.cantidadOriginal || linkedArticle?.stock),
             cantidadContada: toNumber(formData.cantidadContada),
             cantidadEllos: toNumber(formData.cantidadEllos),
             fallado: toNumber(formData.fallado),
+            chequeado: false,
+            chequeadoPor: '',
+            chequeadoAt: '',
+            comentarioControl: '',
             createdAt: new Date().toISOString()
         };
 
@@ -247,10 +259,15 @@ export default function ConteoMercaderiaPage() {
                     color: '',
                     fechaIngreso,
                     taller: taller || linkedArticle?.proveedor || '',
+                    responsable: normalizedEmail === 'juan@celavie.com' ? 'Juan' : normalizedEmail === 'naara@celavie.com' ? 'Naara' : '',
                     cantidadOriginal,
                     cantidadContada,
                     cantidadEllos,
                     fallado,
+                    chequeado: false,
+                    chequeadoPor: '',
+                    chequeadoAt: '',
+                    comentarioControl: '',
                     createdAt: new Date().toISOString()
                 });
             });
@@ -298,8 +315,27 @@ export default function ConteoMercaderiaPage() {
         saveConteos(normalizedConteos);
     };
 
+    const handleControlChange = (id, field, value) => {
+        const nextConteos = conteos.map((item) => {
+            if (item.id !== id) return item;
+            if (field === 'chequeado') {
+                return {
+                    ...item,
+                    chequeado: value,
+                    chequeadoPor: value ? (user?.name || user?.email || 'Nadia') : '',
+                    chequeadoAt: value ? new Date().toISOString() : ''
+                };
+            }
+            return {
+                ...item,
+                [field]: value
+            };
+        });
+        saveConteos(nextConteos);
+    };
+
     const exportCsv = () => {
-        const headers = ['Articulo', 'Descripcion', 'Tipo tela', 'Color', 'Fecha ingreso', 'Taller', 'Cantidad original', 'Cantidad contada', 'Cantidad ellos', 'Fallado', 'Diferencia'];
+        const headers = ['Articulo', 'Descripcion', 'Tipo tela', 'Color', 'Fecha ingreso', 'Taller', 'Responsable', 'Cantidad original', 'Cantidad contada', 'Cantidad ellos', 'Fallado', 'Chequeado', 'Comentario control', 'Diferencia'];
         const rows = conteos.map((item) => {
             const diferencia = toNumber(item.cantidadContada) - toNumber(item.cantidadOriginal);
             return [
@@ -309,10 +345,13 @@ export default function ConteoMercaderiaPage() {
                 item.color,
                 item.fechaIngreso,
                 item.taller,
+                item.responsable,
                 item.cantidadOriginal,
                 item.cantidadContada,
                 item.cantidadEllos,
                 item.fallado,
+                item.chequeado ? 'SI' : 'NO',
+                item.comentarioControl,
                 diferencia
             ];
         });
@@ -338,7 +377,7 @@ export default function ConteoMercaderiaPage() {
                         <Boxes /> Conteo de Mercaderia
                     </h2>
                     <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                        Registro de stock contado por articulo, tela, color y taller. El stock se consolida automaticamente en Articulos.
+                        Registro de stock contado por articulo, tela, color y taller. Juan y Naara cargan; Nadia controla con chequeado y comentarios.
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -349,7 +388,7 @@ export default function ConteoMercaderiaPage() {
                         style={{ display: 'none' }}
                         onChange={handleImportExcel}
                     />
-                    <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
+                    <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={!canEditInventoryRows}>
                         <Upload size={16} /> Importar Excel
                     </button>
                     <button className="btn btn-secondary" onClick={exportCsv}>
@@ -358,7 +397,7 @@ export default function ConteoMercaderiaPage() {
                 </div>
             </div>
 
-            <div className="glass-panel" style={{ padding: 18, marginBottom: 18 }}>
+            <div className="glass-panel" style={{ padding: 18, marginBottom: 18, opacity: canEditInventoryRows ? 1 : 0.92 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
                     <input
                         className="form-input"
@@ -366,16 +405,23 @@ export default function ConteoMercaderiaPage() {
                         placeholder="Articulo / codigo"
                         value={formData.articulo}
                         onChange={(e) => setFormData((prev) => autofillArticle(e.target.value, prev))}
+                        disabled={!canEditInventoryRows}
                     />
-                    <input className="form-input" placeholder="Descripcion" value={formData.descripcion} onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))} />
-                    <input className="form-input" list="conteo-telas" placeholder="Tipo de tela" value={formData.tipoTela} onChange={(e) => setFormData((prev) => ({ ...prev, tipoTela: e.target.value }))} />
-                    <input className="form-input" placeholder="Color / modelo" value={formData.color} onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))} />
-                    <input className="form-input" type="date" value={formData.fechaIngreso} onChange={(e) => setFormData((prev) => ({ ...prev, fechaIngreso: e.target.value }))} />
-                    <input className="form-input" list="conteo-talleres" placeholder="Taller" value={formData.taller} onChange={(e) => setFormData((prev) => ({ ...prev, taller: e.target.value }))} />
-                    <input className="form-input" type="number" placeholder="Cantidad original" value={formData.cantidadOriginal} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadOriginal: e.target.value }))} />
-                    <input className="form-input" type="number" placeholder="Cantidad contada" value={formData.cantidadContada} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadContada: e.target.value }))} />
-                    <input className="form-input" type="number" placeholder="Cantidad de ellos" value={formData.cantidadEllos} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadEllos: e.target.value }))} />
-                    <input className="form-input" type="number" placeholder="Fallado" value={formData.fallado} onChange={(e) => setFormData((prev) => ({ ...prev, fallado: e.target.value }))} />
+                    <input className="form-input" placeholder="Descripcion" value={formData.descripcion} onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))} disabled={!canEditInventoryRows} />
+                    <input className="form-input" list="conteo-telas" placeholder="Tipo de tela" value={formData.tipoTela} onChange={(e) => setFormData((prev) => ({ ...prev, tipoTela: e.target.value }))} disabled={!canEditInventoryRows} />
+                    <input className="form-input" placeholder="Color / modelo" value={formData.color} onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))} disabled={!canEditInventoryRows} />
+                    <input className="form-input" type="date" value={formData.fechaIngreso} onChange={(e) => setFormData((prev) => ({ ...prev, fechaIngreso: e.target.value }))} disabled={!canEditInventoryRows} />
+                    <input className="form-input" list="conteo-talleres" placeholder="Taller" value={formData.taller} onChange={(e) => setFormData((prev) => ({ ...prev, taller: e.target.value }))} disabled={!canEditInventoryRows} />
+                    <select className="form-input" value={formData.responsable} onChange={(e) => setFormData((prev) => ({ ...prev, responsable: e.target.value }))} disabled={!canEditInventoryRows}>
+                        <option value="">Responsable</option>
+                        {responsableOptions.map((responsable) => (
+                            <option key={responsable} value={responsable}>{responsable}</option>
+                        ))}
+                    </select>
+                    <input className="form-input" type="number" placeholder="Cantidad original" value={formData.cantidadOriginal} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadOriginal: e.target.value }))} disabled={!canEditInventoryRows} />
+                    <input className="form-input" type="number" placeholder="Cantidad contada" value={formData.cantidadContada} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadContada: e.target.value }))} disabled={!canEditInventoryRows} />
+                    <input className="form-input" type="number" placeholder="Cantidad de ellos" value={formData.cantidadEllos} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadEllos: e.target.value }))} disabled={!canEditInventoryRows} />
+                    <input className="form-input" type="number" placeholder="Fallado" value={formData.fallado} onChange={(e) => setFormData((prev) => ({ ...prev, fallado: e.target.value }))} disabled={!canEditInventoryRows} />
                 </div>
                 <datalist id="conteo-articulos">
                     {articleOptions.map((item) => (
@@ -402,18 +448,23 @@ export default function ConteoMercaderiaPage() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
-                    <button className="btn btn-primary" onClick={handleAdd}>
+                    <button className="btn btn-primary" onClick={handleAdd} disabled={!canEditInventoryRows}>
                         <Plus size={16} /> Agregar conteo
                     </button>
                 </div>
+                {!canEditInventoryRows && (
+                    <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
+                        Nadia solo controla esta seccion: puede marcar chequeado/no chequeado y dejar comentarios, sin modificar cantidades.
+                    </div>
+                )}
             </div>
 
             <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1450 }}>
                         <thead>
                             <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                                {['Articulo', 'Descripcion', 'Tela', 'Color', 'Fecha ingreso', 'Taller', 'Original', 'Contada', 'Ellos', 'Fallado', 'Diferencia', 'Accion'].map((label) => (
+                                {['Articulo', 'Descripcion', 'Tela', 'Color', 'Fecha ingreso', 'Taller', 'Responsable', 'Original', 'Contada', 'Ellos', 'Fallado', 'Chequeado', 'Comentarios', 'Diferencia', 'Accion'].map((label) => (
                                     <th key={label} style={{ padding: '12px 10px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)' }}>{label}</th>
                                 ))}
                             </tr>
@@ -421,23 +472,59 @@ export default function ConteoMercaderiaPage() {
                         <tbody>
                             {filteredConteos.map((item) => {
                                 const diferencia = toNumber(item.cantidadContada) - toNumber(item.cantidadOriginal);
+                                const rowBackground = item.chequeado ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.08)';
                                 return (
-                                    <tr key={item.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
-                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-articulos" value={item.articulo || ''} onChange={(e) => handleCellChange(item.id, 'articulo', e.target.value)} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" value={item.descripcion || ''} onChange={(e) => handleCellChange(item.id, 'descripcion', e.target.value)} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-telas" value={item.tipoTela || ''} onChange={(e) => handleCellChange(item.id, 'tipoTela', e.target.value)} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" value={item.color || ''} onChange={(e) => handleCellChange(item.id, 'color', e.target.value)} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" type="date" value={item.fechaIngreso || ''} onChange={(e) => handleCellChange(item.id, 'fechaIngreso', e.target.value)} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-talleres" value={item.taller || ''} onChange={(e) => handleCellChange(item.id, 'taller', e.target.value)} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadOriginal || 0} onChange={(e) => handleCellChange(item.id, 'cantidadOriginal', e.target.value)} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadContada || 0} onChange={(e) => handleCellChange(item.id, 'cantidadContada', e.target.value)} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadEllos || 0} onChange={(e) => handleCellChange(item.id, 'cantidadEllos', e.target.value)} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.fallado || 0} onChange={(e) => handleCellChange(item.id, 'fallado', e.target.value)} /></td>
+                                    <tr key={item.id} style={{ borderTop: '1px solid var(--glass-border)', background: rowBackground }}>
+                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-articulos" value={item.articulo || ''} onChange={(e) => handleCellChange(item.id, 'articulo', e.target.value)} disabled={!canEditInventoryRows} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" value={item.descripcion || ''} onChange={(e) => handleCellChange(item.id, 'descripcion', e.target.value)} disabled={!canEditInventoryRows} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-telas" value={item.tipoTela || ''} onChange={(e) => handleCellChange(item.id, 'tipoTela', e.target.value)} disabled={!canEditInventoryRows} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" value={item.color || ''} onChange={(e) => handleCellChange(item.id, 'color', e.target.value)} disabled={!canEditInventoryRows} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" type="date" value={item.fechaIngreso || ''} onChange={(e) => handleCellChange(item.id, 'fechaIngreso', e.target.value)} disabled={!canEditInventoryRows} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-talleres" value={item.taller || ''} onChange={(e) => handleCellChange(item.id, 'taller', e.target.value)} disabled={!canEditInventoryRows} /></td>
+                                        <td style={{ padding: 10 }}>
+                                            <select className="form-input" value={item.responsable || ''} onChange={(e) => handleCellChange(item.id, 'responsable', e.target.value)} disabled={!canEditInventoryRows}>
+                                                <option value="">Responsable</option>
+                                                {responsableOptions.map((responsable) => (
+                                                    <option key={responsable} value={responsable}>{responsable}</option>
+                                                ))}
+                                            </select>
+                                        </td>
+                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadOriginal || 0} onChange={(e) => handleCellChange(item.id, 'cantidadOriginal', e.target.value)} disabled={!canEditInventoryRows} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadContada || 0} onChange={(e) => handleCellChange(item.id, 'cantidadContada', e.target.value)} disabled={!canEditInventoryRows} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadEllos || 0} onChange={(e) => handleCellChange(item.id, 'cantidadEllos', e.target.value)} disabled={!canEditInventoryRows} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.fallado || 0} onChange={(e) => handleCellChange(item.id, 'fallado', e.target.value)} disabled={!canEditInventoryRows} /></td>
+                                        <td style={{ padding: 10, minWidth: 150 }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: item.chequeado ? 'var(--success)' : 'var(--danger)' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!item.chequeado}
+                                                    onChange={(e) => handleControlChange(item.id, 'chequeado', e.target.checked)}
+                                                    disabled={!(isNadiaController || user?.role === 'admin')}
+                                                />
+                                                {item.chequeado ? 'Chequeado' : 'No chequeado'}
+                                            </label>
+                                            {item.chequeadoPor && (
+                                                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                                                    {item.chequeadoPor}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td style={{ padding: 10, minWidth: 220 }}>
+                                            <textarea
+                                                className="form-input"
+                                                rows={2}
+                                                value={item.comentarioControl || ''}
+                                                onChange={(e) => handleControlChange(item.id, 'comentarioControl', e.target.value)}
+                                                placeholder="Comentarios de control..."
+                                                disabled={!(isNadiaController || user?.role === 'admin')}
+                                                style={{ resize: 'vertical', minHeight: 64 }}
+                                            />
+                                        </td>
                                         <td style={{ padding: 10, fontWeight: 700, color: diferencia < 0 ? 'var(--danger)' : 'var(--success)' }}>
                                             {diferencia}
                                         </td>
                                         <td style={{ padding: 10 }}>
-                                            <button className="btn btn-ghost btn-danger" onClick={() => handleDelete(item.id)}>
+                                            <button className="btn btn-ghost btn-danger" onClick={() => handleDelete(item.id)} disabled={!canEditInventoryRows}>
                                                 <Trash2 size={14} />
                                             </button>
                                         </td>

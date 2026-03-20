@@ -15,8 +15,8 @@ const KNOWN_USERS = {
 
 const KNOWN_USER_SECTIONS = {
     'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb'],
-    'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb'],
-    'juan@celavie.com': ['kanban', 'pedidos'],
+    'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia'],
+    'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia'],
     'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia']
 };
 
@@ -26,9 +26,9 @@ const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clien
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
     admin: [...ALL_SECTIONS],
-    encargada: ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb'],
+    encargada: ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia'],
     deposito: ['kanban', 'talleres', 'conteomercaderia'],
-    pedidos: ['kanban', 'pedidos'],
+    pedidos: ['kanban', 'pedidos', 'conteomercaderia'],
     marketing: ['pedidos', 'marketing', 'paginaweb'],
     pendiente: [] // New users get no access until admin assigns a role
 };
