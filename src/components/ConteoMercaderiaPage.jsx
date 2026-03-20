@@ -16,36 +16,92 @@ const EMPTY_FORM = {
 };
 
 const toNumber = (value) => Number.parseInt(value || 0, 10) || 0;
+const normalizeCode = (value) => (value || '').toString().trim().toUpperCase();
 
 export default function ConteoMercaderiaPage() {
-    const { state, updateConfig } = useData();
+    const { state, saveMercaderiaConteos } = useData();
     const conteos = state.config?.mercaderiaConteos || [];
+    const productos = state.config?.posProductos || [];
+    const cortes = state.config?.cortes || [];
+    const talleres = state.config?.talleres || [];
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [search, setSearch] = useState('');
+
+    const articleOptions = useMemo(() => {
+        const map = new Map();
+
+        productos.forEach((producto) => {
+            const code = normalizeCode(producto.codigoInterno);
+            if (!code) return;
+            map.set(code, {
+                codigoInterno: code,
+                descripcion: producto.detalleCorto || producto.detalleLargo || code,
+                stock: toNumber(producto.stock),
+                proveedor: producto.proveedor || ''
+            });
+        });
+
+        cortes.forEach((corte) => {
+            (corte.moldesData || []).forEach((moldeData) => {
+                const molde = state.moldes.find((item) => item.id === moldeData.id);
+                const code = normalizeCode(molde?.codigo || molde?.nombre);
+                if (!code) return;
+                if (!map.has(code)) {
+                    map.set(code, {
+                        codigoInterno: code,
+                        descripcion: molde?.nombre || code,
+                        stock: toNumber(moldeData.cantidad),
+                        proveedor: moldeData.tallerAsignado || ''
+                    });
+                }
+            });
+        });
+
+        return Array.from(map.values()).sort((a, b) => a.codigoInterno.localeCompare(b.codigoInterno));
+    }, [productos, cortes, state.moldes]);
 
     const filteredConteos = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return conteos;
         return conteos.filter((item) =>
-            [item.articulo, item.descripcion, item.color, item.taller]
+            [item.articulo, item.codigoInterno, item.descripcion, item.color, item.taller]
                 .some((value) => (value || '').toLowerCase().includes(q))
         );
     }, [conteos, search]);
 
     const saveConteos = (nextConteos) => {
-        updateConfig({ mercaderiaConteos: nextConteos });
+        saveMercaderiaConteos(nextConteos);
+    };
+
+    const autofillArticle = (rawArticulo, currentForm = formData) => {
+        const articulo = normalizeCode(rawArticulo);
+        const linkedArticle = articleOptions.find((item) => item.codigoInterno === articulo);
+        return {
+            ...currentForm,
+            articulo,
+            descripcion: currentForm.descripcion || linkedArticle?.descripcion || '',
+            taller: currentForm.taller || linkedArticle?.proveedor || '',
+            cantidadOriginal: currentForm.cantidadOriginal || (linkedArticle ? String(linkedArticle.stock) : '')
+        };
     };
 
     const handleAdd = () => {
-        if (!formData.articulo.trim()) {
+        const articulo = normalizeCode(formData.articulo);
+        if (!articulo) {
             alert('El articulo es obligatorio.');
             return;
         }
 
+        const linkedArticle = articleOptions.find((item) => item.codigoInterno === articulo);
         const newItem = {
             id: generateId(),
             ...formData,
-            cantidadOriginal: toNumber(formData.cantidadOriginal),
+            productId: productos.find((producto) => normalizeCode(producto.codigoInterno) === articulo)?.id || null,
+            codigoInterno: articulo,
+            articulo,
+            descripcion: formData.descripcion || linkedArticle?.descripcion || articulo,
+            taller: formData.taller || linkedArticle?.proveedor || '',
+            cantidadOriginal: toNumber(formData.cantidadOriginal || linkedArticle?.stock),
             cantidadContada: toNumber(formData.cantidadContada),
             cantidadEllos: toNumber(formData.cantidadEllos),
             fallado: toNumber(formData.fallado),
@@ -66,13 +122,26 @@ export default function ConteoMercaderiaPage() {
             item.id === id
                 ? {
                     ...item,
-                    [field]: ['cantidadOriginal', 'cantidadContada', 'cantidadEllos', 'fallado'].includes(field)
+                    [field]: field === 'articulo'
+                        ? normalizeCode(value)
+                        : ['cantidadOriginal', 'cantidadContada', 'cantidadEllos', 'fallado'].includes(field)
                         ? toNumber(value)
                         : value
                 }
                 : item
         );
-        saveConteos(nextConteos);
+
+        const normalizedConteos = nextConteos.map((item) => {
+            const linkedArticle = articleOptions.find((option) => option.codigoInterno === normalizeCode(item.articulo || item.codigoInterno));
+            return {
+                ...item,
+                codigoInterno: normalizeCode(item.articulo || item.codigoInterno),
+                articulo: normalizeCode(item.articulo || item.codigoInterno),
+                descripcion: item.descripcion || linkedArticle?.descripcion || '',
+                productId: item.productId || productos.find((producto) => normalizeCode(producto.codigoInterno) === normalizeCode(item.articulo || item.codigoInterno))?.id || null
+            };
+        });
+        saveConteos(normalizedConteos);
     };
 
     const exportCsv = () => {
@@ -114,7 +183,7 @@ export default function ConteoMercaderiaPage() {
                         <Boxes /> Conteo de Mercaderia
                     </h2>
                     <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                        Registro de stock contado por articulo, color y taller.
+                        Registro de stock contado por articulo, color y taller. El stock se consolida automaticamente en Articulos.
                     </p>
                 </div>
                 <button className="btn btn-secondary" onClick={exportCsv}>
@@ -124,16 +193,34 @@ export default function ConteoMercaderiaPage() {
 
             <div className="glass-panel" style={{ padding: 18, marginBottom: 18 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
-                    <input className="form-input" placeholder="Articulo" value={formData.articulo} onChange={(e) => setFormData((prev) => ({ ...prev, articulo: e.target.value }))} />
+                    <input
+                        className="form-input"
+                        list="conteo-articulos"
+                        placeholder="Articulo / codigo"
+                        value={formData.articulo}
+                        onChange={(e) => setFormData((prev) => autofillArticle(e.target.value, prev))}
+                    />
                     <input className="form-input" placeholder="Descripcion" value={formData.descripcion} onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))} />
                     <input className="form-input" placeholder="Color / modelo" value={formData.color} onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))} />
                     <input className="form-input" type="date" value={formData.fechaIngreso} onChange={(e) => setFormData((prev) => ({ ...prev, fechaIngreso: e.target.value }))} />
-                    <input className="form-input" placeholder="Taller" value={formData.taller} onChange={(e) => setFormData((prev) => ({ ...prev, taller: e.target.value }))} />
+                    <input className="form-input" list="conteo-talleres" placeholder="Taller" value={formData.taller} onChange={(e) => setFormData((prev) => ({ ...prev, taller: e.target.value }))} />
                     <input className="form-input" type="number" placeholder="Cantidad original" value={formData.cantidadOriginal} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadOriginal: e.target.value }))} />
                     <input className="form-input" type="number" placeholder="Cantidad contada" value={formData.cantidadContada} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadContada: e.target.value }))} />
                     <input className="form-input" type="number" placeholder="Cantidad de ellos" value={formData.cantidadEllos} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadEllos: e.target.value }))} />
                     <input className="form-input" type="number" placeholder="Fallado" value={formData.fallado} onChange={(e) => setFormData((prev) => ({ ...prev, fallado: e.target.value }))} />
                 </div>
+                <datalist id="conteo-articulos">
+                    {articleOptions.map((item) => (
+                        <option key={item.codigoInterno} value={item.codigoInterno}>
+                            {item.descripcion}
+                        </option>
+                    ))}
+                </datalist>
+                <datalist id="conteo-talleres">
+                    {talleres.map((taller) => (
+                        <option key={taller} value={taller} />
+                    ))}
+                </datalist>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginTop: 14, flexWrap: 'wrap' }}>
                     <input
                         className="form-input"
@@ -163,11 +250,11 @@ export default function ConteoMercaderiaPage() {
                                 const diferencia = toNumber(item.cantidadContada) - toNumber(item.cantidadOriginal);
                                 return (
                                     <tr key={item.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
-                                        <td style={{ padding: 10 }}><input className="form-input" value={item.articulo || ''} onChange={(e) => handleCellChange(item.id, 'articulo', e.target.value)} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-articulos" value={item.articulo || ''} onChange={(e) => handleCellChange(item.id, 'articulo', e.target.value)} /></td>
                                         <td style={{ padding: 10 }}><input className="form-input" value={item.descripcion || ''} onChange={(e) => handleCellChange(item.id, 'descripcion', e.target.value)} /></td>
                                         <td style={{ padding: 10 }}><input className="form-input" value={item.color || ''} onChange={(e) => handleCellChange(item.id, 'color', e.target.value)} /></td>
                                         <td style={{ padding: 10 }}><input className="form-input" type="date" value={item.fechaIngreso || ''} onChange={(e) => handleCellChange(item.id, 'fechaIngreso', e.target.value)} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" value={item.taller || ''} onChange={(e) => handleCellChange(item.id, 'taller', e.target.value)} /></td>
+                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-talleres" value={item.taller || ''} onChange={(e) => handleCellChange(item.id, 'taller', e.target.value)} /></td>
                                         <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadOriginal || 0} onChange={(e) => handleCellChange(item.id, 'cantidadOriginal', e.target.value)} /></td>
                                         <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadContada || 0} onChange={(e) => handleCellChange(item.id, 'cantidadContada', e.target.value)} /></td>
                                         <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadEllos || 0} onChange={(e) => handleCellChange(item.id, 'cantidadEllos', e.target.value)} /></td>

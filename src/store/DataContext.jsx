@@ -8,6 +8,115 @@ import { metaService } from '../utils/metaService';
 
 const DataContext = createContext(null);
 
+const normalizeProductCode = (value) => (value || '').toString().trim().toUpperCase();
+
+const normalizeText = (value) => (value || '').toString().trim();
+
+const sanitizeStockBreakdown = (entries = []) =>
+    entries
+        .map((entry) => ({
+            color: normalizeText(entry.color),
+            taller: normalizeText(entry.taller),
+            fechaIngreso: normalizeText(entry.fechaIngreso),
+            cantidadOriginal: Number.parseInt(entry.cantidadOriginal || 0, 10) || 0,
+            cantidadContada: Number.parseInt(entry.cantidadContada || 0, 10) || 0,
+            cantidadEllos: Number.parseInt(entry.cantidadEllos || 0, 10) || 0,
+            fallado: Number.parseInt(entry.fallado || 0, 10) || 0
+        }))
+        .filter((entry) => entry.color || entry.taller || entry.cantidadOriginal || entry.cantidadContada || entry.cantidadEllos || entry.fallado);
+
+const upsertPosProducts = (existingProducts = [], incomingProducts = []) => {
+    const merged = [...existingProducts];
+
+    incomingProducts.forEach((incoming) => {
+        const incomingCode = normalizeProductCode(incoming.codigoInterno);
+        const incomingWooId = incoming.wooId;
+        const index = merged.findIndex((product) => {
+            const productCode = normalizeProductCode(product.codigoInterno);
+            if (incomingCode && productCode && productCode === incomingCode) return true;
+            if (incomingWooId && product.wooId && product.wooId === incomingWooId) return true;
+            return false;
+        });
+
+        const normalizedIncoming = {
+            ...incoming,
+            codigoInterno: incomingCode || incoming.codigoInterno || ''
+        };
+
+        if (index >= 0) {
+            merged[index] = { ...merged[index], ...normalizedIncoming };
+        } else {
+            merged.push(normalizedIncoming);
+        }
+    });
+
+    return merged;
+};
+
+const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = []) => {
+    const conteos = Array.isArray(mercaderiaConteos) ? mercaderiaConteos : [];
+    const groupedByCode = new Map();
+
+    conteos.forEach((item) => {
+        const code = normalizeProductCode(item.codigoInterno || item.articulo);
+        if (!code) return;
+
+        if (!groupedByCode.has(code)) {
+            groupedByCode.set(code, {
+                codigoInterno: code,
+                detalleCorto: normalizeText(item.descripcion) || code,
+                proveedor: normalizeText(item.taller) || 'Produccion propia',
+                stock: 0,
+                stockPorColor: []
+            });
+        }
+
+        const group = groupedByCode.get(code);
+        const descripcion = normalizeText(item.descripcion);
+        const taller = normalizeText(item.taller);
+        const color = normalizeText(item.color);
+        const fechaIngreso = normalizeText(item.fechaIngreso);
+        const cantidadOriginal = Number.parseInt(item.cantidadOriginal || 0, 10) || 0;
+        const cantidadContada = Number.parseInt(item.cantidadContada || 0, 10) || 0;
+        const cantidadEllos = Number.parseInt(item.cantidadEllos || 0, 10) || 0;
+        const fallado = Number.parseInt(item.fallado || 0, 10) || 0;
+        const stockDisponible = Math.max(0, cantidadContada - fallado);
+
+        if (descripcion) group.detalleCorto = descripcion;
+        if (taller) group.proveedor = taller;
+        group.stock += stockDisponible;
+        group.stockPorColor.push({
+            color,
+            taller,
+            fechaIngreso,
+            cantidadOriginal,
+            cantidadContada,
+            cantidadEllos,
+            fallado,
+            stockDisponible
+        });
+    });
+
+    if (groupedByCode.size === 0) {
+        return existingProducts;
+    }
+
+    return existingProducts.map((product) => {
+        const code = normalizeProductCode(product.codigoInterno);
+        if (!code || !groupedByCode.has(code)) return product;
+
+        const group = groupedByCode.get(code);
+        return {
+            ...product,
+            codigoInterno: code,
+            detalleCorto: group.detalleCorto || product.detalleCorto,
+            proveedor: group.proveedor || product.proveedor,
+            stock: group.stock,
+            stockPorColor: sanitizeStockBreakdown(group.stockPorColor)
+        };
+    });
+};
+
 const parseWooPrice = (...values) => {
     for (const value of values) {
         if (value === null || value === undefined || value === '') continue;
@@ -77,7 +186,8 @@ const ACTION_TYPES = {
     SET_META_ADS_DATA: 'SET_META_ADS_DATA',
     SET_WOO_ANALYTICS_DATA: 'SET_WOO_ANALYTICS_DATA',
     SET_MARKETING_CACHE: 'SET_MARKETING_CACHE',
-    SET_PAGINA_WEB_CACHE: 'SET_PAGINA_WEB_CACHE'
+    SET_PAGINA_WEB_CACHE: 'SET_PAGINA_WEB_CACHE',
+    SAVE_MERCADERIA_CONTEOS: 'SAVE_MERCADERIA_CONTEOS'
 };
 
 function dataReducer(state, action) {
@@ -187,11 +297,19 @@ function dataReducer(state, action) {
             };
         }
 
-        case ACTION_TYPES.UPDATE_CONFIG:
+        case ACTION_TYPES.UPDATE_CONFIG: {
+            const nextConfig = { ...state.config, ...action.payload };
+            if (Object.prototype.hasOwnProperty.call(action.payload, 'mercaderiaConteos')) {
+                return {
+                    ...state,
+                    config: nextConfig
+                };
+            }
             return {
                 ...state,
-                config: { ...state.config, ...action.payload }
+                config: nextConfig
             };
+        }
 
         case ACTION_TYPES.IMPORT_MOLDES:
             return {
@@ -452,18 +570,8 @@ function dataReducer(state, action) {
             };
         case ACTION_TYPES.IMPORT_WOO_PRODUCTS: {
             const existing = state.config.posProductos || [];
-            // Merge: new ones + updated existing ones
             const incoming = action.payload;
-            const merged = [...existing];
-
-            incoming.forEach(newItem => {
-                const idx = merged.findIndex(p => p.codigoInterno === newItem.codigoInterno);
-                if (idx > -1) {
-                    merged[idx] = { ...merged[idx], ...newItem };
-                } else {
-                    merged.push(newItem);
-                }
-            });
+            const merged = upsertPosProducts(existing, incoming);
 
             return {
                 ...state,
@@ -567,7 +675,7 @@ function dataReducer(state, action) {
                 ...state,
                 config: {
                     ...state.config,
-                    posProductos: [...(state.config.posProductos || []), action.payload]
+                    posProductos: upsertPosProducts(state.config.posProductos || [], [action.payload])
                 }
             };
         case ACTION_TYPES.UPDATE_POS_PRODUCT:
@@ -585,9 +693,82 @@ function dataReducer(state, action) {
                 ...state,
                 config: {
                     ...state.config,
-                    posProductos: [...(state.config.posProductos || []), ...action.payload]
+                    posProductos: upsertPosProducts(state.config.posProductos || [], action.payload)
                 }
             };
+        case ACTION_TYPES.SAVE_MERCADERIA_CONTEOS: {
+            const conteos = action.payload.map((item) => ({
+                ...item,
+                codigoInterno: normalizeProductCode(item.codigoInterno || item.articulo),
+                articulo: normalizeProductCode(item.codigoInterno || item.articulo),
+                descripcion: normalizeText(item.descripcion),
+                color: normalizeText(item.color),
+                taller: normalizeText(item.taller),
+                fechaIngreso: normalizeText(item.fechaIngreso),
+                cantidadOriginal: Number.parseInt(item.cantidadOriginal || 0, 10) || 0,
+                cantidadContada: Number.parseInt(item.cantidadContada || 0, 10) || 0,
+                cantidadEllos: Number.parseInt(item.cantidadEllos || 0, 10) || 0,
+                fallado: Number.parseInt(item.fallado || 0, 10) || 0
+            }));
+
+            const conteoDerivedProducts = Array.from(
+                conteos.reduce((map, item) => {
+                    const code = normalizeProductCode(item.codigoInterno || item.articulo);
+                    if (!code) return map;
+
+                    const current = map.get(code) || {
+                        id: item.productId || generateId(),
+                        codigoInterno: code,
+                        codigoBarras: '',
+                        detalleCorto: item.descripcion || code,
+                        detalleLargo: '',
+                        moneda: 'PESOS',
+                        proveedor: item.taller || 'Produccion propia',
+                        precioCosto: 0,
+                        alertaStockMinimo: 0,
+                        precioVentaL1: 0,
+                        precioVentaL2: 0,
+                        precioVentaL3: 0,
+                        precioVentaL4: 0,
+                        precioVentaL5: 0,
+                        precioVentaWeb: 0,
+                        activo: true,
+                        stock: 0,
+                        stockPorColor: []
+                    };
+
+                    const stockDisponible = Math.max(0, item.cantidadContada - item.fallado);
+                    current.detalleCorto = item.descripcion || current.detalleCorto;
+                    current.proveedor = item.taller || current.proveedor;
+                    current.stock += stockDisponible;
+                    current.stockPorColor = [...(current.stockPorColor || []), {
+                        color: item.color,
+                        taller: item.taller,
+                        fechaIngreso: item.fechaIngreso,
+                        cantidadOriginal: item.cantidadOriginal,
+                        cantidadContada: item.cantidadContada,
+                        cantidadEllos: item.cantidadEllos,
+                        fallado: item.fallado
+                    }];
+                    map.set(code, current);
+                    return map;
+                }, new Map()).values()
+            );
+
+            const mergedProducts = syncMercaderiaWithProducts(
+                upsertPosProducts(state.config.posProductos || [], conteoDerivedProducts),
+                conteos
+            );
+
+            return {
+                ...state,
+                config: {
+                    ...state.config,
+                    mercaderiaConteos: conteos,
+                    posProductos: mergedProducts
+                }
+            };
+        }
 
         // --- Clientes ---
         case ACTION_TYPES.ADD_CLIENTE:
@@ -1088,6 +1269,7 @@ export function DataProvider({ children }) {
         deleteCliente: (id) => dispatch({ type: ACTION_TYPES.DELETE_CLIENTE, payload: id }),
         setMarketingCache: (cache) => dispatch({ type: ACTION_TYPES.SET_MARKETING_CACHE, payload: cache }),
         setPaginaWebCache: (cache) => dispatch({ type: ACTION_TYPES.SET_PAGINA_WEB_CACHE, payload: cache }),
+        saveMercaderiaConteos: (conteos) => dispatch({ type: ACTION_TYPES.SAVE_MERCADERIA_CONTEOS, payload: conteos }),
 
         // Reservas de Ticket
         saveReservation: (reserva) => dispatch({ type: ACTION_TYPES.SAVE_RESERVATION, payload: reserva }),

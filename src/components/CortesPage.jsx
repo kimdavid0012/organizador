@@ -7,7 +7,7 @@ import { generateId } from '../utils/helpers';
 import * as XLSX from 'xlsx';
 
 export default function CortesPage() {
-    const { state, updateConfig, updateMolde, addMolde, addTela, setData, addPosProduct, updateMoldeInCorte, addMoldeToCorte, removeMoldeFromCorte } = useData();
+    const { state, updateConfig, updateMolde, addMolde, addTela, setData, addPosProduct, updatePosProduct, updateMoldeInCorte, addMoldeToCorte, removeMoldeFromCorte } = useData();
     const { t } = useI18n();
     const { user } = useAuth();
     const { config, moldes, telas } = state;
@@ -333,6 +333,50 @@ export default function CortesPage() {
         };
         addPosProduct(nuevoProducto);
         alert(`✅ "${molde.nombre}" fue copiado a Artículos con precio $${precioVenta.toFixed(0)} y stock ${cData?.cantidad || 0} unidades.`);
+    };
+
+    const syncArticuloDesdeCorte = (molde, cData, cost) => {
+        const img = getCoverImage(molde);
+        const precioVenta = cData?.precioLocal > 0 ? cData.precioLocal : cost.precioVentaSugerido;
+        const codigoInterno = (molde.codigo || molde.nombre?.slice(0, 6).toUpperCase() || generateId().slice(0, 6).toUpperCase()).toString().trim().toUpperCase();
+        const existingProduct = (config.posProductos || []).find((product) => (product.codigoInterno || '').toString().trim().toUpperCase() === codigoInterno);
+        const productoBase = {
+            codigoInterno,
+            codigoBarras: existingProduct?.codigoBarras || '',
+            detalleCorto: molde.nombre || '(sin nombre)',
+            detalleLargo: molde.observaciones || existingProduct?.detalleLargo || '',
+            moneda: existingProduct?.moneda || 'PESOS',
+            proveedor: cData?.tallerAsignado || existingProduct?.proveedor || 'Produccion propia',
+            precioCosto: cost.costoTotal || existingProduct?.precioCosto || 0,
+            alertaStockMinimo: existingProduct?.alertaStockMinimo || 0,
+            precioVentaL1: precioVenta,
+            precioVentaL2: existingProduct?.precioVentaL2 || 0,
+            precioVentaL3: existingProduct?.precioVentaL3 || 0,
+            precioVentaL4: existingProduct?.precioVentaL4 || 0,
+            precioVentaL5: existingProduct?.precioVentaL5 || 0,
+            precioVentaWeb: existingProduct?.precioVentaWeb || 0,
+            activo: existingProduct?.activo ?? true,
+            stock: cData?.cantidad || existingProduct?.stock || 0,
+            imagenBase64: img || existingProduct?.imagenBase64 || null,
+            stockPorColor: [{
+                color: '',
+                taller: cData?.tallerAsignado || '',
+                fechaIngreso: selectedCorte?.fecha || '',
+                cantidadOriginal: cData?.cantidad || 0,
+                cantidadContada: cData?.cantidad || 0,
+                cantidadEllos: 0,
+                fallado: cData?.prendasFalladas || 0
+            }]
+        };
+
+        if (existingProduct) {
+            updatePosProduct(existingProduct.id, productoBase);
+            alert(`✅ "${molde.nombre}" actualizo el articulo existente ${codigoInterno} en Articulos.`);
+            return;
+        }
+
+        addPosProduct({ id: generateId(), ...productoBase });
+        alert(`✅ "${molde.nombre}" fue copiado a Articulos con codigo ${codigoInterno}, precio $${precioVenta.toFixed(0)} y stock ${cData?.cantidad || 0} unidades.`);
     };
 
     // Add molde to corte
@@ -747,7 +791,7 @@ export default function CortesPage() {
                                                             <button
                                                                 className="btn btn-sm"
                                                                 style={{ background: 'rgba(34,197,94,0.15)', color: 'var(--success)', border: '1px solid var(--success)', fontSize: '10px', padding: '3px 8px', whiteSpace: 'nowrap' }}
-                                                                onClick={() => transferirAArticulos(m, cData, cost)}
+                                                                onClick={() => syncArticuloDesdeCorte(m, cData, cost)}
                                                                 title="Copiar este molde al catálogo de Artículos del POS"
                                                             >
                                                                 <ArrowRightCircle size={12} style={{ display: 'inline', marginRight: '3px' }} />
