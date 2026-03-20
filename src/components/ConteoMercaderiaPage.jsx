@@ -1,12 +1,13 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Boxes, Plus, Trash2, Download, Upload } from 'lucide-react';
+import { Boxes, Plus, Trash2, Download, Upload, CheckCircle2, CircleAlert, Factory, ShoppingBag } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
 import { generateId } from '../utils/helpers';
 import * as XLSX from 'xlsx';
 
 const EMPTY_FORM = {
-    articulo: '',
+    articuloFabrica: '',
+    articuloVenta: '',
     descripcion: '',
     tipoTela: '',
     color: '',
@@ -19,6 +20,8 @@ const EMPTY_FORM = {
     fallado: ''
 };
 
+const RESPONSABLES = ['Juan', 'Naara'];
+
 const toNumber = (value) => Number.parseInt(value || 0, 10) || 0;
 const normalizeCode = (value) => (value || '').toString().trim().toUpperCase();
 const normalizeText = (value) => (value || '').toString().trim();
@@ -26,48 +29,31 @@ const normalizeText = (value) => (value || '').toString().trim();
 const parseExcelNumber = (value) => {
     if (typeof value === 'number') return Math.round(value);
     if (value === null || value === undefined || value === '') return 0;
-    const normalized = value
-        .toString()
-        .trim()
-        .replace(/[^\d,.-]/g, '')
-        .replace(/\.(?=\d{3}(?:\D|$))/g, '')
-        .replace(',', '.');
+    const normalized = value.toString().trim().replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.');
     const parsed = Number.parseFloat(normalized);
     return Number.isNaN(parsed) ? 0 : Math.round(parsed);
 };
 
 const formatExcelDate = (value) => {
     if (!value) return '';
-    if (value instanceof Date && !Number.isNaN(value.getTime())) {
-        return value.toISOString().slice(0, 10);
-    }
-
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
     if (typeof value === 'number') {
         const date = XLSX.SSF.parse_date_code(value);
-        if (date) {
-            const safeDate = new Date(Date.UTC(date.y, date.m - 1, date.d));
-            return safeDate.toISOString().slice(0, 10);
-        }
+        if (date) return new Date(Date.UTC(date.y, date.m - 1, date.d)).toISOString().slice(0, 10);
     }
-
     const raw = value.toString().trim();
     const parsed = new Date(raw);
-    if (!Number.isNaN(parsed.getTime())) {
-        return parsed.toISOString().slice(0, 10);
-    }
-
-    const shortMonthMap = {
-        ene: '01', feb: '02', mar: '03', abr: '04', may: '05', jun: '06',
-        jul: '07', ago: '08', sep: '09', oct: '10', nov: '11', dic: '12'
-    };
-    const match = raw.toLowerCase().match(/^(\d{1,2})[-/ ]([a-z]{3}|\d{1,2})(?:[-/ ](\d{2,4}))?$/);
-    if (!match) return '';
-
-    const day = match[1].padStart(2, '0');
-    const month = shortMonthMap[match[2]] || match[2].padStart(2, '0');
-    const year = match[3] ? match[3].padStart(4, '20') : new Date().getFullYear().toString();
-    return `${year}-${month}-${day}`;
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    return '';
 };
+
+const getFormCardStyle = (checked) => ({
+    padding: 18,
+    borderRadius: 18,
+    background: checked ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.10)',
+    border: `1px solid ${checked ? 'rgba(34, 197, 94, 0.28)' : 'rgba(239, 68, 68, 0.22)'}`,
+    boxShadow: '0 18px 40px rgba(8, 10, 24, 0.22)'
+});
 
 export default function ConteoMercaderiaPage() {
     const { user } = useAuth();
@@ -81,23 +67,24 @@ export default function ConteoMercaderiaPage() {
         .map((tela) => tela?.nombre || tela?.descripcion || '')
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b));
+
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [search, setSearch] = useState('');
     const fileInputRef = useRef(null);
     const normalizedEmail = (user?.email || '').toLowerCase();
     const isNadiaController = normalizedEmail === 'nadia@celavie.com';
     const canEditInventoryRows = user?.role === 'admin' || normalizedEmail === 'naara@celavie.com' || normalizedEmail === 'juan@celavie.com';
-    const responsableOptions = ['Juan', 'Naara'];
 
     const articleOptions = useMemo(() => {
         const map = new Map();
 
         productos.forEach((producto) => {
-            const code = normalizeCode(producto.codigoInterno);
-            if (!code) return;
-            map.set(code, {
-                codigoInterno: code,
-                descripcion: producto.detalleCorto || producto.detalleLargo || code,
+            const saleCode = normalizeCode(producto.codigoInterno);
+            if (!saleCode) return;
+            map.set(saleCode, {
+                articuloVenta: saleCode,
+                articuloFabrica: saleCode,
+                descripcion: producto.detalleCorto || producto.detalleLargo || saleCode,
                 stock: toNumber(producto.stock),
                 proveedor: producto.proveedor || ''
             });
@@ -106,28 +93,34 @@ export default function ConteoMercaderiaPage() {
         cortes.forEach((corte) => {
             (corte.moldesData || []).forEach((moldeData) => {
                 const molde = state.moldes.find((item) => item.id === moldeData.id);
-                const code = normalizeCode(molde?.codigo || molde?.nombre);
-                if (!code) return;
-                if (!map.has(code)) {
-                    map.set(code, {
-                        codigoInterno: code,
-                        descripcion: molde?.nombre || code,
-                        stock: toNumber(moldeData.cantidad),
-                        proveedor: moldeData.tallerAsignado || ''
-                    });
-                }
+                const articleFactory = normalizeCode(molde?.codigo || molde?.nombre);
+                if (!articleFactory || map.has(articleFactory)) return;
+                map.set(articleFactory, {
+                    articuloVenta: articleFactory,
+                    articuloFabrica: articleFactory,
+                    descripcion: molde?.nombre || articleFactory,
+                    stock: toNumber(moldeData.cantidad),
+                    proveedor: moldeData.tallerAsignado || ''
+                });
             });
         });
 
-        return Array.from(map.values()).sort((a, b) => a.codigoInterno.localeCompare(b.codigoInterno));
+        return Array.from(map.values()).sort((a, b) => a.articuloVenta.localeCompare(b.articuloVenta));
     }, [productos, cortes, state.moldes]);
 
     const filteredConteos = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return conteos;
         return conteos.filter((item) =>
-            [item.articulo, item.codigoInterno, item.descripcion, item.tipoTela, item.color, item.taller]
-                .some((value) => (value || '').toLowerCase().includes(q))
+            [
+                item.articuloFabrica,
+                item.articuloVenta,
+                item.descripcion,
+                item.tipoTela,
+                item.color,
+                item.taller,
+                item.responsable
+            ].some((value) => (value || '').toLowerCase().includes(q))
         );
     }, [conteos, search]);
 
@@ -135,11 +128,40 @@ export default function ConteoMercaderiaPage() {
         saveMercaderiaConteos(nextConteos);
     };
 
+    const buildConteoItem = (baseItem) => {
+        const articuloVenta = normalizeCode(baseItem.articuloVenta || baseItem.codigoInterno);
+        const articuloFabrica = normalizeCode(baseItem.articuloFabrica || baseItem.articulo || articuloVenta);
+        const linkedArticle = articleOptions.find((item) => item.articuloVenta === articuloVenta);
+        return {
+            ...baseItem,
+            productId: baseItem.productId || productos.find((producto) => normalizeCode(producto.codigoInterno) === articuloVenta)?.id || null,
+            codigoInterno: articuloVenta,
+            articulo: articuloFabrica,
+            articuloFabrica,
+            articuloVenta,
+            descripcion: baseItem.descripcion || linkedArticle?.descripcion || articuloVenta || articuloFabrica,
+            tipoTela: normalizeText(baseItem.tipoTela),
+            color: normalizeText(baseItem.color),
+            fechaIngreso: normalizeText(baseItem.fechaIngreso),
+            taller: normalizeText(baseItem.taller || linkedArticle?.proveedor || ''),
+            responsable: normalizeText(baseItem.responsable),
+            cantidadOriginal: toNumber(baseItem.cantidadOriginal || linkedArticle?.stock),
+            cantidadContada: toNumber(baseItem.cantidadContada),
+            cantidadEllos: toNumber(baseItem.cantidadEllos),
+            fallado: toNumber(baseItem.fallado),
+            chequeado: Boolean(baseItem.chequeado),
+            chequeadoPor: baseItem.chequeadoPor || '',
+            chequeadoAt: baseItem.chequeadoAt || '',
+            comentarioControl: baseItem.comentarioControl || ''
+        };
+    };
+
     const upsertConteos = (incomingConteos) => {
         const existingMap = new Map(
             conteos.map((item) => [
                 [
-                    normalizeCode(item.codigoInterno || item.articulo),
+                    normalizeCode(item.articuloFabrica),
+                    normalizeCode(item.articuloVenta || item.codigoInterno),
                     normalizeText(item.color).toUpperCase(),
                     normalizeText(item.taller).toUpperCase(),
                     normalizeText(item.fechaIngreso)
@@ -150,7 +172,8 @@ export default function ConteoMercaderiaPage() {
 
         incomingConteos.forEach((item) => {
             const key = [
-                normalizeCode(item.codigoInterno || item.articulo),
+                normalizeCode(item.articuloFabrica),
+                normalizeCode(item.articuloVenta || item.codigoInterno),
                 normalizeText(item.color).toUpperCase(),
                 normalizeText(item.taller).toUpperCase(),
                 normalizeText(item.fechaIngreso)
@@ -162,12 +185,12 @@ export default function ConteoMercaderiaPage() {
         saveConteos(Array.from(existingMap.values()));
     };
 
-    const autofillArticle = (rawArticulo, currentForm = formData) => {
-        const articulo = normalizeCode(rawArticulo);
-        const linkedArticle = articleOptions.find((item) => item.codigoInterno === articulo);
+    const autofillSaleArticle = (rawArticuloVenta, currentForm = formData) => {
+        const articuloVenta = normalizeCode(rawArticuloVenta);
+        const linkedArticle = articleOptions.find((item) => item.articuloVenta === articuloVenta);
         return {
             ...currentForm,
-            articulo,
+            articuloVenta,
             descripcion: currentForm.descripcion || linkedArticle?.descripcion || '',
             taller: currentForm.taller || linkedArticle?.proveedor || '',
             cantidadOriginal: currentForm.cantidadOriginal || (linkedArticle ? String(linkedArticle.stock) : '')
@@ -175,33 +198,18 @@ export default function ConteoMercaderiaPage() {
     };
 
     const handleAdd = () => {
-        const articulo = normalizeCode(formData.articulo);
-        if (!articulo) {
-            alert('El articulo es obligatorio.');
+        const articuloVenta = normalizeCode(formData.articuloVenta);
+        if (!articuloVenta) {
+            alert('El articulo de venta es obligatorio.');
             return;
         }
 
-        const linkedArticle = articleOptions.find((item) => item.codigoInterno === articulo);
-        const newItem = {
+        const newItem = buildConteoItem({
             id: generateId(),
             ...formData,
-            productId: productos.find((producto) => normalizeCode(producto.codigoInterno) === articulo)?.id || null,
-            codigoInterno: articulo,
-            articulo,
-            descripcion: formData.descripcion || linkedArticle?.descripcion || articulo,
-            tipoTela: formData.tipoTela || '',
-            taller: formData.taller || linkedArticle?.proveedor || '',
             responsable: formData.responsable || (normalizedEmail === 'juan@celavie.com' ? 'Juan' : normalizedEmail === 'naara@celavie.com' ? 'Naara' : ''),
-            cantidadOriginal: toNumber(formData.cantidadOriginal || linkedArticle?.stock),
-            cantidadContada: toNumber(formData.cantidadContada),
-            cantidadEllos: toNumber(formData.cantidadEllos),
-            fallado: toNumber(formData.fallado),
-            chequeado: false,
-            chequeadoPor: '',
-            chequeadoAt: '',
-            comentarioControl: '',
             createdAt: new Date().toISOString()
-        };
+        });
 
         saveConteos([newItem, ...conteos]);
         setFormData(EMPTY_FORM);
@@ -230,7 +238,7 @@ export default function ConteoMercaderiaPage() {
             const importedConteos = [];
 
             rows.slice(1).forEach((row) => {
-                const articulo = normalizeCode(row[1]);
+                const articuloFabrica = normalizeCode(row[1]);
                 const descripcion = normalizeText(row[2]);
                 const tipoTela = normalizeText(row[3]);
                 const cantidadOriginal = parseExcelNumber(row[4]);
@@ -238,38 +246,28 @@ export default function ConteoMercaderiaPage() {
                 const cantidadContada = parseExcelNumber(row[6]);
                 const taller = normalizeText(row[0]);
 
-                const extraNumbers = row
-                    .slice(7)
-                    .map((cell) => parseExcelNumber(cell))
-                    .filter((value) => value > 0);
-
+                const extraNumbers = row.slice(7).map((cell) => parseExcelNumber(cell)).filter((value) => value > 0);
                 const cantidadEllos = extraNumbers[0] || 0;
                 const fallado = extraNumbers[1] || 0;
 
-                if (!articulo && !descripcion) return;
+                if (!articuloFabrica && !descripcion) return;
 
-                const linkedArticle = articleOptions.find((item) => item.codigoInterno === articulo);
-                importedConteos.push({
+                importedConteos.push(buildConteoItem({
                     id: generateId(),
-                    productId: productos.find((producto) => normalizeCode(producto.codigoInterno) === articulo)?.id || null,
-                    codigoInterno: articulo || normalizeCode(descripcion),
-                    articulo: articulo || normalizeCode(descripcion),
-                    descripcion: descripcion || linkedArticle?.descripcion || articulo,
+                    articuloFabrica: articuloFabrica || normalizeCode(descripcion),
+                    articuloVenta: articuloFabrica || normalizeCode(descripcion),
+                    descripcion,
                     tipoTela,
                     color: '',
                     fechaIngreso,
-                    taller: taller || linkedArticle?.proveedor || '',
+                    taller,
                     responsable: normalizedEmail === 'juan@celavie.com' ? 'Juan' : normalizedEmail === 'naara@celavie.com' ? 'Naara' : '',
                     cantidadOriginal,
                     cantidadContada,
                     cantidadEllos,
                     fallado,
-                    chequeado: false,
-                    chequeadoPor: '',
-                    chequeadoAt: '',
-                    comentarioControl: '',
                     createdAt: new Date().toISOString()
-                });
+                }));
             });
 
             if (!importedConteos.length) {
@@ -278,10 +276,10 @@ export default function ConteoMercaderiaPage() {
             }
 
             upsertConteos(importedConteos);
-            alert(`✅ Se importaron/actualizaron ${importedConteos.length} filas de conteo desde Excel.`);
+            alert(`Se importaron o actualizaron ${importedConteos.length} filas desde Excel.`);
         } catch (error) {
             console.error('Error importando Excel de conteo:', error);
-            alert(`❌ No pude importar ese Excel: ${error.message}`);
+            alert(`No pude importar ese Excel: ${error.message}`);
         } finally {
             event.target.value = '';
         }
@@ -290,29 +288,17 @@ export default function ConteoMercaderiaPage() {
     const handleCellChange = (id, field, value) => {
         const nextConteos = conteos.map((item) =>
             item.id === id
-                ? {
+                ? buildConteoItem({
                     ...item,
-                    [field]: field === 'articulo'
+                    [field]: ['articuloFabrica', 'articuloVenta'].includes(field)
                         ? normalizeCode(value)
                         : ['cantidadOriginal', 'cantidadContada', 'cantidadEllos', 'fallado'].includes(field)
                         ? toNumber(value)
                         : value
-                }
+                })
                 : item
         );
-
-        const normalizedConteos = nextConteos.map((item) => {
-            const linkedArticle = articleOptions.find((option) => option.codigoInterno === normalizeCode(item.articulo || item.codigoInterno));
-            return {
-                ...item,
-                codigoInterno: normalizeCode(item.articulo || item.codigoInterno),
-                articulo: normalizeCode(item.articulo || item.codigoInterno),
-                descripcion: item.descripcion || linkedArticle?.descripcion || '',
-                tipoTela: item.tipoTela || '',
-                productId: item.productId || productos.find((producto) => normalizeCode(producto.codigoInterno) === normalizeCode(item.articulo || item.codigoInterno))?.id || null
-            };
-        });
-        saveConteos(normalizedConteos);
+        saveConteos(nextConteos);
     };
 
     const handleControlChange = (id, field, value) => {
@@ -326,20 +312,18 @@ export default function ConteoMercaderiaPage() {
                     chequeadoAt: value ? new Date().toISOString() : ''
                 };
             }
-            return {
-                ...item,
-                [field]: value
-            };
+            return { ...item, [field]: value };
         });
         saveConteos(nextConteos);
     };
 
     const exportCsv = () => {
-        const headers = ['Articulo', 'Descripcion', 'Tipo tela', 'Color', 'Fecha ingreso', 'Taller', 'Responsable', 'Cantidad original', 'Cantidad contada', 'Cantidad ellos', 'Fallado', 'Chequeado', 'Comentario control', 'Diferencia'];
+        const headers = ['Articulo fabrica', 'Articulo venta', 'Descripcion', 'Tipo tela', 'Color', 'Fecha ingreso', 'Taller', 'Responsable', 'Cantidad original', 'Cantidad contada', 'Cantidad ellos', 'Fallado', 'Chequeado', 'Comentario control', 'Diferencia'];
         const rows = conteos.map((item) => {
             const diferencia = toNumber(item.cantidadContada) - toNumber(item.cantidadOriginal);
             return [
-                item.articulo,
+                item.articuloFabrica,
+                item.articuloVenta,
                 item.descripcion,
                 item.tipoTela,
                 item.color,
@@ -370,24 +354,18 @@ export default function ConteoMercaderiaPage() {
     };
 
     return (
-        <div className="view-container" style={{ maxWidth: 1250, margin: '0 auto', padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20 }}>
+        <div className="view-container" style={{ maxWidth: 1380, margin: '0 auto', padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 20 }}>
                 <div>
-                    <h2 style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <h2 style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                         <Boxes /> Conteo de Mercaderia
                     </h2>
-                    <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                        Registro de stock contado por articulo, tela, color y taller. Juan y Naara cargan; Nadia controla con chequeado y comentarios.
+                    <p style={{ margin: 0, color: 'var(--text-secondary)', maxWidth: 780 }}>
+                        Ahora separamos articulo de fabrica y articulo de venta. El stock sincroniza por articulo de venta, mientras el codigo de fabrica queda guardado para produccion y control.
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".xlsx,.xls"
-                        style={{ display: 'none' }}
-                        onChange={handleImportExcel}
-                    />
+                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
                     <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={!canEditInventoryRows}>
                         <Upload size={16} /> Importar Excel
                     </button>
@@ -397,149 +375,82 @@ export default function ConteoMercaderiaPage() {
                 </div>
             </div>
 
-            <div className="glass-panel" style={{ padding: 18, marginBottom: 18, opacity: canEditInventoryRows ? 1 : 0.92 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
-                    <input
-                        className="form-input"
-                        list="conteo-articulos"
-                        placeholder="Articulo / codigo"
-                        value={formData.articulo}
-                        onChange={(e) => setFormData((prev) => autofillArticle(e.target.value, prev))}
-                        disabled={!canEditInventoryRows}
-                    />
-                    <input className="form-input" placeholder="Descripcion" value={formData.descripcion} onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))} disabled={!canEditInventoryRows} />
-                    <input className="form-input" list="conteo-telas" placeholder="Tipo de tela" value={formData.tipoTela} onChange={(e) => setFormData((prev) => ({ ...prev, tipoTela: e.target.value }))} disabled={!canEditInventoryRows} />
-                    <input className="form-input" placeholder="Color / modelo" value={formData.color} onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))} disabled={!canEditInventoryRows} />
-                    <input className="form-input" type="date" value={formData.fechaIngreso} onChange={(e) => setFormData((prev) => ({ ...prev, fechaIngreso: e.target.value }))} disabled={!canEditInventoryRows} />
-                    <input className="form-input" list="conteo-talleres" placeholder="Taller" value={formData.taller} onChange={(e) => setFormData((prev) => ({ ...prev, taller: e.target.value }))} disabled={!canEditInventoryRows} />
-                    <select className="form-input" value={formData.responsable} onChange={(e) => setFormData((prev) => ({ ...prev, responsable: e.target.value }))} disabled={!canEditInventoryRows}>
-                        <option value="">Responsable</option>
-                        {responsableOptions.map((responsable) => (
-                            <option key={responsable} value={responsable}>{responsable}</option>
-                        ))}
-                    </select>
-                    <input className="form-input" type="number" placeholder="Cantidad original" value={formData.cantidadOriginal} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadOriginal: e.target.value }))} disabled={!canEditInventoryRows} />
-                    <input className="form-input" type="number" placeholder="Cantidad contada" value={formData.cantidadContada} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadContada: e.target.value }))} disabled={!canEditInventoryRows} />
-                    <input className="form-input" type="number" placeholder="Cantidad de ellos" value={formData.cantidadEllos} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadEllos: e.target.value }))} disabled={!canEditInventoryRows} />
-                    <input className="form-input" type="number" placeholder="Fallado" value={formData.fallado} onChange={(e) => setFormData((prev) => ({ ...prev, fallado: e.target.value }))} disabled={!canEditInventoryRows} />
+            <div className="glass-panel" style={{ padding: 20, marginBottom: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo fabrica</span><input className="form-input" placeholder="Codigo de fabrica" value={formData.articuloFabrica} onChange={(e) => setFormData((prev) => ({ ...prev, articuloFabrica: normalizeCode(e.target.value) }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo venta</span><input className="form-input" list="conteo-articulos-venta" placeholder="Codigo de venta" value={formData.articuloVenta} onChange={(e) => setFormData((prev) => autofillSaleArticle(e.target.value, prev))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Descripcion</span><input className="form-input" value={formData.descripcion} onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Tela</span><input className="form-input" list="conteo-telas" value={formData.tipoTela} onChange={(e) => setFormData((prev) => ({ ...prev, tipoTela: e.target.value }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Color</span><input className="form-input" value={formData.color} onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fecha ingreso</span><input className="form-input" type="date" value={formData.fechaIngreso} onChange={(e) => setFormData((prev) => ({ ...prev, fechaIngreso: e.target.value }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Taller</span><input className="form-input" list="conteo-talleres" value={formData.taller} onChange={(e) => setFormData((prev) => ({ ...prev, taller: e.target.value }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Responsable</span><select className="form-input" value={formData.responsable} onChange={(e) => setFormData((prev) => ({ ...prev, responsable: e.target.value }))} disabled={!canEditInventoryRows}><option value="">Elegir responsable</option>{RESPONSABLES.map((responsable) => <option key={responsable} value={responsable}>{responsable}</option>)}</select></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Cantidad original</span><input className="form-input" type="number" value={formData.cantidadOriginal} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadOriginal: e.target.value }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Cantidad contada</span><input className="form-input" type="number" value={formData.cantidadContada} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadContada: e.target.value }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Cantidad de ellos</span><input className="form-input" type="number" value={formData.cantidadEllos} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadEllos: e.target.value }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fallado</span><input className="form-input" type="number" value={formData.fallado} onChange={(e) => setFormData((prev) => ({ ...prev, fallado: e.target.value }))} disabled={!canEditInventoryRows} /></label>
                 </div>
-                <datalist id="conteo-articulos">
-                    {articleOptions.map((item) => (
-                        <option key={item.codigoInterno} value={item.codigoInterno}>
-                            {item.descripcion}
-                        </option>
-                    ))}
-                </datalist>
-                <datalist id="conteo-telas">
-                    {telasActivas.map((tela) => (
-                        <option key={tela} value={tela} />
-                    ))}
-                </datalist>
-                <datalist id="conteo-talleres">
-                    {talleres.map((taller) => (
-                        <option key={taller} value={taller} />
-                    ))}
-                </datalist>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginTop: 14, flexWrap: 'wrap' }}>
-                    <input
-                        className="form-input"
-                        style={{ maxWidth: 320 }}
-                        placeholder="Buscar por articulo, tela, descripcion, color o taller..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                    />
-                    <button className="btn btn-primary" onClick={handleAdd} disabled={!canEditInventoryRows}>
-                        <Plus size={16} /> Agregar conteo
-                    </button>
+
+                <datalist id="conteo-articulos-venta">{articleOptions.map((item) => <option key={item.articuloVenta} value={item.articuloVenta}>{item.descripcion}</option>)}</datalist>
+                <datalist id="conteo-telas">{telasActivas.map((tela) => <option key={tela} value={tela} />)}</datalist>
+                <datalist id="conteo-talleres">{talleres.map((taller) => <option key={taller} value={taller} />)}</datalist>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
+                    <input className="form-input" style={{ maxWidth: 420 }} placeholder="Buscar por articulo fabrica, venta, tela, descripcion, color o taller..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <button className="btn btn-primary" onClick={handleAdd} disabled={!canEditInventoryRows}><Plus size={16} /> Agregar conteo</button>
                 </div>
-                {!canEditInventoryRows && (
-                    <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
-                        Nadia solo controla esta seccion: puede marcar chequeado/no chequeado y dejar comentarios, sin modificar cantidades.
-                    </div>
-                )}
+                {!canEditInventoryRows && <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)' }}>Nadia solo controla: puede marcar chequeado y comentar, sin editar cantidades ni articulos.</div>}
             </div>
 
-            <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1450 }}>
-                        <thead>
-                            <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                                {['Articulo', 'Descripcion', 'Tela', 'Color', 'Fecha ingreso', 'Taller', 'Responsable', 'Original', 'Contada', 'Ellos', 'Fallado', 'Chequeado', 'Comentarios', 'Diferencia', 'Accion'].map((label) => (
-                                    <th key={label} style={{ padding: '12px 10px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)' }}>{label}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredConteos.map((item) => {
-                                const diferencia = toNumber(item.cantidadContada) - toNumber(item.cantidadOriginal);
-                                const rowBackground = item.chequeado ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.08)';
-                                return (
-                                    <tr key={item.id} style={{ borderTop: '1px solid var(--glass-border)', background: rowBackground }}>
-                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-articulos" value={item.articulo || ''} onChange={(e) => handleCellChange(item.id, 'articulo', e.target.value)} disabled={!canEditInventoryRows} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" value={item.descripcion || ''} onChange={(e) => handleCellChange(item.id, 'descripcion', e.target.value)} disabled={!canEditInventoryRows} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-telas" value={item.tipoTela || ''} onChange={(e) => handleCellChange(item.id, 'tipoTela', e.target.value)} disabled={!canEditInventoryRows} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" value={item.color || ''} onChange={(e) => handleCellChange(item.id, 'color', e.target.value)} disabled={!canEditInventoryRows} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" type="date" value={item.fechaIngreso || ''} onChange={(e) => handleCellChange(item.id, 'fechaIngreso', e.target.value)} disabled={!canEditInventoryRows} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" list="conteo-talleres" value={item.taller || ''} onChange={(e) => handleCellChange(item.id, 'taller', e.target.value)} disabled={!canEditInventoryRows} /></td>
-                                        <td style={{ padding: 10 }}>
-                                            <select className="form-input" value={item.responsable || ''} onChange={(e) => handleCellChange(item.id, 'responsable', e.target.value)} disabled={!canEditInventoryRows}>
-                                                <option value="">Responsable</option>
-                                                {responsableOptions.map((responsable) => (
-                                                    <option key={responsable} value={responsable}>{responsable}</option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadOriginal || 0} onChange={(e) => handleCellChange(item.id, 'cantidadOriginal', e.target.value)} disabled={!canEditInventoryRows} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadContada || 0} onChange={(e) => handleCellChange(item.id, 'cantidadContada', e.target.value)} disabled={!canEditInventoryRows} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.cantidadEllos || 0} onChange={(e) => handleCellChange(item.id, 'cantidadEllos', e.target.value)} disabled={!canEditInventoryRows} /></td>
-                                        <td style={{ padding: 10 }}><input className="form-input" type="number" value={item.fallado || 0} onChange={(e) => handleCellChange(item.id, 'fallado', e.target.value)} disabled={!canEditInventoryRows} /></td>
-                                        <td style={{ padding: 10, minWidth: 150 }}>
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: item.chequeado ? 'var(--success)' : 'var(--danger)' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={!!item.chequeado}
-                                                    onChange={(e) => handleControlChange(item.id, 'chequeado', e.target.checked)}
-                                                    disabled={!(isNadiaController || user?.role === 'admin')}
-                                                />
-                                                {item.chequeado ? 'Chequeado' : 'No chequeado'}
-                                            </label>
-                                            {item.chequeadoPor && (
-                                                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-                                                    {item.chequeadoPor}
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td style={{ padding: 10, minWidth: 220 }}>
-                                            <textarea
-                                                className="form-input"
-                                                rows={2}
-                                                value={item.comentarioControl || ''}
-                                                onChange={(e) => handleControlChange(item.id, 'comentarioControl', e.target.value)}
-                                                placeholder="Comentarios de control..."
-                                                disabled={!(isNadiaController || user?.role === 'admin')}
-                                                style={{ resize: 'vertical', minHeight: 64 }}
-                                            />
-                                        </td>
-                                        <td style={{ padding: 10, fontWeight: 700, color: diferencia < 0 ? 'var(--danger)' : 'var(--success)' }}>
-                                            {diferencia}
-                                        </td>
-                                        <td style={{ padding: 10 }}>
-                                            <button className="btn btn-ghost btn-danger" onClick={() => handleDelete(item.id)} disabled={!canEditInventoryRows}>
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+            <div style={{ display: 'grid', gap: 14 }}>
+                {filteredConteos.map((item) => {
+                    const diferencia = toNumber(item.cantidadContada) - toNumber(item.cantidadOriginal);
+                    const checked = Boolean(item.chequeado);
+                    return (
+                        <section key={item.id} style={getFormCardStyle(checked)}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+                                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.07)', fontSize: 12 }}><Factory size={14} /> Fab: {item.articuloFabrica || '-'}</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.07)', fontSize: 12 }}><ShoppingBag size={14} /> Venta: {item.articuloVenta || '-'}</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 999, background: checked ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.16)', color: checked ? 'var(--success)' : '#ff7a7a', fontWeight: 700 }}>{checked ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}{checked ? 'Chequeado' : 'No chequeado'}</span>
+                                </div>
+                                <button className="btn btn-ghost btn-danger" onClick={() => handleDelete(item.id)} disabled={!canEditInventoryRows}><Trash2 size={14} /></button>
+                            </div>
 
-                {filteredConteos.length === 0 && (
-                    <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>
-                        No hay conteos cargados todavía.
-                    </div>
-                )}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo fabrica</span><input className="form-input" value={item.articuloFabrica || ''} onChange={(e) => handleCellChange(item.id, 'articuloFabrica', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo venta</span><input className="form-input" list="conteo-articulos-venta" value={item.articuloVenta || ''} onChange={(e) => handleCellChange(item.id, 'articuloVenta', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6, gridColumn: 'span 2' }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Descripcion</span><input className="form-input" value={item.descripcion || ''} onChange={(e) => handleCellChange(item.id, 'descripcion', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Tela</span><input className="form-input" list="conteo-telas" value={item.tipoTela || ''} onChange={(e) => handleCellChange(item.id, 'tipoTela', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Color</span><input className="form-input" value={item.color || ''} onChange={(e) => handleCellChange(item.id, 'color', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fecha ingreso</span><input className="form-input" type="date" value={item.fechaIngreso || ''} onChange={(e) => handleCellChange(item.id, 'fechaIngreso', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Taller</span><input className="form-input" list="conteo-talleres" value={item.taller || ''} onChange={(e) => handleCellChange(item.id, 'taller', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Responsable</span><select className="form-input" value={item.responsable || ''} onChange={(e) => handleCellChange(item.id, 'responsable', e.target.value)} disabled={!canEditInventoryRows}><option value="">Responsable</option>{RESPONSABLES.map((responsable) => <option key={responsable} value={responsable}>{responsable}</option>)}</select></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Original</span><input className="form-input" type="number" value={item.cantidadOriginal || 0} onChange={(e) => handleCellChange(item.id, 'cantidadOriginal', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Contada</span><input className="form-input" type="number" value={item.cantidadContada || 0} onChange={(e) => handleCellChange(item.id, 'cantidadContada', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Ellos</span><input className="form-input" type="number" value={item.cantidadEllos || 0} onChange={(e) => handleCellChange(item.id, 'cantidadEllos', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fallado</span><input className="form-input" type="number" value={item.fallado || 0} onChange={(e) => handleCellChange(item.id, 'fallado', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <div style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Diferencia</span><div className="form-input" style={{ display: 'flex', alignItems: 'center', fontWeight: 700, color: diferencia < 0 ? '#ff7a7a' : 'var(--success)' }}>{diferencia}</div></div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr', gap: 12, marginTop: 14 }}>
+                                <div style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.05)' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: checked ? 'var(--success)' : '#ff7a7a' }}>
+                                        <input type="checkbox" checked={checked} onChange={(e) => handleControlChange(item.id, 'chequeado', e.target.checked)} disabled={!(isNadiaController || user?.role === 'admin')} />
+                                        {checked ? 'Chequeado en verde' : 'No chequeado en rojo'}
+                                    </label>
+                                    {item.chequeadoPor && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>Revisado por {item.chequeadoPor}</div>}
+                                </div>
+                                <label style={{ display: 'grid', gap: 6 }}>
+                                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Comentarios de control</span>
+                                    <textarea className="form-input" rows={3} value={item.comentarioControl || ''} onChange={(e) => handleControlChange(item.id, 'comentarioControl', e.target.value)} disabled={!(isNadiaController || user?.role === 'admin')} style={{ resize: 'vertical', minHeight: 90 }} />
+                                </label>
+                            </div>
+                        </section>
+                    );
+                })}
+
+                {filteredConteos.length === 0 && <div className="glass-panel" style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>No hay conteos cargados todavia.</div>}
             </div>
         </div>
     );

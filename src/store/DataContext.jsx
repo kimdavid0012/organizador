@@ -15,6 +15,8 @@ const normalizeText = (value) => (value || '').toString().trim();
 const sanitizeStockBreakdown = (entries = []) =>
     entries
         .map((entry) => ({
+            articuloFabrica: normalizeProductCode(entry.articuloFabrica),
+            articuloVenta: normalizeProductCode(entry.articuloVenta),
             tipoTela: normalizeText(entry.tipoTela),
             color: normalizeText(entry.color),
             taller: normalizeText(entry.taller),
@@ -24,7 +26,7 @@ const sanitizeStockBreakdown = (entries = []) =>
             cantidadEllos: Number.parseInt(entry.cantidadEllos || 0, 10) || 0,
             fallado: Number.parseInt(entry.fallado || 0, 10) || 0
         }))
-        .filter((entry) => entry.tipoTela || entry.color || entry.taller || entry.cantidadOriginal || entry.cantidadContada || entry.cantidadEllos || entry.fallado);
+        .filter((entry) => entry.articuloFabrica || entry.articuloVenta || entry.tipoTela || entry.color || entry.taller || entry.cantidadOriginal || entry.cantidadContada || entry.cantidadEllos || entry.fallado);
 
 const upsertPosProducts = (existingProducts = [], incomingProducts = []) => {
     const merged = [...existingProducts];
@@ -59,7 +61,7 @@ const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = [
     const groupedByCode = new Map();
 
     conteos.forEach((item) => {
-        const code = normalizeProductCode(item.codigoInterno || item.articulo);
+        const code = normalizeProductCode(item.articuloVenta || item.codigoInterno || item.articulo);
         if (!code) return;
 
         if (!groupedByCode.has(code)) {
@@ -74,6 +76,8 @@ const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = [
 
         const group = groupedByCode.get(code);
         const descripcion = normalizeText(item.descripcion);
+        const articuloFabrica = normalizeProductCode(item.articuloFabrica || item.articulo);
+        const articuloVenta = normalizeProductCode(item.articuloVenta || item.codigoInterno || item.articulo);
         const tipoTela = normalizeText(item.tipoTela);
         const taller = normalizeText(item.taller);
         const color = normalizeText(item.color);
@@ -88,6 +92,8 @@ const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = [
         if (taller) group.proveedor = taller;
         group.stock += stockDisponible;
         group.stockPorColor.push({
+            articuloFabrica,
+            articuloVenta,
             tipoTela,
             color,
             taller,
@@ -702,8 +708,10 @@ function dataReducer(state, action) {
         case ACTION_TYPES.SAVE_MERCADERIA_CONTEOS: {
             const conteos = action.payload.map((item) => ({
                 ...item,
-                codigoInterno: normalizeProductCode(item.codigoInterno || item.articulo),
-                articulo: normalizeProductCode(item.codigoInterno || item.articulo),
+                codigoInterno: normalizeProductCode(item.articuloVenta || item.codigoInterno || item.articulo),
+                articulo: normalizeProductCode(item.articuloFabrica || item.articulo),
+                articuloFabrica: normalizeProductCode(item.articuloFabrica || item.articulo),
+                articuloVenta: normalizeProductCode(item.articuloVenta || item.codigoInterno || item.articulo),
                 descripcion: normalizeText(item.descripcion),
                 tipoTela: normalizeText(item.tipoTela),
                 color: normalizeText(item.color),
@@ -717,7 +725,7 @@ function dataReducer(state, action) {
 
             const conteoDerivedProducts = Array.from(
                 conteos.reduce((map, item) => {
-                    const code = normalizeProductCode(item.codigoInterno || item.articulo);
+                    const code = normalizeProductCode(item.articuloVenta || item.codigoInterno || item.articulo);
                     if (!code) return map;
 
                     const current = map.get(code) || {
@@ -746,6 +754,8 @@ function dataReducer(state, action) {
                     current.proveedor = item.taller || current.proveedor;
                     current.stock += stockDisponible;
                     current.stockPorColor = [...(current.stockPorColor || []), {
+                        articuloFabrica: item.articuloFabrica,
+                        articuloVenta: item.articuloVenta,
                         tipoTela: item.tipoTela,
                         color: item.color,
                         taller: item.taller,
