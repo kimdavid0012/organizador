@@ -11,6 +11,7 @@ const EMPTY_FORM = {
     descripcion: '',
     tipoTela: '',
     color: '',
+    numeroCorte: '',
     fechaIngreso: '',
     taller: '',
     responsable: '',
@@ -25,6 +26,12 @@ const RESPONSABLES = ['Juan', 'Naara'];
 const toNumber = (value) => Number.parseInt(value || 0, 10) || 0;
 const normalizeCode = (value) => (value || '').toString().trim().toUpperCase();
 const normalizeText = (value) => (value || '').toString().trim();
+const extractCorteNumber = (value) => {
+    const raw = normalizeText(value);
+    if (!raw) return '';
+    const match = raw.match(/(\d+)/);
+    return match ? match[1] : raw.toUpperCase();
+};
 
 const parseExcelNumber = (value) => {
     if (typeof value === 'number') return Math.round(value);
@@ -83,6 +90,8 @@ export default function ConteoMercaderiaPage() {
             const descripcion = normalizeText(incomingOption.descripcion);
             const proveedor = normalizeText(incomingOption.proveedor);
             const stock = toNumber(incomingOption.stock);
+            const numeroCorte = extractCorteNumber(incomingOption.numeroCorte);
+            const fechaIngreso = normalizeText(incomingOption.fechaIngreso);
 
             const existingIndex = mergedOptions.findIndex((option) =>
                 (articuloVenta && (option.articuloVenta === articuloVenta || option.articuloFabrica === articuloVenta)) ||
@@ -96,7 +105,9 @@ export default function ConteoMercaderiaPage() {
                     articuloFabrica: current.articuloFabrica || articuloFabrica || articuloVenta,
                     descripcion: current.descripcion || descripcion || articuloVenta || articuloFabrica,
                     stock: current.stock || stock,
-                    proveedor: current.proveedor || proveedor
+                    proveedor: current.proveedor || proveedor,
+                    numeroCorte: current.numeroCorte || numeroCorte,
+                    fechaIngreso: current.fechaIngreso || fechaIngreso
                 };
                 return;
             }
@@ -106,7 +117,9 @@ export default function ConteoMercaderiaPage() {
                 articuloFabrica: articuloFabrica || articuloVenta,
                 descripcion: descripcion || articuloVenta || articuloFabrica,
                 stock,
-                proveedor
+                proveedor,
+                numeroCorte,
+                fechaIngreso
             });
         };
 
@@ -118,11 +131,15 @@ export default function ConteoMercaderiaPage() {
                 articuloFabrica: saleCode,
                 descripcion: producto.detalleCorto || producto.detalleLargo || saleCode,
                 stock: toNumber(producto.stock),
-                proveedor: producto.proveedor || ''
+                proveedor: producto.proveedor || '',
+                numeroCorte: '',
+                fechaIngreso: ''
             });
         });
 
         cortes.forEach((corte) => {
+            const numeroCorte = extractCorteNumber(corte?.nombre);
+            const fechaIngreso = normalizeText(corte?.fecha);
             (corte.moldesData || []).forEach((moldeData) => {
                 const molde = state.moldes.find((item) => item.id === moldeData.id);
                 const articleFactory = normalizeCode(molde?.codigo || molde?.nombre);
@@ -132,7 +149,9 @@ export default function ConteoMercaderiaPage() {
                     articuloFabrica: articleFactory,
                     descripcion: molde?.nombre || articleFactory,
                     stock: toNumber(moldeData.cantidad),
-                    proveedor: moldeData.tallerAsignado || ''
+                    proveedor: moldeData.tallerAsignado || '',
+                    numeroCorte,
+                    fechaIngreso
                 });
             });
         });
@@ -143,7 +162,9 @@ export default function ConteoMercaderiaPage() {
                 articuloFabrica: conteo.articuloFabrica || conteo.articulo,
                 descripcion: conteo.descripcion,
                 stock: conteo.cantidadContada,
-                proveedor: conteo.taller
+                proveedor: conteo.taller,
+                numeroCorte: conteo.numeroCorte,
+                fechaIngreso: conteo.fechaIngreso
             });
         });
 
@@ -166,6 +187,7 @@ export default function ConteoMercaderiaPage() {
                 item.descripcion,
                 item.tipoTela,
                 item.color,
+                item.numeroCorte,
                 item.taller,
                 item.responsable
             ].some((value) => (value || '').toLowerCase().includes(q))
@@ -194,6 +216,7 @@ export default function ConteoMercaderiaPage() {
             descripcion: baseItem.descripcion || linkedArticle?.descripcion || articuloVenta || articuloFabrica,
             tipoTela: normalizeText(baseItem.tipoTela),
             color: normalizeText(baseItem.color),
+            numeroCorte: extractCorteNumber(baseItem.numeroCorte || linkedArticle?.numeroCorte),
             fechaIngreso: normalizeText(baseItem.fechaIngreso),
             taller: normalizeText(baseItem.taller || linkedArticle?.proveedor || ''),
             responsable: normalizeText(baseItem.responsable),
@@ -216,6 +239,7 @@ export default function ConteoMercaderiaPage() {
                     normalizeCode(item.articuloVenta || item.codigoInterno),
                     normalizeText(item.color).toUpperCase(),
                     normalizeText(item.taller).toUpperCase(),
+                    extractCorteNumber(item.numeroCorte),
                     normalizeText(item.fechaIngreso)
                 ].join('|'),
                 item
@@ -228,6 +252,7 @@ export default function ConteoMercaderiaPage() {
                 normalizeCode(item.articuloVenta || item.codigoInterno),
                 normalizeText(item.color).toUpperCase(),
                 normalizeText(item.taller).toUpperCase(),
+                extractCorteNumber(item.numeroCorte),
                 normalizeText(item.fechaIngreso)
             ].join('|');
             const previous = existingMap.get(key);
@@ -252,6 +277,8 @@ export default function ConteoMercaderiaPage() {
             articuloVenta: linkedArticle?.articuloVenta || nextArticuloVenta || nextArticuloFabrica,
             articuloFabrica: linkedArticle?.articuloFabrica || nextArticuloFabrica || nextArticuloVenta,
             descripcion: currentForm.descripcion || linkedArticle?.descripcion || '',
+            numeroCorte: currentForm.numeroCorte || linkedArticle?.numeroCorte || '',
+            fechaIngreso: currentForm.fechaIngreso || linkedArticle?.fechaIngreso || '',
             taller: currentForm.taller || linkedArticle?.proveedor || '',
             cantidadOriginal: currentForm.cantidadOriginal || (linkedArticle ? String(linkedArticle.stock) : '')
         };
@@ -320,6 +347,7 @@ export default function ConteoMercaderiaPage() {
                     descripcion,
                     tipoTela,
                     color: '',
+                    numeroCorte: '',
                     fechaIngreso,
                     taller,
                     responsable: normalizedEmail === 'juan@celavie.com' ? 'Juan' : normalizedEmail === 'naara@celavie.com' ? 'Naara' : '',
@@ -353,6 +381,8 @@ export default function ConteoMercaderiaPage() {
                     ...item,
                     [field]: ['articuloFabrica', 'articuloVenta'].includes(field)
                         ? normalizeCode(value)
+                        : field === 'numeroCorte'
+                        ? extractCorteNumber(value)
                         : ['cantidadOriginal', 'cantidadContada', 'cantidadEllos', 'fallado'].includes(field)
                         ? toNumber(value)
                         : value
@@ -379,7 +409,7 @@ export default function ConteoMercaderiaPage() {
     };
 
     const exportCsv = () => {
-        const headers = ['Articulo fabrica', 'Articulo venta', 'Descripcion', 'Tipo tela', 'Color', 'Fecha ingreso', 'Taller', 'Responsable', 'Cantidad original', 'Cantidad contada', 'Cantidad ellos', 'Fallado', 'Chequeado', 'Comentario control', 'Diferencia'];
+        const headers = ['Articulo fabrica', 'Articulo venta', 'Descripcion', 'Tipo tela', 'Color', 'Numero corte', 'Fecha ingreso', 'Taller', 'Responsable', 'Cantidad original', 'Cantidad contada', 'Cantidad ellos', 'Fallado', 'Chequeado', 'Comentario control', 'Diferencia'];
         const rows = conteos.map((item) => {
             const diferencia = toNumber(item.cantidadContada) - toNumber(item.cantidadOriginal);
             return [
@@ -388,6 +418,7 @@ export default function ConteoMercaderiaPage() {
                 item.descripcion,
                 item.tipoTela,
                 item.color,
+                item.numeroCorte,
                 item.fechaIngreso,
                 item.taller,
                 item.responsable,
@@ -422,7 +453,7 @@ export default function ConteoMercaderiaPage() {
                         <Boxes /> Conteo de Mercaderia
                     </h2>
                     <p style={{ margin: 0, color: 'var(--text-secondary)', maxWidth: 780 }}>
-                        Ahora separamos articulo de fabrica y articulo de venta. El stock sincroniza por articulo de venta, mientras el codigo de fabrica queda guardado para produccion y control.
+                        Ahora separamos articulo de fabrica y articulo de venta. Tambien guardamos numero de corte, taller y fecha de ingreso para que el dashboard pueda seguir la trazabilidad productiva.
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -443,6 +474,7 @@ export default function ConteoMercaderiaPage() {
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Descripcion</span><input className="form-input" value={formData.descripcion} onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Tela</span><input className="form-input" list="conteo-telas" value={formData.tipoTela} onChange={(e) => setFormData((prev) => ({ ...prev, tipoTela: e.target.value }))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Color</span><input className="form-input" value={formData.color} onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Numero de corte</span><input className="form-input" list="conteo-cortes" value={formData.numeroCorte} onChange={(e) => setFormData((prev) => ({ ...prev, numeroCorte: extractCorteNumber(e.target.value) }))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fecha ingreso</span><input className="form-input" type="date" value={formData.fechaIngreso} onChange={(e) => setFormData((prev) => ({ ...prev, fechaIngreso: e.target.value }))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Taller</span><input className="form-input" list="conteo-talleres" value={formData.taller} onChange={(e) => setFormData((prev) => ({ ...prev, taller: e.target.value }))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Responsable</span><select className="form-input" value={formData.responsable} onChange={(e) => setFormData((prev) => ({ ...prev, responsable: e.target.value }))} disabled={!canEditInventoryRows}><option value="">Elegir responsable</option>{RESPONSABLES.map((responsable) => <option key={responsable} value={responsable}>{responsable}</option>)}</select></label>
@@ -454,11 +486,12 @@ export default function ConteoMercaderiaPage() {
 
                 <datalist id="conteo-articulos-venta">{articleOptions.filter((item) => item.articuloVenta).map((item) => <option key={`venta-${item.articuloVenta}`} value={item.articuloVenta}>{item.descripcion}</option>)}</datalist>
                 <datalist id="conteo-articulos-fabrica">{articleOptions.filter((item) => item.articuloFabrica).map((item) => <option key={`fabrica-${item.articuloFabrica}`} value={item.articuloFabrica}>{item.descripcion}</option>)}</datalist>
+                <datalist id="conteo-cortes">{cortes.map((corte) => { const numero = extractCorteNumber(corte?.nombre); return numero ? <option key={corte.id || numero} value={numero}>{corte.nombre}</option> : null; })}</datalist>
                 <datalist id="conteo-telas">{telasActivas.map((tela) => <option key={tela} value={tela} />)}</datalist>
                 <datalist id="conteo-talleres">{talleres.map((taller) => <option key={taller} value={taller} />)}</datalist>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
-                    <input className="form-input" style={{ maxWidth: 420 }} placeholder="Buscar por articulo fabrica, venta, tela, descripcion, color o taller..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <input className="form-input" style={{ maxWidth: 420 }} placeholder="Buscar por articulo, tela, descripcion, color, taller o corte..." value={search} onChange={(e) => setSearch(e.target.value)} />
                     <button className="btn btn-primary" onClick={handleAdd} disabled={!canEditInventoryRows}><Plus size={16} /> Agregar conteo</button>
                 </div>
                 {!canEditInventoryRows && <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)' }}>Nadia solo controla: puede marcar chequeado y comentar, sin editar cantidades ni articulos.</div>}
@@ -485,6 +518,7 @@ export default function ConteoMercaderiaPage() {
                                 <label style={{ display: 'grid', gap: 6, gridColumn: 'span 2' }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Descripcion</span><input className="form-input" value={item.descripcion || ''} onChange={(e) => handleCellChange(item.id, 'descripcion', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Tela</span><input className="form-input" list="conteo-telas" value={item.tipoTela || ''} onChange={(e) => handleCellChange(item.id, 'tipoTela', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Color</span><input className="form-input" value={item.color || ''} onChange={(e) => handleCellChange(item.id, 'color', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Numero de corte</span><input className="form-input" list="conteo-cortes" value={item.numeroCorte || ''} onChange={(e) => handleCellChange(item.id, 'numeroCorte', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fecha ingreso</span><input className="form-input" type="date" value={item.fechaIngreso || ''} onChange={(e) => handleCellChange(item.id, 'fechaIngreso', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Taller</span><input className="form-input" list="conteo-talleres" value={item.taller || ''} onChange={(e) => handleCellChange(item.id, 'taller', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Responsable</span><select className="form-input" value={item.responsable || ''} onChange={(e) => handleCellChange(item.id, 'responsable', e.target.value)} disabled={!canEditInventoryRows}><option value="">Responsable</option>{RESPONSABLES.map((responsable) => <option key={responsable} value={responsable}>{responsable}</option>)}</select></label>

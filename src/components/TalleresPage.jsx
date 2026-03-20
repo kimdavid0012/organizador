@@ -4,12 +4,20 @@ import { useData } from '../store/DataContext';
 import { useI18n } from '../store/I18nContext';
 import { useAuth } from '../store/AuthContext';
 
+const extractCorteNumber = (value) => {
+    const raw = (value || '').toString().trim();
+    if (!raw) return '';
+    const match = raw.match(/(\d+)/);
+    return match ? match[1] : raw.toUpperCase();
+};
+
 export default function TalleresPage() {
     const { state, updateConfig } = useData();
     const { t } = useI18n();
     const { user } = useAuth();
     const { config, moldes, telas } = state;
     const talleres = config.talleres || [];
+    const mercaderiaConteos = config.mercaderiaConteos || [];
 
     const [newName, setNewName] = useState('');
     const [selected, setSelected] = useState(null);
@@ -47,8 +55,10 @@ export default function TalleresPage() {
     // Performance stats per taller
     const stats = useMemo(() => {
         const map = {};
+        const corteDates = new Map((config.cortes || []).map((corte) => [extractCorteNumber(corte?.nombre), corte?.fecha || '']));
         talleres.forEach(name => {
             const assigned = moldes.filter(m => m.taller === name);
+            const conteosTaller = mercaderiaConteos.filter((item) => (item?.taller || '').trim().toUpperCase() === name.trim().toUpperCase());
             const withDates = assigned.filter(m => m.fechaEnvioTaller && m.fechaRetornoTaller);
             const inProgress = assigned.filter(m => m.fechaEnvioTaller && !m.fechaRetornoTaller);
             const days = withDates.map(m => {
@@ -57,6 +67,17 @@ export default function TalleresPage() {
                 return Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
             });
             const avgDays = days.length > 0 ? Math.round(days.reduce((a, b) => a + b, 0) / days.length) : 0;
+            const ingresosConLead = conteosTaller
+                .map((item) => {
+                    const fechaIngreso = item?.fechaIngreso ? new Date(item.fechaIngreso) : null;
+                    const fechaCorteRaw = corteDates.get(extractCorteNumber(item?.numeroCorte));
+                    const fechaCorte = fechaCorteRaw ? new Date(fechaCorteRaw) : null;
+                    if (!fechaIngreso || !fechaCorte || Number.isNaN(fechaIngreso.getTime()) || Number.isNaN(fechaCorte.getTime())) return null;
+                    return Math.max(0, Math.round((fechaIngreso - fechaCorte) / (1000 * 60 * 60 * 24)));
+                })
+                .filter((value) => value !== null);
+            const avgIngresoDays = ingresosConLead.length > 0 ? Math.round(ingresosConLead.reduce((a, b) => a + b, 0) / ingresosConLead.length) : 0;
+            const cortesUnicos = new Set(conteosTaller.map((item) => extractCorteNumber(item?.numeroCorte)).filter(Boolean));
 
             // Fallados
             const fallados = assigned.filter(m => {
@@ -93,6 +114,9 @@ export default function TalleresPage() {
                 maxDays: days.length > 0 ? Math.max(...days) : 0,
                 fallados: fallados.length,
                 delayed: delayed.length,
+                conteosMercaderia: conteosTaller.length,
+                cortesIngresados: cortesUnicos.size,
+                avgIngresoDays,
                 totalCost,
                 avgCost,
                 score,
@@ -100,7 +124,7 @@ export default function TalleresPage() {
             };
         });
         return map;
-    }, [talleres, moldes]);
+    }, [talleres, moldes, mercaderiaConteos, config.cortes]);
 
     const selectedStats = selected ? stats[selected] : null;
 
@@ -167,6 +191,7 @@ export default function TalleresPage() {
                                             <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)' }}>{name}</div>
                                             <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: 2 }}>
                                                 {s?.total || 0} moldes · {s?.inProgress?.length || 0} en taller
+                                                {s?.conteosMercaderia > 0 && ` · ${s.conteosMercaderia} ingresos`}
                                                 {user?.role === 'admin' && s?.totalCost > 0 && ` · $${s.totalCost.toLocaleString()}`}
                                             </div>
                                         </div>
@@ -222,11 +247,13 @@ export default function TalleresPage() {
                             </h3>
 
                             {/* Metric cards */}
-                            <div style={{ display: 'grid', gridTemplateColumns: user?.role === 'admin' ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: 'var(--sp-3)', marginTop: 'var(--sp-3)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: user?.role === 'admin' ? 'repeat(6, 1fr)' : 'repeat(5, 1fr)', gap: 'var(--sp-3)', marginTop: 'var(--sp-3)' }}>
                                 {[
                                     { value: selectedStats.total, label: t('totalMoldes'), bg: 'var(--accent-light)', color: 'var(--accent)' },
                                     { value: selectedStats.completed, label: t('completados'), bg: 'var(--success-bg)', color: 'var(--success)' },
                                     { value: selectedStats.avgDays || '—', label: t('promedioTaller'), bg: selectedStats.avgDays <= 7 ? 'var(--success-bg)' : selectedStats.avgDays <= 14 ? 'var(--warning-bg)' : 'var(--danger-bg)', color: selectedStats.avgDays <= 7 ? 'var(--success)' : selectedStats.avgDays <= 14 ? 'var(--warning)' : 'var(--danger)', suffix: 'd' },
+                                    { value: selectedStats.cortesIngresados || 0, label: 'Cortes ingresados', bg: 'rgba(59,130,246,0.10)', color: 'var(--accent)' },
+                                    { value: selectedStats.avgIngresoDays || '—', label: 'Ingreso promedio', bg: selectedStats.avgIngresoDays <= 3 ? 'var(--success-bg)' : selectedStats.avgIngresoDays <= 7 ? 'var(--warning-bg)' : 'var(--danger-bg)', color: selectedStats.avgIngresoDays <= 3 ? 'var(--success)' : selectedStats.avgIngresoDays <= 7 ? 'var(--warning)' : 'var(--danger)', suffix: 'd' },
                                     { value: selectedStats.fallados, label: t('fallados'), bg: selectedStats.fallados > 0 ? 'var(--danger-bg)' : 'var(--glass-bg)', color: selectedStats.fallados > 0 ? 'var(--danger)' : 'var(--text-muted)', icon: AlertTriangle },
                                     ...(user?.role === 'admin' ? [{ value: `$${selectedStats.totalCost.toLocaleString()}`, label: t('costoTotal'), bg: 'rgba(52,211,153,0.08)', color: 'var(--success)', icon: DollarSign }] : []),
                                 ].map((m, i) => (

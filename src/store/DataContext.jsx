@@ -19,6 +19,7 @@ const sanitizeStockBreakdown = (entries = []) =>
             articuloVenta: normalizeProductCode(entry.articuloVenta),
             tipoTela: normalizeText(entry.tipoTela),
             color: normalizeText(entry.color),
+            numeroCorte: normalizeText(entry.numeroCorte),
             taller: normalizeText(entry.taller),
             fechaIngreso: normalizeText(entry.fechaIngreso),
             cantidadOriginal: Number.parseInt(entry.cantidadOriginal || 0, 10) || 0,
@@ -26,7 +27,7 @@ const sanitizeStockBreakdown = (entries = []) =>
             cantidadEllos: Number.parseInt(entry.cantidadEllos || 0, 10) || 0,
             fallado: Number.parseInt(entry.fallado || 0, 10) || 0
         }))
-        .filter((entry) => entry.articuloFabrica || entry.articuloVenta || entry.tipoTela || entry.color || entry.taller || entry.cantidadOriginal || entry.cantidadContada || entry.cantidadEllos || entry.fallado);
+        .filter((entry) => entry.articuloFabrica || entry.articuloVenta || entry.tipoTela || entry.color || entry.numeroCorte || entry.taller || entry.cantidadOriginal || entry.cantidadContada || entry.cantidadEllos || entry.fallado);
 
 const upsertPosProducts = (existingProducts = [], incomingProducts = []) => {
     const merged = [...existingProducts];
@@ -81,6 +82,7 @@ const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = [
         const tipoTela = normalizeText(item.tipoTela);
         const taller = normalizeText(item.taller);
         const color = normalizeText(item.color);
+        const numeroCorte = normalizeText(item.numeroCorte);
         const fechaIngreso = normalizeText(item.fechaIngreso);
         const cantidadOriginal = Number.parseInt(item.cantidadOriginal || 0, 10) || 0;
         const cantidadContada = Number.parseInt(item.cantidadContada || 0, 10) || 0;
@@ -96,6 +98,7 @@ const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = [
             articuloVenta,
             tipoTela,
             color,
+            numeroCorte,
             taller,
             fechaIngreso,
             cantidadOriginal,
@@ -715,6 +718,7 @@ function dataReducer(state, action) {
                 descripcion: normalizeText(item.descripcion),
                 tipoTela: normalizeText(item.tipoTela),
                 color: normalizeText(item.color),
+                numeroCorte: normalizeText(item.numeroCorte),
                 taller: normalizeText(item.taller),
                 fechaIngreso: normalizeText(item.fechaIngreso),
                 cantidadOriginal: Number.parseInt(item.cantidadOriginal || 0, 10) || 0,
@@ -758,6 +762,7 @@ function dataReducer(state, action) {
                         articuloVenta: item.articuloVenta,
                         tipoTela: item.tipoTela,
                         color: item.color,
+                        numeroCorte: item.numeroCorte,
                         taller: item.taller,
                         fechaIngreso: item.fechaIngreso,
                         cantidadOriginal: item.cantidadOriginal,
