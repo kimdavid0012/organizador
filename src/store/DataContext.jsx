@@ -645,6 +645,7 @@ export function DataProvider({ children }) {
     const stateRef = useRef(state);
     const justSaved = useRef(false);
     const localChangeTimestamp = useRef(0); // timestamp of last local change
+    const pendingCloudSave = useRef(false);
 
     useEffect(() => {
         stateRef.current = state;
@@ -658,12 +659,18 @@ export function DataProvider({ children }) {
             // Si nosotros acabamos de guardar, ignorar el echo
             if (justSaved.current) {
                 justSaved.current = false;
+                pendingCloudSave.current = false;
+                return;
+            }
+
+            if (pendingCloudSave.current) {
+                console.log('Snapshot ignorado: guardado local pendiente.');
                 return;
             }
 
             // Bloquear snapshots por 3 segundos después de cualquier cambio local
             const timeSinceLocalChange = Date.now() - localChangeTimestamp.current;
-            if (initialized.current && timeSinceLocalChange < 3000) {
+            if (initialized.current && timeSinceLocalChange < 15000) {
                 console.log(`🛡️ Snapshot ignorado (cambio local hace ${timeSinceLocalChange}ms)`);
                 return;
             }
@@ -680,7 +687,7 @@ export function DataProvider({ children }) {
                     const localMoldes = stateRef.current?.moldes?.length || 0;
                     const remoteMoldes = fullData?.moldes?.length || 0;
 
-                    if (initialized.current && (localCortes > remoteCortes + 2 || localMoldes > remoteMoldes + 5)) {
+                    if (initialized.current && (localCortes > remoteCortes || localMoldes > remoteMoldes)) {
                         console.warn(`⚠️ Firestore tiene menos datos que local. Ignorando.`);
                         return;
                     }
@@ -725,6 +732,7 @@ export function DataProvider({ children }) {
         // SIEMPRE guardar a localStorage inmediatamente como backup
         saveDataToLocal(state);
         localChangeTimestamp.current = Date.now();
+        pendingCloudSave.current = true;
 
         // Debounce saves to Firestore (800ms)
         if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -734,8 +742,10 @@ export function DataProvider({ children }) {
                 const { saveDataToFirestore } = await import('./storage');
                 justSaved.current = true;
                 await saveDataToFirestore(currentState);
+                pendingCloudSave.current = false;
             } catch (err) {
                 justSaved.current = false;
+                pendingCloudSave.current = false;
                 console.error('❌ Error saving to Firestore:', err);
             }
         }, 800);
