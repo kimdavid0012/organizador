@@ -531,6 +531,7 @@ export default function Settings() {
                                         <option value="encargada">👩‍💼 Encargada</option>
                                         <option value="deposito">📦 Depósito</option>
                                         <option value="pedidos">🌐 Pedidos Online</option>
+                                        <option value="marketing">📣 Marketing</option>
                                         <option value="pendiente">⏳ Pendiente (sin acceso)</option>
                                     </select>
                                     <div style={{ fontSize: '11px', color: u.role === 'pendiente' ? 'var(--danger)' : 'var(--success)', fontWeight: 'var(--fw-bold)' }}>

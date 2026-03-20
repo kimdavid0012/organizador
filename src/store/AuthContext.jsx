@@ -5,8 +5,13 @@ import { auth, db } from './firebase';
 
 const AuthContext = createContext();
 
+const KNOWN_USERS = {
+    'kimdavid0012@gmail.com': { role: 'admin', name: 'kimdavid0012' },
+    'giselakim.wk@gmail.com': { role: 'marketing', name: 'Gisela Marketing' }
+};
+
 // All available sections in the app
-const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'settings'];
+const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'paginaweb', 'settings'];
 
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
@@ -14,6 +19,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
     encargada: ['pos', 'articulos', 'kanban', 'library', 'pedidos', 'clientes', 'cortes', 'talleres', 'empleados', 'settings'],
     deposito: ['talleres', 'articulos', 'clientes'],
     pedidos: ['pedidos', 'articulos', 'clientes'],
+    marketing: ['pedidos', 'marketing', 'paginaweb'],
     pendiente: [] // New users get no access until admin assigns a role
 };
 
@@ -31,6 +37,7 @@ const SECTION_LABELS = {
     talleres: 'Talleres',
     empleados: 'Empleados',
     marketing: 'Marketing',
+    paginaweb: 'Pagina Web',
     settings: 'Configuración'
 };
 
@@ -47,6 +54,8 @@ export function AuthProvider({ children }) {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
+                const normalizedEmail = (firebaseUser.email || '').toLowerCase();
+                const knownUser = KNOWN_USERS[normalizedEmail];
                 // User is signed in — load profile from Firestore
                 try {
                     const userDocRef = doc(db, 'users', firebaseUser.uid);
@@ -54,19 +63,24 @@ export function AuthProvider({ children }) {
 
                     if (userSnap.exists()) {
                         const userData = userSnap.data();
+                        const resolvedRole = knownUser?.role || userData.role || 'pendiente';
+                        const resolvedName = knownUser?.name || userData.name || firebaseUser.email;
+
+                        if (knownUser && (userData.role !== resolvedRole || userData.name !== resolvedName)) {
+                            await setDoc(userDocRef, { role: resolvedRole, name: resolvedName, email: firebaseUser.email }, { merge: true });
+                        }
+
                         setUser({
                             uid: firebaseUser.uid,
                             email: firebaseUser.email,
-                            role: userData.role || 'pendiente',
-                            name: userData.name || firebaseUser.email
+                            role: resolvedRole,
+                            name: resolvedName
                         });
                     } else {
-                        // First login — create profile. Only the known admin email gets admin role.
-                        const isKnownAdmin = firebaseUser.email === 'kimdavid0012@gmail.com';
                         const defaultProfile = {
                             email: firebaseUser.email,
-                            role: isKnownAdmin ? 'admin' : 'pendiente',
-                            name: firebaseUser.email
+                            role: knownUser?.role || 'pendiente',
+                            name: knownUser?.name || firebaseUser.email
                         };
                         await setDoc(userDocRef, defaultProfile);
                         setUser({
@@ -151,9 +165,9 @@ export function AuthProvider({ children }) {
             return;
         }
 
-        if (user && user.role === 'admin') {
-            // Load user with that role from users list
-            const targetUser = users.find(u => u.role === targetRole);
+            if (user && user.role === 'admin') {
+                // Load user with that role from users list
+                const targetUser = users.find(u => u.role === targetRole);
             if (targetUser) {
                 setOriginalAdmin(user);
                 setUser({

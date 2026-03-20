@@ -29,7 +29,7 @@ export default function PedidosOnlinePage() {
     const [newItemComment, setNewItemComment] = useState('');
 
     const canCreateOrder = user.role === 'encargada' || user.role === 'admin';
-    const canProcessOrder = user.role === 'pedidos' || user.role === 'admin';
+    const canProcessOrder = user.role === 'pedidos' || user.role === 'marketing' || user.role === 'admin';
 
     const handleCreatePedido = (e) => {
         e.preventDefault();

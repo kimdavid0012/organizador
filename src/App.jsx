@@ -341,6 +341,7 @@ function AppContent() {
                                     <option value="encargada">👩‍💼 Encargada (Nadia)</option>
                                     <option value="deposito">📦 Depósito (Naara)</option>
                                     <option value="pedidos">🌐 Pedidos Online (Juan)</option>
+                                    <option value="marketing">📣 Marketing (Gisela)</option>
                                 </select>
                             )}
 
