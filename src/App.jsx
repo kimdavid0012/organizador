@@ -26,6 +26,7 @@ import ClientesPage from './components/ClientesPage';
 import PosProductos from './components/POS/PosProductos';
 import { AuthProvider, useAuth } from './store/AuthContext';
 import AIAssistant from './components/AIAssistant';
+import { firebaseConfigured, firebaseConfigMissingKeys } from './store/firebase';
 import './App.css';
 
 // ===== Mobile Bottom Nav with "More" popup =====
@@ -464,6 +465,53 @@ function AppWrapper() {
 }
 
 export default function App() {
+    if (!firebaseConfigured) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 24,
+                background: 'radial-gradient(circle at center, #241734 0%, #0f1220 55%, #090b14 100%)',
+                color: '#fff'
+            }}>
+                <div style={{
+                    width: '100%',
+                    maxWidth: 720,
+                    background: 'rgba(16, 18, 30, 0.9)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 20,
+                    padding: 28,
+                    boxShadow: '0 20px 80px rgba(0,0,0,0.35)'
+                }}>
+                    <h1 style={{ margin: 0, marginBottom: 12, fontSize: 28 }}>Falta configurar Firebase en Netlify</h1>
+                    <p style={{ marginTop: 0, color: 'rgba(255,255,255,0.8)', lineHeight: 1.6 }}>
+                        La app ya no se queda en blanco: necesita las variables de entorno de Firebase para iniciar.
+                        Agregalas en Netlify y luego hacé un redeploy.
+                    </p>
+                    <div style={{
+                        marginTop: 20,
+                        padding: 16,
+                        borderRadius: 14,
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        fontFamily: 'monospace',
+                        fontSize: 14,
+                        lineHeight: 1.8
+                    }}>
+                        {firebaseConfigMissingKeys.map((key) => (
+                            <div key={key}>{`VITE_FIREBASE_${key.replace(/([A-Z])/g, '_$1').toUpperCase()}`}</div>
+                        ))}
+                    </div>
+                    <p style={{ marginTop: 18, color: 'rgba(255,255,255,0.72)' }}>
+                        Ruta: Site configuration → Environment variables
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <ErrorBoundary>
             <AuthProvider>
