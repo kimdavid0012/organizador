@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { Boxes, Plus, Trash2, Download } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { Boxes, Plus, Trash2, Download, Upload } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { generateId } from '../utils/helpers';
+import * as XLSX from 'xlsx';
 
 const EMPTY_FORM = {
     articulo: '',
@@ -18,6 +19,53 @@ const EMPTY_FORM = {
 
 const toNumber = (value) => Number.parseInt(value || 0, 10) || 0;
 const normalizeCode = (value) => (value || '').toString().trim().toUpperCase();
+const normalizeText = (value) => (value || '').toString().trim();
+
+const parseExcelNumber = (value) => {
+    if (typeof value === 'number') return Math.round(value);
+    if (value === null || value === undefined || value === '') return 0;
+    const normalized = value
+        .toString()
+        .trim()
+        .replace(/[^\d,.-]/g, '')
+        .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+        .replace(',', '.');
+    const parsed = Number.parseFloat(normalized);
+    return Number.isNaN(parsed) ? 0 : Math.round(parsed);
+};
+
+const formatExcelDate = (value) => {
+    if (!value) return '';
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString().slice(0, 10);
+    }
+
+    if (typeof value === 'number') {
+        const date = XLSX.SSF.parse_date_code(value);
+        if (date) {
+            const safeDate = new Date(Date.UTC(date.y, date.m - 1, date.d));
+            return safeDate.toISOString().slice(0, 10);
+        }
+    }
+
+    const raw = value.toString().trim();
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().slice(0, 10);
+    }
+
+    const shortMonthMap = {
+        ene: '01', feb: '02', mar: '03', abr: '04', may: '05', jun: '06',
+        jul: '07', ago: '08', sep: '09', oct: '10', nov: '11', dic: '12'
+    };
+    const match = raw.toLowerCase().match(/^(\d{1,2})[-/ ]([a-z]{3}|\d{1,2})(?:[-/ ](\d{2,4}))?$/);
+    if (!match) return '';
+
+    const day = match[1].padStart(2, '0');
+    const month = shortMonthMap[match[2]] || match[2].padStart(2, '0');
+    const year = match[3] ? match[3].padStart(4, '20') : new Date().getFullYear().toString();
+    return `${year}-${month}-${day}`;
+};
 
 export default function ConteoMercaderiaPage() {
     const { state, saveMercaderiaConteos } = useData();
@@ -32,6 +80,7 @@ export default function ConteoMercaderiaPage() {
         .sort((a, b) => a.localeCompare(b));
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [search, setSearch] = useState('');
+    const fileInputRef = useRef(null);
 
     const articleOptions = useMemo(() => {
         const map = new Map();
@@ -79,6 +128,33 @@ export default function ConteoMercaderiaPage() {
         saveMercaderiaConteos(nextConteos);
     };
 
+    const upsertConteos = (incomingConteos) => {
+        const existingMap = new Map(
+            conteos.map((item) => [
+                [
+                    normalizeCode(item.codigoInterno || item.articulo),
+                    normalizeText(item.color).toUpperCase(),
+                    normalizeText(item.taller).toUpperCase(),
+                    normalizeText(item.fechaIngreso)
+                ].join('|'),
+                item
+            ])
+        );
+
+        incomingConteos.forEach((item) => {
+            const key = [
+                normalizeCode(item.codigoInterno || item.articulo),
+                normalizeText(item.color).toUpperCase(),
+                normalizeText(item.taller).toUpperCase(),
+                normalizeText(item.fechaIngreso)
+            ].join('|');
+            const previous = existingMap.get(key);
+            existingMap.set(key, previous ? { ...previous, ...item, id: previous.id } : item);
+        });
+
+        saveConteos(Array.from(existingMap.values()));
+    };
+
     const autofillArticle = (rawArticulo, currentForm = formData) => {
         const articulo = normalizeCode(rawArticulo);
         const linkedArticle = articleOptions.find((item) => item.codigoInterno === articulo);
@@ -122,6 +198,76 @@ export default function ConteoMercaderiaPage() {
     const handleDelete = (id) => {
         if (!window.confirm('Eliminar este conteo?')) return;
         saveConteos(conteos.filter((item) => item.id !== id));
+    };
+
+    const handleImportExcel = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const buffer = await file.arrayBuffer();
+            const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
+
+            if (!rows.length) {
+                alert('El Excel esta vacio.');
+                return;
+            }
+
+            const importedConteos = [];
+
+            rows.slice(1).forEach((row) => {
+                const articulo = normalizeCode(row[1]);
+                const descripcion = normalizeText(row[2]);
+                const tipoTela = normalizeText(row[3]);
+                const cantidadOriginal = parseExcelNumber(row[4]);
+                const fechaIngreso = formatExcelDate(row[5]);
+                const cantidadContada = parseExcelNumber(row[6]);
+                const taller = normalizeText(row[0]);
+
+                const extraNumbers = row
+                    .slice(7)
+                    .map((cell) => parseExcelNumber(cell))
+                    .filter((value) => value > 0);
+
+                const cantidadEllos = extraNumbers[0] || 0;
+                const fallado = extraNumbers[1] || 0;
+
+                if (!articulo && !descripcion) return;
+
+                const linkedArticle = articleOptions.find((item) => item.codigoInterno === articulo);
+                importedConteos.push({
+                    id: generateId(),
+                    productId: productos.find((producto) => normalizeCode(producto.codigoInterno) === articulo)?.id || null,
+                    codigoInterno: articulo || normalizeCode(descripcion),
+                    articulo: articulo || normalizeCode(descripcion),
+                    descripcion: descripcion || linkedArticle?.descripcion || articulo,
+                    tipoTela,
+                    color: '',
+                    fechaIngreso,
+                    taller: taller || linkedArticle?.proveedor || '',
+                    cantidadOriginal,
+                    cantidadContada,
+                    cantidadEllos,
+                    fallado,
+                    createdAt: new Date().toISOString()
+                });
+            });
+
+            if (!importedConteos.length) {
+                alert('No encontre filas validas para importar en ese Excel.');
+                return;
+            }
+
+            upsertConteos(importedConteos);
+            alert(`✅ Se importaron/actualizaron ${importedConteos.length} filas de conteo desde Excel.`);
+        } catch (error) {
+            console.error('Error importando Excel de conteo:', error);
+            alert(`❌ No pude importar ese Excel: ${error.message}`);
+        } finally {
+            event.target.value = '';
+        }
     };
 
     const handleCellChange = (id, field, value) => {
@@ -195,9 +341,21 @@ export default function ConteoMercaderiaPage() {
                         Registro de stock contado por articulo, tela, color y taller. El stock se consolida automaticamente en Articulos.
                     </p>
                 </div>
-                <button className="btn btn-secondary" onClick={exportCsv}>
-                    <Download size={16} /> Exportar CSV
-                </button>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".xlsx,.xls"
+                        style={{ display: 'none' }}
+                        onChange={handleImportExcel}
+                    />
+                    <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
+                        <Upload size={16} /> Importar Excel
+                    </button>
+                    <button className="btn btn-secondary" onClick={exportCsv}>
+                        <Download size={16} /> Exportar CSV
+                    </button>
+                </div>
             </div>
 
             <div className="glass-panel" style={{ padding: 18, marginBottom: 18 }}>
