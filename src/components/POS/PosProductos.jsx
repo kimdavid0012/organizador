@@ -247,8 +247,9 @@ export default function PosProductos() {
                             <th>Detalle</th>
                             <th>Stock</th>
                             <th>Pr. Costo</th>
-                            <th>L1 (Mostrador)</th>
-                            <th>L2 / Mayor</th>
+                            <th>Lista 1</th>
+                            <th>Lista 2</th>
+                            <th>Lista 3</th>
                             <th>Estado</th>
                             <th style={{ textAlign: 'right' }}>Acciones</th>
                         </tr>
@@ -267,6 +268,7 @@ export default function PosProductos() {
                                 <td>${p.precioCosto}</td>
                                 <td style={{ color: 'var(--accent)', fontWeight: 'bold' }}>${p.precioVentaL1}</td>
                                 <td>${p.precioVentaL2}</td>
+                                <td>${p.precioVentaL3}</td>
                                 <td>
                                     <span className={`status-badge ${p.activo ? 'status-active' : 'status-inactive'}`}>
                                         {p.activo ? 'Activo' : 'Inactivo'}
@@ -284,7 +286,7 @@ export default function PosProductos() {
                         ))}
                         {filteredProducts.length === 0 && (
                             <tr>
-                                <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                <td colSpan={10} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                                     No se encontraron productos. Añade uno nuevo o importa desde Excel.
                                 </td>
                             </tr>
@@ -318,8 +320,16 @@ export default function PosProductos() {
                                 <strong>{formatCurrency(p.precioCosto)}</strong>
                             </div>
                             <div>
-                                <span className="pos-product-card-label">Lista 1</span>
+                                <span className="pos-product-card-label">Lista 1 / Local</span>
                                 <strong className="pos-product-card-price">{formatCurrency(p.precioVentaL1)}</strong>
+                            </div>
+                            <div>
+                                <span className="pos-product-card-label">Lista 2 / Modatex</span>
+                                <strong>{formatCurrency(p.precioVentaL2)}</strong>
+                            </div>
+                            <div>
+                                <span className="pos-product-card-label">Lista 3 / Distrito</span>
+                                <strong>{formatCurrency(p.precioVentaL3)}</strong>
                             </div>
                             <div>
                                 <span className="pos-product-card-label">Web</span>
@@ -391,15 +401,15 @@ export default function PosProductos() {
                             <div className="full-width"><h4 style={{ margin: 0 }}>Listas de Precios</h4></div>
 
                             <div className="form-group">
-                                <label>Lista 1 (Mostrador)</label>
+                                <label>Lista 1 (Local / WhatsApp)</label>
                                 <input type="number" className="form-input" name="precioVentaL1" value={formData.precioVentaL1} onChange={handleChange} />
                             </div>
                             <div className="form-group">
-                                <label>Lista 2 (Mayorista)</label>
+                                <label>Lista 2 (Modatex)</label>
                                 <input type="number" className="form-input" name="precioVentaL2" value={formData.precioVentaL2} onChange={handleChange} />
                             </div>
                             <div className="form-group">
-                                <label>Lista 3</label>
+                                <label>Lista 3 (Distrito / Chloe)</label>
                                 <input type="number" className="form-input" name="precioVentaL3" value={formData.precioVentaL3} onChange={handleChange} />
                             </div>
                             <div className="form-group">

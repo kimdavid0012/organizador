@@ -8,6 +8,38 @@ import './PosCaja.css';
 
 const SALES_CHANNELS = ['LOCAL', 'PAGINA WEB', 'WHATSAPP', 'MODATEX', 'DISTRITO', 'CHLOE'];
 
+const getChannelPricing = (product, channel) => {
+    switch (channel) {
+        case 'PAGINA WEB':
+            return {
+                listKey: 'precioVentaWeb',
+                listLabel: 'WEB',
+                price: Number(product.precioVentaWeb || product.precioVentaL1 || 0)
+            };
+        case 'MODATEX':
+            return {
+                listKey: 'precioVentaL2',
+                listLabel: 'LISTA 2',
+                price: Number(product.precioVentaL2 || product.precioVentaL1 || 0)
+            };
+        case 'DISTRITO':
+        case 'CHLOE':
+            return {
+                listKey: 'precioVentaL3',
+                listLabel: 'LISTA 3',
+                price: Number(product.precioVentaL3 || product.precioVentaL2 || product.precioVentaL1 || 0)
+            };
+        case 'WHATSAPP':
+        case 'LOCAL':
+        default:
+            return {
+                listKey: 'precioVentaL1',
+                listLabel: 'LISTA 1',
+                price: Number(product.precioVentaL1 || 0)
+            };
+    }
+};
+
 export default function PosCaja() {
     const { state, addPosSale } = useData();
     const { user } = useAuth();
@@ -56,6 +88,7 @@ export default function PosCaja() {
     const totalFinal = Math.max(0, subtotal - totalDescuentosItem - descuentoGlobal);
 
     const handleAddToCart = (product) => {
+        const pricing = getChannelPricing(product, canalVenta);
         setCart(prev => {
             const existing = prev.find(i => i.id === product.id);
             if (existing) {
@@ -67,16 +100,36 @@ export default function PosCaja() {
                 id: product.id,
                 codigoInterno: product.codigoInterno,
                 detalleCorto: product.detalleCorto,
-                precioOriginal: product.precioVentaL1,
-                precioUnitario: product.precioVentaL1,
+                precioOriginal: pricing.price,
+                precioUnitario: pricing.price,
+                listaPrecio: pricing.listLabel,
+                canalVenta,
                 descuentoPorcentaje: 0,
                 cantidad: 1,
-                importe: product.precioVentaL1
+                importe: pricing.price
             }];
         });
         setSearch('');
         searchInputRef.current?.focus();
     };
+
+    useEffect(() => {
+        setCart((prev) => prev.map((item) => {
+            const product = productos.find((prod) => prod.id === item.id);
+            if (!product) return item;
+            const pricing = getChannelPricing(product, canalVenta);
+            const newBasePrice = pricing.price;
+            const discountedPrice = newBasePrice * (1 - ((item.descuentoPorcentaje || 0) / 100));
+            return {
+                ...item,
+                precioOriginal: newBasePrice,
+                precioUnitario: discountedPrice,
+                listaPrecio: pricing.listLabel,
+                canalVenta,
+                importe: item.cantidad * discountedPrice
+            };
+        }));
+    }, [canalVenta, productos]);
 
     const handleUpdateQuantity = (id, delta) => {
         setCart(prev => prev.map(i => {
@@ -202,7 +255,7 @@ export default function PosCaja() {
                             {searchResults.map(p => (
                                 <div key={p.id} className="pos-search-item" onClick={() => handleAddToCart(p)}>
                                     <span><strong>{p.codigoInterno}</strong> - {p.detalleCorto}</span>
-                                    <span>${p.precioVentaL1}</span>
+                                    <span>${getChannelPricing(p, canalVenta).price}</span>
                                 </div>
                             ))}
                         </div>
@@ -215,7 +268,7 @@ export default function PosCaja() {
                             <tr>
                                 <th style={{ width: '60px' }}>Cant.</th>
                                 <th>Cod. / Detalle</th>
-                                <th style={{ width: '100px' }}>Pr. Lista</th>
+                                <th style={{ width: '120px' }}>Pr. Lista</th>
                                 <th style={{ width: '80px' }}>Desc %</th>
                                 <th style={{ width: '120px', textAlign: 'right' }}>Importe</th>
                                 <th style={{ width: '50px', textAlign: 'center' }}><Trash2 size={16} /></th>
@@ -241,7 +294,10 @@ export default function PosCaja() {
                                         <div style={{ fontWeight: 'var(--fw-semibold)' }}>{item.codigoInterno}</div>
                                         <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-secondary)' }}>{item.detalleCorto}</div>
                                     </td>
-                                    <td>${item.precioOriginal}</td>
+                                    <td>
+                                        <div>${item.precioOriginal}</div>
+                                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{item.listaPrecio || 'LISTA 1'}</div>
+                                    </td>
                                     <td>
                                         <input
                                             type="number"
@@ -297,6 +353,15 @@ export default function PosCaja() {
                                 <option key={channel} value={channel}>{channel}</option>
                             ))}
                         </select>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                            {canalVenta === 'PAGINA WEB'
+                                ? 'Usa precio web'
+                                : canalVenta === 'MODATEX'
+                                ? 'Usa Lista 2'
+                                : canalVenta === 'DISTRITO' || canalVenta === 'CHLOE'
+                                ? 'Usa Lista 3'
+                                : 'Usa Lista 1'}
+                        </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 2, minWidth: '100%' }}>
                         <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)' }}>Recordatorio/Fecha:</span>
