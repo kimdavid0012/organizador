@@ -3,6 +3,137 @@ import { Megaphone, TrendingUp, AlertCircle, RefreshCw, DollarSign, Eye, MousePo
 import { useData } from '../store/DataContext';
 import { metaService } from '../utils/metaService';
 
+const MARKETING_REPORT_PROMPT = `Sos un analista senior de performance en Meta Ads especializado en e-commerce de moda. Analizás campañas de una tienda de ropa online que vende a través de Instagram y Facebook Ads.
+
+Tu tarea es generar un REPORTE DIARIO PROFESIONAL por campaña activa, útil tanto para el dueño del negocio como para el equipo de marketing.
+
+---
+
+📊 DATOS DE CAMPAÑAS (inyectados automáticamente):
+{{campaign_data}}
+
+Estructura de datos disponibles por campaña:
+- nombre, estado, objetivo
+- spend_hoy, spend_total, budget_diario, budget_total
+- impresiones, alcance, frecuencia
+- clicks, CTR
+- CPC, CPM
+- conversiones, revenue, ROAS
+- datos_historicos_7d: { spend, conversiones, ROAS, CTR, CPC }
+- datos_historicos_30d: { spend, conversiones, ROAS, CTR, CPC }
+
+---
+
+BENCHMARKS DE REFERENCIA (ropa online, Argentina):
+- CTR: bueno >2%, excelente >4%
+- CPC: bueno <$800 ARS, crítico >$2000 ARS
+- CPM: saludable <$3000 ARS/1000
+- Frecuencia: óptimo 1.5–3.0 | fatiga >4.0
+- ROAS mínimo viable: 2.0x | saludable: >3.5x | excelente: >6x
+- Tasa de conversión: buena >1.5% | crítica <0.5%
+
+---
+
+🔍 ESTRUCTURA DEL REPORTE:
+
+════════════════════════════════
+📋 RESUMEN EJECUTIVO DEL DÍA
+════════════════════════════════
+- Estado general del account en 2-3 líneas
+- Métrica más preocupante del día
+- Métrica más positiva del día
+- Comparación vs semana anterior (usar datos_historicos_7d)
+
+════════════════════════════════
+📌 ANÁLISIS POR CAMPAÑA
+════════════════════════════════
+Repetir para cada campaña activa:
+
+[NOMBRE DE CAMPAÑA]
+──────────────────────────────
+PUNTAJE: [0-100] | LETRA: [A/B/C/D/F]
+  A = 85-100 | B = 70-84 | C = 55-69 | D = 40-54 | F = <40
+
+MÉTRICAS CLAVE HOY:
+  💰 Gasto: $X | Budget restante: $X (X% ejecutado)
+  👁 Impresiones: X | Alcance: X | Frecuencia: X
+  🖱 Clicks: X | CTR: X% | CPC: $X
+  📦 Conversiones: X | Revenue: $X | ROAS: Xx
+  📈 CPM: $X/1000
+
+TENDENCIA (vs 7 días anteriores):
+  - ROAS: X hoy vs X promedio 7d → [mejorando/empeorando/estable]
+  - CPC: X hoy vs X promedio 7d → [mejorando/empeorando/estable]
+  - CTR: X hoy vs X promedio 7d → [mejorando/empeorando/estable]
+  - Conversiones: X hoy vs X promedio 7d
+
+DIAGNÓSTICO:
+  ✅ Qué está funcionando bien (ser específico con números)
+  ❌ Problema principal identificado
+  🎯 Origen del problema: [audiencia / creativo / oferta / funnel / presupuesto / saturación]
+
+ALERTAS (ordenadas por urgencia):
+  🔴 CRÍTICO (acción hoy): ...
+  🟡 ATENCIÓN (esta semana): ...
+  🟢 POSITIVO: ...
+
+ACCIONES CONCRETAS (máximo 3, ordenadas por impacto):
+  1. [Acción específica con número concreto]
+     → Quién: dueño / equipo marketing
+     → Cuándo: hoy / esta semana
+     → Resultado esperado: ...
+  2. ...
+  3. ...
+
+════════════════════════════════
+⚡ COMPARACIÓN ENTRE CAMPAÑAS
+════════════════════════════════
+- Mejor ROAS: [campaña X] con Xx vs [campaña Y] con Xx
+- Mejor eficiencia de costo (CPC más bajo): ...
+- Mayor riesgo de saturación (frecuencia más alta): ...
+- ¿Hay posible canibalización de audiencia? [sí/no + explicación]
+- Campaña para ESCALAR esta semana: [nombre + por qué]
+- Campaña para PAUSAR o revisar urgente: [nombre + por qué]
+- Redistribución de presupuesto sugerida: X% a [campaña] / X% a [campaña]
+
+════════════════════════════════
+📈 PROYECCIÓN PRÓXIMOS 7 DÍAS
+════════════════════════════════
+(Basada en tendencia actual sin cambios)
+
+Por campaña:
+- Gasto proyectado: $X
+- Conversiones proyectadas: X
+- ROAS proyectado: Xx
+- Riesgo principal: [saturación / budget agotado / caída de CTR / etc.]
+
+Global del account:
+- Inversión total proyectada 7 días: $X
+- Revenue proyectado: $X
+- ROAS general esperado: Xx
+- Alerta de tendencia: [qué puede salir mal si no se actúa]
+
+════════════════════════════════
+✅ TOP 5 PRIORIDADES DE LA SEMANA
+════════════════════════════════
+Ordenadas por impacto en ROAS y conversiones:
+
+1. [Tarea concreta] → [dueño / marketing] → impacto: [alto/medio]
+2. ...
+3. ...
+4. ...
+5. ...
+
+---
+
+REGLAS DE ANÁLISIS:
+- Nunca des recomendaciones genéricas. Siempre incluí el número concreto y comparalo con el benchmark.
+- Si un dato no está disponible, indicalo explícitamente.
+- Si la frecuencia supera 3.5, marcalo siempre como alerta crítica.
+- Si el ROAS está por debajo de 2x, marcalo siempre como crítico.
+- Si el CTR bajó más de 20% vs el promedio de 7 días, alertar.
+- Respondé siempre en español, tono profesional pero directo.`;
+
 export default function MarketingSection() {
     const { state } = useData();
     const { config } = state;
@@ -14,6 +145,8 @@ export default function MarketingSection() {
     const [expandedCampaign, setExpandedCampaign] = useState(null);
     const [adSets, setAdSets] = useState({});
     const [loadingAdSets, setLoadingAdSets] = useState(null);
+    const [aiReport, setAiReport] = useState('');
+    const [loadingAiReport, setLoadingAiReport] = useState(false);
 
     // Campaign detail view
     const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -221,6 +354,70 @@ export default function MarketingSection() {
     const formatMoney = (v) => '$' + parseFloat(v || 0).toLocaleString('es-AR', { minimumFractionDigits: 0 });
     const formatNum = (v) => parseInt(v || 0).toLocaleString('es-AR');
     const formatPct = (v) => parseFloat(v || 0).toFixed(2) + '%';
+    const toNumber = (v) => Number.parseFloat(v || 0) || 0;
+
+    const getActionValue = (insight, actionTypes) => {
+        const actions = insight?.actions || [];
+        const match = actions.find(action => actionTypes.includes(action.action_type));
+        return Number.parseFloat(match?.value || 0) || 0;
+    };
+
+    const getRevenueValue = (insight) => {
+        const actionValues = insight?.action_values || [];
+        const match = actionValues.find(action =>
+            ['purchase', 'offsite_conversion.fb_pixel_purchase', 'omni_purchase'].includes(action.action_type)
+        );
+        return Number.parseFloat(match?.value || 0) || 0;
+    };
+
+    const getRoasValue = (insight) => {
+        const spend = toNumber(insight?.spend);
+        const revenue = getRevenueValue(insight);
+        if (revenue > 0 && spend > 0) return revenue / spend;
+
+        const purchaseRoas = insight?.purchase_roas?.[0]?.value;
+        return Number.parseFloat(purchaseRoas || 0) || 0;
+    };
+
+    const buildCampaignReportPayload = (campaign, reportData) => {
+        const today = reportData?.today || {};
+        const last7d = reportData?.last7d || {};
+        const last30d = reportData?.last30d || {};
+
+        return {
+            nombre: campaign.name,
+            estado: campaign.status,
+            objetivo: campaign.objective,
+            spend_hoy: toNumber(today.spend),
+            spend_total: toNumber(last30d.spend),
+            budget_diario: toNumber(campaign.daily_budget) / 100,
+            budget_total: toNumber(campaign.lifetime_budget) / 100,
+            impresiones: Number.parseInt(today.impressions || 0, 10) || 0,
+            alcance: Number.parseInt(today.reach || 0, 10) || 0,
+            frecuencia: toNumber(today.frequency),
+            clicks: Number.parseInt(today.clicks || 0, 10) || 0,
+            CTR: toNumber(today.ctr),
+            CPC: toNumber(today.cpc),
+            CPM: toNumber(today.cpm),
+            conversiones: getActionValue(today, ['purchase', 'offsite_conversion.fb_pixel_purchase', 'omni_purchase']),
+            revenue: getRevenueValue(today),
+            ROAS: getRoasValue(today),
+            datos_historicos_7d: {
+                spend: toNumber(last7d.spend),
+                conversiones: getActionValue(last7d, ['purchase', 'offsite_conversion.fb_pixel_purchase', 'omni_purchase']),
+                ROAS: getRoasValue(last7d),
+                CTR: toNumber(last7d.ctr),
+                CPC: toNumber(last7d.cpc),
+            },
+            datos_historicos_30d: {
+                spend: toNumber(last30d.spend),
+                conversiones: getActionValue(last30d, ['purchase', 'offsite_conversion.fb_pixel_purchase', 'omni_purchase']),
+                ROAS: getRoasValue(last30d),
+                CTR: toNumber(last30d.ctr),
+                CPC: toNumber(last30d.cpc),
+            }
+        };
+    };
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -250,6 +447,73 @@ export default function MarketingSection() {
 
     const getInsight = (campaign) => {
         return campaign.insights?.data?.[0] || {};
+    };
+
+    const generateAiMarketingReport = async () => {
+        if (!marketing.openaiKey) {
+            alert('Necesitás cargar la OpenAI API Key en Configuración para generar el reporte IA.');
+            return;
+        }
+        if (!campaigns || campaigns.length === 0) {
+            alert('Primero sincronizá las campañas de Meta.');
+            return;
+        }
+
+        const activeCampaignsForReport = campaigns.filter(campaign => campaign.status === 'ACTIVE');
+        if (activeCampaignsForReport.length === 0) {
+            alert('No hay campañas activas para analizar.');
+            return;
+        }
+
+        setLoadingAiReport(true);
+        try {
+            const reportData = await Promise.all(
+                activeCampaignsForReport.map(async (campaign) => ({
+                    campaign,
+                    metrics: await metaService.fetchCampaignReportData(config, campaign.id)
+                }))
+            );
+
+            const campaignPayload = reportData.map(({ campaign, metrics }) =>
+                buildCampaignReportPayload(campaign, metrics)
+            );
+
+            const prompt = MARKETING_REPORT_PROMPT.replace('{{campaign_data}}', JSON.stringify(campaignPayload, null, 2));
+
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${marketing.openaiKey}`,
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    temperature: 0.4,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'Respondé siempre en español rioplatense profesional, con foco en performance marketing, claridad ejecutiva y acciones concretas.'
+                        },
+                        {
+                            role: 'user',
+                            content: prompt
+                        }
+                    ]
+                })
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error?.message || 'No se pudo generar el reporte IA.');
+            }
+
+            setAiReport(result.choices?.[0]?.message?.content || 'No se recibió contenido del modelo.');
+        } catch (err) {
+            console.error('Error generating AI marketing report:', err);
+            alert(`Error generando reporte IA: ${err.message}`);
+        } finally {
+            setLoadingAiReport(false);
+        }
     };
 
     // Extract actions (conversions) from insights
@@ -425,10 +689,16 @@ export default function MarketingSection() {
                     </p>
                 </div>
                 {marketing.metaToken && (
-                    <button className="btn btn-primary" onClick={handleSync} disabled={loading}>
-                        <RefreshCw size={16} className={loading ? 'spin' : ''} />
-                        {loading ? 'Sincronizando...' : '📊 Sincronizar Ads'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <button className="btn btn-secondary" onClick={generateAiMarketingReport} disabled={loadingAiReport || loading || !campaigns}>
+                            <Zap size={16} className={loadingAiReport ? 'spin' : ''} />
+                            {loadingAiReport ? 'Generando reporte...' : 'Reporte IA'}
+                        </button>
+                        <button className="btn btn-primary" onClick={handleSync} disabled={loading}>
+                            <RefreshCw size={16} className={loading ? 'spin' : ''} />
+                            {loading ? 'Sincronizando...' : '📊 Sincronizar Ads'}
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -452,6 +722,52 @@ export default function MarketingSection() {
                 </div>
             ) : (
                 <>
+                    {marketing.openaiKey && (
+                        <div className="glass-panel" style={{ padding: 24, marginBottom: 24 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                                <div>
+                                    <h3 style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <Zap size={18} color="#22c55e" /> Reporte Diario IA
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+                                        Usa tu prompt profesional para analizar campañas activas con foco en ROAS, saturación y acciones concretas.
+                                    </p>
+                                </div>
+                                <button className="btn btn-secondary" onClick={generateAiMarketingReport} disabled={loadingAiReport}>
+                                    <Zap size={16} className={loadingAiReport ? 'spin' : ''} />
+                                    {loadingAiReport ? 'Actualizando...' : 'Generar ahora'}
+                                </button>
+                            </div>
+
+                            {!aiReport ? (
+                                <div style={{
+                                    padding: 16,
+                                    borderRadius: 12,
+                                    border: '1px dashed var(--glass-border)',
+                                    color: 'var(--text-muted)',
+                                    fontSize: 13
+                                }}>
+                                    Sin reporte generado todavía. Primero sincronizá Meta Ads y luego tocá <strong>Reporte IA</strong>.
+                                </div>
+                            ) : (
+                                <pre style={{
+                                    whiteSpace: 'pre-wrap',
+                                    margin: 0,
+                                    padding: 18,
+                                    borderRadius: 14,
+                                    background: 'rgba(255,255,255,0.03)',
+                                    border: '1px solid var(--glass-border)',
+                                    color: 'var(--text-primary)',
+                                    fontFamily: 'inherit',
+                                    fontSize: 13,
+                                    lineHeight: 1.65
+                                }}>
+                                    {aiReport}
+                                </pre>
+                            )}
+                        </div>
+                    )}
+
                     {/* Account-Level KPIs */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 24 }}>
                         <div className="glass-panel" style={{ padding: 16, textAlign: 'center' }}>

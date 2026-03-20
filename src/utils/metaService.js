@@ -15,6 +15,36 @@ export const metaService = {
         return metaToken;
     },
 
+    async _fetchJson(url, fallbackMessage) {
+        const response = await fetch(url);
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error?.message || fallbackMessage);
+        }
+        return await response.json();
+    },
+
+    async _fetchCampaignInsightsByPreset(config, campaignId, datePreset) {
+        const token = this._getToken(config);
+        const fields = [
+            'spend',
+            'impressions',
+            'clicks',
+            'reach',
+            'cpc',
+            'ctr',
+            'cpm',
+            'frequency',
+            'actions',
+            'action_values',
+            'purchase_roas'
+        ].join(',');
+
+        const url = `https://graph.facebook.com/v19.0/${campaignId}/insights?fields=${fields}&date_preset=${datePreset}&access_token=${token}`;
+        const result = await this._fetchJson(url, 'Error al traer insights de campaña');
+        return result.data?.[0] || {};
+    },
+
     /**
      * Fetch account-level insights for the last 30 days
      */
@@ -24,13 +54,7 @@ export const metaService = {
 
         const url = `https://graph.facebook.com/v19.0/${adAccountId}/insights?fields=spend,impressions,clicks,reach,cpc,ctr,cpp,frequency,actions&date_preset=last_30d&access_token=${token}`;
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error?.message || 'Error al traer datos de Meta Ads');
-        }
-
-        const result = await response.json();
+        const result = await this._fetchJson(url, 'Error al traer datos de Meta Ads');
         return result.data || [];
     },
 
@@ -43,13 +67,7 @@ export const metaService = {
 
         const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,insights.date_preset(last_30d){spend,impressions,clicks,reach,cpc,ctr,actions}&limit=50&access_token=${token}`;
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error?.message || 'Error al traer campañas de Meta');
-        }
-
-        const result = await response.json();
+        const result = await this._fetchJson(url, 'Error al traer campañas de Meta');
         return result.data || [];
     },
 
@@ -61,13 +79,7 @@ export const metaService = {
 
         const url = `https://graph.facebook.com/v19.0/${campaignId}/adsets?fields=name,status,daily_budget,lifetime_budget,targeting,insights.date_preset(last_30d){spend,impressions,clicks,reach,cpc,ctr}&limit=50&access_token=${token}`;
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error?.message || 'Error al traer conjuntos de anuncios');
-        }
-
-        const result = await response.json();
+        const result = await this._fetchJson(url, 'Error al traer conjuntos de anuncios');
         return result.data || [];
     },
 
@@ -79,13 +91,17 @@ export const metaService = {
 
         const url = `https://graph.facebook.com/v19.0/${campaignId}/insights?fields=spend,impressions,clicks,reach,cpc,ctr&date_preset=last_30d&time_increment=1&access_token=${token}`;
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error?.message || 'Error al traer insights diarios');
-        }
-
-        const result = await response.json();
+        const result = await this._fetchJson(url, 'Error al traer insights diarios');
         return result.data || [];
+    },
+
+    async fetchCampaignReportData(config, campaignId) {
+        const [today, last7d, last30d] = await Promise.all([
+            this._fetchCampaignInsightsByPreset(config, campaignId, 'today'),
+            this._fetchCampaignInsightsByPreset(config, campaignId, 'last_7d'),
+            this._fetchCampaignInsightsByPreset(config, campaignId, 'last_30d'),
+        ]);
+
+        return { today, last7d, last30d };
     }
 };
