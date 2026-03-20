@@ -76,12 +76,44 @@ export default function ConteoMercaderiaPage() {
     const canEditInventoryRows = user?.role === 'admin' || normalizedEmail === 'naara@celavie.com' || normalizedEmail === 'juan@celavie.com';
 
     const articleOptions = useMemo(() => {
-        const map = new Map();
+        const mergedOptions = [];
+        const mergeOption = (incomingOption) => {
+            const articuloVenta = normalizeCode(incomingOption.articuloVenta);
+            const articuloFabrica = normalizeCode(incomingOption.articuloFabrica);
+            const descripcion = normalizeText(incomingOption.descripcion);
+            const proveedor = normalizeText(incomingOption.proveedor);
+            const stock = toNumber(incomingOption.stock);
+
+            const existingIndex = mergedOptions.findIndex((option) =>
+                (articuloVenta && (option.articuloVenta === articuloVenta || option.articuloFabrica === articuloVenta)) ||
+                (articuloFabrica && (option.articuloVenta === articuloFabrica || option.articuloFabrica === articuloFabrica))
+            );
+
+            if (existingIndex >= 0) {
+                const current = mergedOptions[existingIndex];
+                mergedOptions[existingIndex] = {
+                    articuloVenta: current.articuloVenta || articuloVenta || articuloFabrica,
+                    articuloFabrica: current.articuloFabrica || articuloFabrica || articuloVenta,
+                    descripcion: current.descripcion || descripcion || articuloVenta || articuloFabrica,
+                    stock: current.stock || stock,
+                    proveedor: current.proveedor || proveedor
+                };
+                return;
+            }
+
+            mergedOptions.push({
+                articuloVenta: articuloVenta || articuloFabrica,
+                articuloFabrica: articuloFabrica || articuloVenta,
+                descripcion: descripcion || articuloVenta || articuloFabrica,
+                stock,
+                proveedor
+            });
+        };
 
         productos.forEach((producto) => {
             const saleCode = normalizeCode(producto.codigoInterno);
             if (!saleCode) return;
-            map.set(saleCode, {
+            mergeOption({
                 articuloVenta: saleCode,
                 articuloFabrica: saleCode,
                 descripcion: producto.detalleCorto || producto.detalleLargo || saleCode,
@@ -94,9 +126,9 @@ export default function ConteoMercaderiaPage() {
             (corte.moldesData || []).forEach((moldeData) => {
                 const molde = state.moldes.find((item) => item.id === moldeData.id);
                 const articleFactory = normalizeCode(molde?.codigo || molde?.nombre);
-                if (!articleFactory || map.has(articleFactory)) return;
-                map.set(articleFactory, {
-                    articuloVenta: articleFactory,
+                if (!articleFactory) return;
+                mergeOption({
+                    articuloVenta: '',
                     articuloFabrica: articleFactory,
                     descripcion: molde?.nombre || articleFactory,
                     stock: toNumber(moldeData.cantidad),
@@ -105,8 +137,24 @@ export default function ConteoMercaderiaPage() {
             });
         });
 
-        return Array.from(map.values()).sort((a, b) => a.articuloVenta.localeCompare(b.articuloVenta));
-    }, [productos, cortes, state.moldes]);
+        conteos.forEach((conteo) => {
+            mergeOption({
+                articuloVenta: conteo.articuloVenta || conteo.codigoInterno,
+                articuloFabrica: conteo.articuloFabrica || conteo.articulo,
+                descripcion: conteo.descripcion,
+                stock: conteo.cantidadContada,
+                proveedor: conteo.taller
+            });
+        });
+
+        return mergedOptions.sort((a, b) => (a.articuloVenta || a.articuloFabrica).localeCompare(b.articuloVenta || b.articuloFabrica));
+    }, [productos, cortes, conteos, state.moldes]);
+
+    const findLinkedArticleByAnyCode = (rawCode) => {
+        const normalizedCode = normalizeCode(rawCode);
+        if (!normalizedCode) return null;
+        return articleOptions.find((item) => item.articuloVenta === normalizedCode || item.articuloFabrica === normalizedCode) || null;
+    };
 
     const filteredConteos = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -129,9 +177,13 @@ export default function ConteoMercaderiaPage() {
     };
 
     const buildConteoItem = (baseItem) => {
-        const articuloVenta = normalizeCode(baseItem.articuloVenta || baseItem.codigoInterno);
-        const articuloFabrica = normalizeCode(baseItem.articuloFabrica || baseItem.articulo || articuloVenta);
-        const linkedArticle = articleOptions.find((item) => item.articuloVenta === articuloVenta);
+        const linkedArticle =
+            findLinkedArticleByAnyCode(baseItem.articuloVenta) ||
+            findLinkedArticleByAnyCode(baseItem.articuloFabrica) ||
+            findLinkedArticleByAnyCode(baseItem.codigoInterno) ||
+            findLinkedArticleByAnyCode(baseItem.articulo);
+        const articuloVenta = normalizeCode(baseItem.articuloVenta || linkedArticle?.articuloVenta || baseItem.codigoInterno || linkedArticle?.articuloFabrica);
+        const articuloFabrica = normalizeCode(baseItem.articuloFabrica || linkedArticle?.articuloFabrica || baseItem.articulo || articuloVenta);
         return {
             ...baseItem,
             productId: baseItem.productId || productos.find((producto) => normalizeCode(producto.codigoInterno) === articuloVenta)?.id || null,
@@ -185,12 +237,20 @@ export default function ConteoMercaderiaPage() {
         saveConteos(Array.from(existingMap.values()));
     };
 
-    const autofillSaleArticle = (rawArticuloVenta, currentForm = formData) => {
-        const articuloVenta = normalizeCode(rawArticuloVenta);
-        const linkedArticle = articleOptions.find((item) => item.articuloVenta === articuloVenta);
+    const syncArticleFields = (field, rawValue, currentForm = formData) => {
+        const normalizedValue = normalizeCode(rawValue);
+        const linkedArticle = findLinkedArticleByAnyCode(normalizedValue);
+        const nextArticuloVenta = field === 'articuloVenta'
+            ? normalizedValue
+            : normalizeCode(currentForm.articuloVenta || linkedArticle?.articuloVenta || '');
+        const nextArticuloFabrica = field === 'articuloFabrica'
+            ? normalizedValue
+            : normalizeCode(currentForm.articuloFabrica || linkedArticle?.articuloFabrica || '');
+
         return {
             ...currentForm,
-            articuloVenta,
+            articuloVenta: linkedArticle?.articuloVenta || nextArticuloVenta || nextArticuloFabrica,
+            articuloFabrica: linkedArticle?.articuloFabrica || nextArticuloFabrica || nextArticuloVenta,
             descripcion: currentForm.descripcion || linkedArticle?.descripcion || '',
             taller: currentForm.taller || linkedArticle?.proveedor || '',
             cantidadOriginal: currentForm.cantidadOriginal || (linkedArticle ? String(linkedArticle.stock) : '')
@@ -199,8 +259,9 @@ export default function ConteoMercaderiaPage() {
 
     const handleAdd = () => {
         const articuloVenta = normalizeCode(formData.articuloVenta);
-        if (!articuloVenta) {
-            alert('El articulo de venta es obligatorio.');
+        const articuloFabrica = normalizeCode(formData.articuloFabrica);
+        if (!articuloVenta && !articuloFabrica) {
+            alert('Tenes que cargar el art de local o el art de fabrica.');
             return;
         }
 
@@ -377,8 +438,8 @@ export default function ConteoMercaderiaPage() {
 
             <div className="glass-panel" style={{ padding: 20, marginBottom: 20 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
-                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo fabrica</span><input className="form-input" placeholder="Codigo de fabrica" value={formData.articuloFabrica} onChange={(e) => setFormData((prev) => ({ ...prev, articuloFabrica: normalizeCode(e.target.value) }))} disabled={!canEditInventoryRows} /></label>
-                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo venta</span><input className="form-input" list="conteo-articulos-venta" placeholder="Codigo de venta" value={formData.articuloVenta} onChange={(e) => setFormData((prev) => autofillSaleArticle(e.target.value, prev))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo fabrica</span><input className="form-input" list="conteo-articulos-fabrica" placeholder="Codigo de fabrica" value={formData.articuloFabrica} onChange={(e) => setFormData((prev) => syncArticleFields('articuloFabrica', e.target.value, prev))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo venta</span><input className="form-input" list="conteo-articulos-venta" placeholder="Codigo de venta" value={formData.articuloVenta} onChange={(e) => setFormData((prev) => syncArticleFields('articuloVenta', e.target.value, prev))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Descripcion</span><input className="form-input" value={formData.descripcion} onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Tela</span><input className="form-input" list="conteo-telas" value={formData.tipoTela} onChange={(e) => setFormData((prev) => ({ ...prev, tipoTela: e.target.value }))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Color</span><input className="form-input" value={formData.color} onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))} disabled={!canEditInventoryRows} /></label>
@@ -391,7 +452,8 @@ export default function ConteoMercaderiaPage() {
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fallado</span><input className="form-input" type="number" value={formData.fallado} onChange={(e) => setFormData((prev) => ({ ...prev, fallado: e.target.value }))} disabled={!canEditInventoryRows} /></label>
                 </div>
 
-                <datalist id="conteo-articulos-venta">{articleOptions.map((item) => <option key={item.articuloVenta} value={item.articuloVenta}>{item.descripcion}</option>)}</datalist>
+                <datalist id="conteo-articulos-venta">{articleOptions.filter((item) => item.articuloVenta).map((item) => <option key={`venta-${item.articuloVenta}`} value={item.articuloVenta}>{item.descripcion}</option>)}</datalist>
+                <datalist id="conteo-articulos-fabrica">{articleOptions.filter((item) => item.articuloFabrica).map((item) => <option key={`fabrica-${item.articuloFabrica}`} value={item.articuloFabrica}>{item.descripcion}</option>)}</datalist>
                 <datalist id="conteo-telas">{telasActivas.map((tela) => <option key={tela} value={tela} />)}</datalist>
                 <datalist id="conteo-talleres">{talleres.map((taller) => <option key={taller} value={taller} />)}</datalist>
 
@@ -418,7 +480,7 @@ export default function ConteoMercaderiaPage() {
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo fabrica</span><input className="form-input" value={item.articuloFabrica || ''} onChange={(e) => handleCellChange(item.id, 'articuloFabrica', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo fabrica</span><input className="form-input" list="conteo-articulos-fabrica" value={item.articuloFabrica || ''} onChange={(e) => handleCellChange(item.id, 'articuloFabrica', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo venta</span><input className="form-input" list="conteo-articulos-venta" value={item.articuloVenta || ''} onChange={(e) => handleCellChange(item.id, 'articuloVenta', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6, gridColumn: 'span 2' }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Descripcion</span><input className="form-input" value={item.descripcion || ''} onChange={(e) => handleCellChange(item.id, 'descripcion', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Tela</span><input className="form-input" list="conteo-telas" value={item.tipoTela || ''} onChange={(e) => handleCellChange(item.id, 'tipoTela', e.target.value)} disabled={!canEditInventoryRows} /></label>
