@@ -227,7 +227,26 @@ export default function PosCaja() {
         }, 300);
     };
 
-    // Tecla Rápida (Atajo F12 no soportado habitualmente en browsers, usaremos un button)
+    useEffect(() => {
+        const handleShortcut = (event) => {
+            if (event.key !== 'F6') return;
+            event.preventDefault();
+
+            if (mostrarModalCobro) {
+                confirmarVenta();
+                return;
+            }
+
+            if (cart.length > 0) {
+                handleCobrar();
+            }
+        };
+
+        window.addEventListener('keydown', handleShortcut);
+        return () => window.removeEventListener('keydown', handleShortcut);
+    }, [mostrarModalCobro, cart.length, pagoRecibido, totalFinal, cart, cliente, canalVenta, notasDePedido, subtotal, totalDescuentosItem, descuentoGlobal, ventasCount, user.name]);
+
+    // Tecla rápida F6 para cobranza / confirmar venta
     // Escuchar Enter en buscador si hay 1 solo resultado
     const handleSearchKeyDown = (e) => {
         if (e.key === 'Enter' && searchResults.length === 1) {
@@ -399,7 +418,7 @@ export default function PosCaja() {
 
                 <div className="pos-caja-numpad">
                     <button className="pos-action-btn primary" onClick={handleCobrar} disabled={cart.length === 0}>
-                        <DollarSign size={24} /> Cobranza [F12]
+                        <DollarSign size={24} /> Cobranza [F6]
                     </button>
 
                     <button className="pos-action-btn" onClick={() => clearCaja()}>
