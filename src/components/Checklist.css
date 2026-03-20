@@ -1,0 +1,121 @@
+/* ========= CHECKLIST ========= */
+.checklist {
+    margin-top: var(--sp-2);
+}
+
+.checklist-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sp-2);
+}
+
+.checklist-progress-text {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+}
+
+.checklist-progress-bar {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: var(--sp-3);
+}
+
+.checklist-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--success), #6ee7b7);
+    border-radius: 4px;
+    transition: width var(--transition-normal);
+}
+
+.checklist-items {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: var(--sp-2);
+}
+
+.checklist-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-1) var(--sp-2);
+    border-radius: var(--radius-sm);
+    transition: background var(--transition-fast);
+}
+
+.checklist-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.checklist-item.done .checklist-text {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.checklist-check {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    transition: color var(--transition-fast);
+}
+
+.checklist-check svg {
+    width: 18px;
+    height: 18px;
+}
+
+.checklist-item.done .checklist-check {
+    color: var(--success);
+}
+
+.checklist-text {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: var(--fs-sm);
+    font-family: var(--font-family);
+    outline: none;
+}
+
+.checklist-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    opacity: 0;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    transition: all var(--transition-fast);
+}
+
+.checklist-remove svg {
+    width: 14px;
+    height: 14px;
+}
+
+.checklist-item:hover .checklist-remove {
+    opacity: 1;
+}
+
+.checklist-remove:hover {
+    color: var(--danger);
+}
+
+.checklist-add {
+    display: flex;
+    gap: var(--sp-2);
+    margin-top: var(--sp-2);
+}
+
+.checklist-add .form-input {
+    flex: 1;
+}

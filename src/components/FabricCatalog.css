@@ -1,0 +1,159 @@
+/* ========= FABRIC CATALOG ========= */
+.fabric-catalog {
+    flex: 1;
+    overflow: auto;
+    padding: var(--sp-6);
+}
+
+.fabric-catalog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sp-5);
+}
+
+.fabric-catalog-header h2 {
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+}
+
+.fabric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--sp-4);
+}
+
+.fabric-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: all var(--transition-normal);
+    animation: slideUp var(--transition-normal);
+    position: relative;
+}
+
+.fabric-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-lg);
+    background: var(--glass-shine);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.fabric-card:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow-glass);
+    transform: translateY(-2px);
+}
+
+.fabric-card-image {
+    width: 100%;
+    height: 140px;
+    background: rgba(255, 255, 255, 0.02);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.fabric-card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.fabric-card-image-placeholder {
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: var(--fs-xs);
+}
+
+.fabric-card-image-placeholder svg {
+    width: 32px;
+    height: 32px;
+    opacity: 0.2;
+}
+
+.fabric-card-body {
+    padding: var(--sp-4);
+}
+
+.fabric-card-name {
+    font-size: var(--fs-md);
+    font-weight: var(--fw-semibold);
+    margin-bottom: var(--sp-2);
+}
+
+.fabric-card-detail {
+    font-size: var(--fs-xs);
+    color: var(--text-secondary);
+    margin-bottom: var(--sp-1);
+    display: flex;
+    gap: var(--sp-2);
+}
+
+.fabric-card-detail span:first-child {
+    color: var(--text-muted);
+    min-width: 80px;
+}
+
+.fabric-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+    margin-top: var(--sp-3);
+    padding-top: var(--sp-3);
+    border-top: 1px solid var(--glass-border);
+}
+
+.fabric-color-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-full);
+    border: 2px solid var(--glass-border);
+    display: inline-block;
+    vertical-align: middle;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Fabric Modal */
+.fabric-modal .modal {
+    max-width: 500px;
+}
+
+.fabric-modal .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.fabric-empty {
+    text-align: center;
+    padding: var(--sp-10);
+    color: var(--text-muted);
+}
+
+.fabric-empty svg {
+    width: 48px;
+    height: 48px;
+    opacity: 0.2;
+    margin-bottom: var(--sp-3);
+}
+/* ---- Mobile Fabric Catalog ---- */
+@media (max-width: 768px) {
+    .fabric-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .fabric-card {
+        padding: 12px;
+    }
+}

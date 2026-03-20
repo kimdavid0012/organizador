@@ -1,0 +1,222 @@
+.pos-caja {
+    display: flex;
+    height: 100%;
+    padding: var(--sp-4);
+    gap: var(--sp-4);
+}
+
+.pos-caja-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+}
+
+/* Header & Search */
+.pos-caja-search {
+    display: flex;
+    gap: var(--sp-2);
+}
+
+.pos-search-input-wrapper {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0 var(--sp-3);
+}
+
+.pos-search-input-wrapper input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: var(--sp-3);
+    color: var(--text-primary);
+    outline: none;
+    font-size: var(--fs-md);
+}
+
+.pos-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 100;
+    margin-top: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.pos-search-item {
+    padding: var(--sp-2) var(--sp-3);
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+}
+
+.pos-search-item:hover {
+    background: var(--bg-hover);
+}
+
+/* Cart Grid */
+.pos-caja-cart {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: auto;
+}
+
+.pos-cart-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.pos-cart-table th {
+    background: var(--bg-body);
+    padding: var(--sp-2) var(--sp-3);
+    text-align: left;
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+}
+
+.pos-cart-table td {
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+/* Controls */
+.qty-control {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.qty-btn {
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-body);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.qty-btn:hover {
+    background: var(--bg-hover);
+}
+
+/* Right Panel (Actions & Totals) */
+.pos-caja-side {
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+}
+
+.pos-caja-totals {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--sp-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+}
+
+.pos-total-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--fs-md);
+    color: var(--text-secondary);
+}
+
+.pos-total-row.grand-total {
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--accent);
+    padding-top: var(--sp-3);
+    border-top: 1px solid var(--border-color);
+    margin-top: var(--sp-2);
+}
+
+.pos-caja-numpad {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-2);
+    flex: 1;
+}
+
+.pos-action-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--sp-4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-weight: var(--fw-semibold);
+    transition: all 0.2s;
+}
+
+.pos-action-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent);
+}
+
+.pos-action-btn.primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    grid-column: 1 / -1;
+    font-size: var(--fs-lg);
+    padding: var(--sp-5);
+}
+
+.pos-action-btn.primary:hover {
+    background: var(--accent-hover);
+}
+
+.pos-caja-payment-modal .pos-modal {
+    max-width: 400px;
+}
+/* ---- Mobile POS Caja ---- */
+@media (max-width: 768px) {
+    .pos-caja-layout {
+        flex-direction: column !important;
+    }
+    .pos-caja-left,
+    .pos-caja-right {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-height: none !important;
+        border: none !important;
+    }
+    .pos-caja-right {
+        border-top: 1px solid var(--border-color) !important;
+    }
+    .pos-search-product input {
+        font-size: 16px !important;
+    }
+    .pos-cart-item {
+        font-size: 12px;
+    }
+}

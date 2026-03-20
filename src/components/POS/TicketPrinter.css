@@ -1,0 +1,135 @@
+/* This CSS is specifically targeted for printing the 10cm thermal ticket */
+
+@media screen {
+    .thermal-ticket-container {
+        display: none !important;
+    }
+}
+
+@media print {
+    @page {
+        margin: 0;
+        size: 100mm auto;
+        /* 10cm ticket width */
+    }
+
+    body * {
+        visibility: hidden;
+    }
+
+    .thermal-ticket-container,
+    .thermal-ticket-container * {
+        visibility: visible;
+    }
+
+    .thermal-ticket-container {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+    }
+
+    .thermal-ticket {
+        width: 95mm;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 12px;
+        color: #000;
+        padding: 2mm 0;
+    }
+}
+
+.thermal-ticket {
+    width: 90mm;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    /* Slightly larger */
+    line-height: 1.3;
+    background: white;
+    color: black;
+    padding: 10px;
+}
+
+.ticket-header h2 {
+    text-align: center;
+    font-size: 20px;
+    margin: 5px 0;
+    letter-spacing: 2px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.ticket-header p,
+.ticket-footer p {
+    margin: 4px 0;
+}
+
+.ticket-meta {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px dashed #000;
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+}
+
+.divider {
+    border-top: 1px dashed #000;
+    margin: 8px 0;
+}
+
+.ticket-col-headers {
+    display: flex;
+    flex-wrap: wrap;
+    font-weight: bold;
+    border-bottom: 1px solid #000;
+    padding-bottom: 2px;
+}
+
+.ticket-col-headers span:first-child {
+    width: 100%;
+    margin-bottom: 2px;
+}
+
+.ticket-col-headers span:nth-child(2) {
+    flex: 1;
+}
+
+.ticket-col-headers span:last-child {
+    width: 80px;
+    text-align: right;
+}
+
+.ticket-items {
+    margin: 10px 0;
+}
+
+.ticket-item-row {
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 0.5px solid #eee;
+}
+
+.item-name {
+    width: 100%;
+    font-weight: bold;
+}
+
+.item-details {
+    display: flex;
+    justify-content: space-between;
+    padding-left: 5px;
+}
+
+.ticket-summary {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.grand-total {
+    font-size: 16px;
+    font-weight: bold;
+    border-top: 1px double #000;
+    padding-top: 5px;
+    margin-top: 5px;
+}

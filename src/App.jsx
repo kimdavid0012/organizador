@@ -1,0 +1,478 @@
+import React, { useState, useMemo } from 'react';
+import {
+    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon
+} from 'lucide-react';
+import { DataProvider, useData } from './store/DataContext';
+import { I18nProvider, useI18n } from './store/I18nContext';
+import { getStorageUsage } from './store/storage';
+import { isTodayOrOverdue } from './utils/helpers';
+import Header from './components/Header';
+import KanbanBoard from './components/KanbanBoard';
+import Library from './components/Library';
+import FabricCatalog from './components/FabricCatalog';
+import Settings from './components/Settings';
+import CortadoresPage from './components/CortadoresPage';
+import TalleresPage from './components/TalleresPage';
+import CortesPage from './components/CortesPage';
+import EmpleadosPage from './components/EmpleadosPage';
+import PedidosOnlinePage from './components/PedidosOnlinePage';
+import PosPage from './components/POS/PosPage';
+import MarketingSection from './components/MarketingSection.jsx';
+import PaginaWebSection from './components/PaginaWebSection.jsx';
+import MoldModal from './components/MoldModal';
+import TaskModal from './components/TaskModal';
+import Login from './components/Login';
+import ClientesPage from './components/ClientesPage';
+import PosProductos from './components/POS/PosProductos';
+import { AuthProvider, useAuth } from './store/AuthContext';
+import AIAssistant from './components/AIAssistant';
+import './App.css';
+
+// ===== Mobile Bottom Nav with "More" popup =====
+function MobileNav({ navItems, view, setView }) {
+    const [showMore, setShowMore] = useState(false);
+    // Show first 4 items + "Más" button
+    const mainItems = navItems.slice(0, 4);
+    const moreItems = navItems.slice(4);
+    const isInMore = moreItems.find(i => i.id === view);
+
+    return (
+        <>
+            {showMore && (
+                <div
+                    style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.7)', zIndex: 9991,
+                        display: 'flex', alignItems: 'flex-end', justifyContent: 'center'
+                    }}
+                    onClick={() => setShowMore(false)}
+                >
+                    <div
+                        style={{
+                            background: 'var(--bg-card, #1e1e2e)',
+                            borderRadius: '16px 16px 0 0',
+                            padding: '16px 12px',
+                            paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+                            width: '100%', maxWidth: 500,
+                            maxHeight: '70vh', overflowY: 'auto'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '0 4px' }}>
+                            <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>Menú</span>
+                            <button onClick={() => setShowMore(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
+                                <XIcon size={20} />
+                            </button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                            {navItems.map(item => (
+                                <div
+                                    key={`more-${item.id}`}
+                                    onClick={() => { setView(item.id); setShowMore(false); }}
+                                    style={{
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                                        padding: '14px 8px', borderRadius: 12, cursor: 'pointer',
+                                        background: view === item.id ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.03)',
+                                        color: view === item.id ? 'var(--accent, #8b5cf6)' : 'var(--text-secondary)',
+                                        border: view === item.id ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid transparent',
+                                        transition: 'all 0.15s'
+                                    }}
+                                >
+                                    <item.icon size={22} />
+                                    <span style={{ fontSize: 11, fontWeight: 500, textAlign: 'center', lineHeight: 1.2 }}>
+                                        {item.label}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+            <nav className="mobile-bottom-nav">
+                {mainItems.map(item => (
+                    <div
+                        key={`mob-${item.id}`}
+                        className={`mobile-nav-item ${view === item.id ? 'active' : ''}`}
+                        onClick={() => setView(item.id)}
+                    >
+                        <item.icon />
+                        <span>{item.label.length > 7 ? item.label.slice(0, 6) + '…' : item.label}</span>
+                    </div>
+                ))}
+                {moreItems.length > 0 && (
+                    <div
+                        className={`mobile-nav-item ${isInMore ? 'active' : ''}`}
+                        onClick={() => setShowMore(true)}
+                    >
+                        <MoreHorizontal />
+                        <span>Más</span>
+                    </div>
+                )}
+            </nav>
+        </>
+    );
+}
+
+class ErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+    static getDerivedStateFromError(error) { return { hasError: true, error }; }
+    componentDidCatch(error, errorInfo) { console.error("App Crash:", error, errorInfo); }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div style={{ padding: 40, textAlign: 'center', background: '#121212', color: 'white', minHeight: '100vh' }}>
+                    <h2>Oops! Algo salió mal.</h2>
+                    <p>La aplicación encontró un error inesperado:</p>
+                    <div style={{
+                        background: '#222', padding: 20, borderRadius: 8,
+                        margin: '20px auto', maxWidth: 600, textAlign: 'left',
+                        fontFamily: 'monospace', fontSize: 12, overflow: 'auto',
+                        border: '1px solid #444', color: '#ff5555'
+                    }}>
+                        {this.state.error && this.state.error.toString()}
+                    </div>
+                    <button className="btn btn-primary" onClick={() => window.location.reload()}>Recargar página</button>
+                    <div style={{ marginTop: 20, fontSize: 10, color: '#444' }}>
+                        Por favor, enviame una captura de este error para que pueda arreglarlo.
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+function AppContent() {
+    const { state, addMolde, addTarea } = useData();
+    const { moldes, telas, config } = state;
+    const { t, lang, changeLang, LANGUAGE_LABELS } = useI18n();
+    const { user, users, originalAdmin, logout, switchUser, getAllowedSections } = useAuth(); // Auth integration
+
+    const initialView = () => {
+        const allowed = getAllowedSections(user.role);
+        if (allowed.includes('kanban')) return 'kanban';
+        return allowed[0] || 'kanban';
+    };
+    const [view, setView] = useState(initialView());
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filters, setFilters] = useState({
+        tela: '', estado: '', responsable: '', temporada: '', prioridad: ''
+    });
+    const [soloHoy, setSoloHoy] = useState(false);
+    const [editingMolde, setEditingMolde] = useState(null);
+
+    const storage = getStorageUsage();
+
+    // Filter moldes
+    const filteredMoldes = useMemo(() => {
+        return moldes.filter(m => {
+            if (searchQuery) {
+                const q = searchQuery.toLowerCase();
+                const match =
+                    (m.nombre || '').toLowerCase().includes(q) ||
+                    (m.codigo || '').toLowerCase().includes(q) ||
+                    (m.categoria || '').toLowerCase().includes(q) ||
+                    (m.observaciones || '').toLowerCase().includes(q);
+                if (!match) return false;
+            }
+            if (filters.prioridad && m.prioridad !== filters.prioridad) return false;
+            if (filters.temporada && m.temporada !== filters.temporada) return false;
+            if (filters.responsable && m.responsable !== filters.responsable) return false;
+            if (filters.estado) {
+                const col = config.columnas.find(c => c.nombre === filters.estado);
+                if (col && m.estado !== col.id) return false;
+            }
+            if (filters.tela) {
+                const tela = telas.find(t => t.nombre === filters.tela);
+                if (tela && !(m.telasIds || []).includes(tela.id)) return false;
+            }
+            if (soloHoy && !isTodayOrOverdue(m.fechaObjetivo)) return false;
+            return true;
+        });
+    }, [moldes, searchQuery, filters, soloHoy, config.columnas, telas]);
+
+    const handleAddMolde = () => {
+        addMolde({ nombre: '', estado: config.columnas[0]?.id || 'por-hacer' });
+        setTimeout(() => setEditingMolde('latest'), 50);
+    };
+
+    const handleAddTarea = (columnId) => {
+        const estado = columnId || config.columnas[0]?.id || 'por-hacer';
+        const tareasInCol = state.tareas.filter(t => t.estado === estado);
+        addTarea({ nombre: '', estado, orden: tareasInCol.length });
+        setTimeout(() => setEditingMolde('latest_tarea'), 50);
+    };
+
+    const handleOpenMolde = (molde) => setEditingMolde({ id: molde.id, type: 'molde' });
+    const handleOpenTarea = (tarea) => setEditingMolde({ id: tarea.id, type: 'tarea' });
+
+    // Detect if we're editing a molde or a tarea
+    let resolvedEditItem = null;
+    let editType = 'molde';
+
+    if (editingMolde === 'latest') {
+        resolvedEditItem = moldes[moldes.length - 1];
+    } else if (editingMolde === 'latest_tarea') {
+        resolvedEditItem = state.tareas[state.tareas.length - 1];
+        editType = 'tarea';
+    } else if (editingMolde && editingMolde.type === 'tarea') {
+        resolvedEditItem = state.tareas.find(t => t.id === editingMolde.id);
+        editType = 'tarea';
+    } else if (editingMolde && editingMolde.type === 'molde') {
+        resolvedEditItem = moldes.find(m => m.id === editingMolde.id);
+    } else if (typeof editingMolde === 'string') {
+        // Fallback for older code
+        resolvedEditItem = moldes.find(m => m.id === editingMolde);
+    }
+
+    // Role-based NavItems filtering
+    let navItems = [
+        { id: 'kanban', icon: LayoutDashboard, label: t('navTablero') },
+        { id: 'pos', icon: Store, label: 'Punta de Venta' },
+        { id: 'articulos', icon: ShoppingCart, label: 'Artículos' },
+        { id: 'library', icon: BookOpen, label: t('navBiblioteca') },
+        { id: 'pedidos', icon: Globe, label: 'Pedidos Online' },
+        { id: 'clientes', icon: Users, label: 'Clientes' },
+        { id: 'fabrics', icon: Scissors, label: t('navTelas') },
+        { id: 'cortes', icon: PackageOpen, label: t('cortes') },
+        { id: 'cortadores', icon: UserCheck, label: t('cortadores') },
+        { id: 'talleres', icon: Factory, label: t('talleres') },
+        { id: 'empleados', icon: Users, label: 'Empleados' },
+        { id: 'marketing', icon: Megaphone, label: 'Marketing' },
+        { id: 'paginaweb', icon: Globe, label: 'Página Web' },
+        { id: 'settings', icon: SettingsIcon, label: t('navConfiguracion') },
+    ];
+
+    if (user.role !== 'admin') {
+        const allowed = getAllowedSections(user.role);
+        navItems = navItems.filter(i => allowed.includes(i.id));
+    }
+
+    return (
+        <div className="app">
+            <div className="app-body">
+                <aside className="sidebar">
+                    <div className="sidebar-brand">
+                        <div className="sidebar-brand-icon">
+                            <Scissors size={20} />
+                        </div>
+                        <div>
+                            <h1 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {t('appName')}
+                                <div style={{
+                                    width: 8, height: 8, borderRadius: '50%',
+                                    background: state ? 'var(--success)' : 'var(--danger)',
+                                    boxShadow: state ? '0 0 8px var(--success)' : 'none'
+                                }} title={state ? 'Sincronizado con la nube' : 'Sin conexión a la nube'} />
+                            </h1>
+                            <span>{t('appSubtitle')}</span>
+                        </div>
+                    </div>
+
+                    <nav className="sidebar-nav">
+                        {navItems.map(item => (
+                            <div
+                                key={item.id}
+                                className={`sidebar-item ${view === item.id ? 'active' : ''}`}
+                                onClick={() => setView(item.id)}
+                            >
+                                <item.icon />
+                                <span>{item.label}</span>
+                            </div>
+                        ))}
+                    </nav>
+
+                    <div className="sidebar-divider" />
+
+                    {/* Language switcher */}
+                    <div className="sidebar-item" style={{ gap: 8 }}>
+                        <Globe style={{ width: 18, height: 18, flexShrink: 0 }} />
+                        <select
+                            value={lang}
+                            onChange={(e) => changeLang(e.target.value)}
+                            style={{
+                                background: 'var(--bg-input)',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: 'var(--radius-sm)',
+                                color: 'var(--text-primary)',
+                                fontSize: 'var(--fs-xs)',
+                                padding: '2px 6px',
+                                fontFamily: 'var(--font-family)',
+                                cursor: 'pointer',
+                                flex: 1,
+                                outline: 'none',
+                            }}
+                        >
+                            {Object.entries(LANGUAGE_LABELS).map(([code, label]) => (
+                                <option key={code} value={code}>{label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="sidebar-storage">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>
+                                {originalAdmin ? 'Simulando vista de:' : 'Conectado como:'}
+                            </div>
+                            <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)', color: originalAdmin ? 'var(--warning)' : 'var(--accent)' }}>
+                                {user.name}
+                            </div>
+
+                            {/* User Switcher Dropdown for Admins */}
+                            {(user.role === 'admin' || originalAdmin) && (
+                                <select
+                                    className="form-select"
+                                    style={{ fontSize: '11px', padding: '4px', marginTop: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                                    value={user.role}
+                                    onChange={(e) => {
+                                        switchUser(e.target.value);
+                                        // Update default view based on permissions
+                                        const role = e.target.value;
+                                        const allowed = getAllowedSections(role);
+                                        if (allowed.includes('kanban')) setView('kanban');
+                                        else setView(allowed[0] || 'kanban');
+                                    }}
+                                >
+                                    <option value="admin">👨‍💻 Administrador</option>
+                                    <option value="encargada">👩‍💼 Encargada (Nadia)</option>
+                                    <option value="deposito">📦 Depósito (Naara)</option>
+                                    <option value="pedidos">🌐 Pedidos Online (Juan)</option>
+                                </select>
+                            )}
+
+                            <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', marginTop: '4px' }} onClick={logout}>
+                                Cerrar Sesión
+                            </button>
+                        </div>
+                        <div className="sidebar-storage-label">
+                            <HardDrive style={{ width: 12, height: 12, display: 'inline', marginRight: 4 }} />
+                            {storage.usedMB} {t('mbUsados')}
+                        </div>
+                        <div className="sidebar-storage-bar">
+                            <div
+                                className="sidebar-storage-bar-fill"
+                                style={{ width: `${Math.min((parseFloat(storage.usedMB) / 10) * 100, 100)}%` }}
+                            />
+                        </div>
+                    </div>
+                </aside>
+
+                <div className="main-content">
+                    {(view === 'kanban' || view === 'library') && (
+                        <Header
+                            filters={filters}
+                            setFilters={setFilters}
+                            searchQuery={searchQuery}
+                            setSearchQuery={setSearchQuery}
+                            soloHoy={soloHoy}
+                            setSoloHoy={setSoloHoy}
+                        />
+                    )}
+                    {view === 'kanban' && (
+                        <KanbanBoard
+                            tareas={state.tareas || []}
+                            onOpenTarea={handleOpenTarea}
+                            onAddTarea={handleAddTarea}
+                        />
+                    )}
+                    {view === 'library' && (
+                        <Library
+                            filteredMoldes={filteredMoldes}
+                            onOpenMolde={handleOpenMolde}
+                            onAddMolde={handleAddMolde}
+                        />
+                    )}
+                    {view === 'fabrics' && <FabricCatalog />}
+                    {view === 'cortes' && <CortesPage />}
+                    {view === 'cortadores' && <CortadoresPage />}
+                    {view === 'talleres' && <TalleresPage />}
+                    {view === 'pos' && <PosPage />}
+                    {view === 'empleados' && <EmpleadosPage />}
+                    {view === 'settings' && <Settings />}
+                    {view === 'pedidos' && <PedidosOnlinePage />}
+                    {view === 'marketing' && <MarketingSection />}
+                    {view === 'paginaweb' && <PaginaWebSection />}
+                    {view === 'articulos' && <PosProductos />}
+                    {view === 'clientes' && <ClientesPage />}
+                </div>
+            </div>
+
+            {resolvedEditItem && editType === 'molde' && (
+                <MoldModal
+                    molde={resolvedEditItem}
+                    onClose={() => setEditingMolde(null)}
+                />
+            )}
+            {/* For now we'll reuse MoldModal for Tareas but hide specific fields, or ideally build a TaskModal. 
+                Wait, building a Task modal is better, but maybe just use the basic fields.
+                Let's use a quick inline prompt or build a simplified Modal if needed. 
+                Actually, MoldModal has a lot of Mold-specific logic. Let's build TaskModal shortly. */}
+            {resolvedEditItem && editType === 'tarea' && (
+                <TaskModal
+                    tarea={resolvedEditItem}
+                    onClose={() => setEditingMolde(null)}
+                />
+            )}
+
+            {/* AI Assistant - floating chat */}
+            <AIAssistant />
+
+            {/* Mobile Bottom Navigation */}
+            <MobileNav navItems={navItems} view={view} setView={setView} />
+        </div>
+    );
+}
+
+function AppWrapper() {
+    const { user, logout } = useAuth();
+    if (!user) return <Login />;
+
+    // Users with 'pendiente' role can't access the app yet
+    if (user.role === 'pendiente') {
+        return (
+            <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                minHeight: '100vh', background: 'var(--bg-app)',
+                padding: '20px'
+            }}>
+                <div style={{
+                    textAlign: 'center', maxWidth: 420,
+                    background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)',
+                    padding: '40px 32px', border: '1px solid var(--border-color)'
+                }}>
+                    <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+                    <h2 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>Cuenta pendiente</h2>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--fs-sm)', marginBottom: 24 }}>
+                        Tu cuenta fue creada pero el administrador todavía no te asignó un rol.
+                        Contactá al administrador para que active tu acceso.
+                    </p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: 16 }}>
+                        Conectado como: {user.email}
+                    </p>
+                    <button className="btn btn-ghost" onClick={logout} style={{ color: 'var(--text-muted)' }}>
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return <AppContent />;
+}
+
+export default function App() {
+    return (
+        <ErrorBoundary>
+            <AuthProvider>
+                <I18nProvider>
+                    <DataProvider>
+                        <AppWrapper />
+                    </DataProvider>
+                </I18nProvider>
+            </AuthProvider>
+        </ErrorBoundary>
+    );
+}

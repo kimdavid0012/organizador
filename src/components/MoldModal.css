@@ -1,0 +1,100 @@
+/* ========= MOLD MODAL ========= */
+.mold-modal .modal-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-6);
+}
+
+.mold-modal-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.mold-modal-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-3);
+}
+
+.mold-modal-telas {
+    margin-top: var(--sp-1);
+}
+
+.mold-modal-telas-selected {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: var(--sp-2);
+    min-height: 24px;
+}
+
+.mold-modal-telas-dropdown {
+    margin-top: var(--sp-2);
+    max-height: 120px;
+    overflow-y: auto;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(10px);
+}
+
+.mold-modal-tela-option {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    cursor: pointer;
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+
+.mold-modal-tela-option:hover {
+    background: rgba(139, 92, 246, 0.08);
+    color: var(--text-primary);
+}
+
+.mold-modal-tela-option.selected {
+    color: var(--accent);
+}
+
+.mold-modal-tela-option .check-icon {
+    width: 14px;
+    height: 14px;
+}
+
+@media (max-width: 700px) {
+    .mold-modal .modal-body {
+        grid-template-columns: 1fr;
+    }
+
+    .mold-modal-row {
+        grid-template-columns: 1fr;
+    }
+}
+/* ---- Mobile MoldModal ---- */
+@media (max-width: 768px) {
+    .mold-modal {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100dvh;
+        max-height: 100dvh;
+        border-radius: 0 !important;
+    }
+    .mold-modal .modal-body {
+        flex-direction: column;
+        padding: 12px;
+    }
+    .mold-modal-col {
+        min-width: 100%;
+        width: 100%;
+    }
+    .mold-modal-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .mold-modal-section-title {
+        font-size: 13px;
+    }
+}

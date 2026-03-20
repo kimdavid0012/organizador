@@ -1,0 +1,71 @@
+.pos-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--bg-body);
+}
+
+.pos-nav {
+    display: flex;
+    gap: var(--sp-2);
+    padding: var(--sp-3);
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+}
+
+.pos-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-4);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-weight: var(--fw-medium);
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.pos-nav-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.pos-nav-btn.active {
+    background: var(--accent);
+    color: white;
+}
+
+.pos-content {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+}
+/* ---- Mobile POS Page ---- */
+@media (max-width: 768px) {
+    .pos-page {
+        flex-direction: column;
+        height: auto;
+    }
+    .pos-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 4px;
+        padding: 8px;
+        border-bottom: 1px solid var(--border-color);
+        border-right: none;
+    }
+    .pos-nav-btn {
+        font-size: 11px;
+        padding: 8px 12px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .pos-content {
+        padding: 8px;
+        overflow-y: auto;
+    }
+}
