@@ -10,6 +10,10 @@ const KNOWN_USERS = {
     'giselakim.wk@gmail.com': { role: 'marketing', name: 'Gisela Marketing' }
 };
 
+const KNOWN_USER_SECTIONS = {
+    'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb']
+};
+
 // All available sections in the app
 const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'paginaweb', 'settings'];
 
@@ -107,6 +111,7 @@ export function AuthProvider({ children }) {
                         const parsed = permsSnap.data();
                         const merged = { ...DEFAULT_ROLE_PERMISSIONS, ...parsed };
                         merged.admin = [...ALL_SECTIONS];
+                        merged.marketing = [...DEFAULT_ROLE_PERMISSIONS.marketing];
                         setRolePermissions(merged);
                     }
                 } catch (err) {
@@ -273,9 +278,13 @@ export function AuthProvider({ children }) {
         }
     };
 
-    const getAllowedSections = (role) => {
+    const getAllowedSections = (role, email = '') => {
+        const normalizedEmail = (email || '').toLowerCase();
         if (role === 'admin') return ALL_SECTIONS;
-        return rolePermissions[role] || [];
+        if (KNOWN_USER_SECTIONS[normalizedEmail]) {
+            return KNOWN_USER_SECTIONS[normalizedEmail];
+        }
+        return rolePermissions[role] || DEFAULT_ROLE_PERMISSIONS[role] || [];
     };
 
     if (loading) return null;

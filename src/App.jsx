@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon
 } from 'lucide-react';
@@ -153,7 +153,7 @@ function AppContent() {
     const { user, users, originalAdmin, logout, switchUser, getAllowedSections } = useAuth(); // Auth integration
 
     const initialView = () => {
-        const allowed = getAllowedSections(user.role);
+        const allowed = getAllowedSections(user.role, user.email);
         if (allowed.includes('kanban')) return 'kanban';
         return allowed[0] || 'kanban';
     };
@@ -248,9 +248,17 @@ function AppContent() {
     ];
 
     if (user.role !== 'admin') {
-        const allowed = getAllowedSections(user.role);
+        const allowed = getAllowedSections(user.role, user.email);
         navItems = navItems.filter(i => allowed.includes(i.id));
     }
+
+    useEffect(() => {
+        const allowed = getAllowedSections(user.role, user.email);
+        if (!allowed.length) return;
+        if (!allowed.includes(view)) {
+            setView(allowed.includes('kanban') ? 'kanban' : allowed[0]);
+        }
+    }, [user.role, user.email, view, getAllowedSections]);
 
     return (
         <div className="app">
@@ -332,7 +340,7 @@ function AppContent() {
                                         switchUser(e.target.value);
                                         // Update default view based on permissions
                                         const role = e.target.value;
-                                        const allowed = getAllowedSections(role);
+                                        const allowed = getAllowedSections(role, role === 'marketing' ? 'giselakim.wk@gmail.com' : '');
                                         if (allowed.includes('kanban')) setView('kanban');
                                         else setView(allowed[0] || 'kanban');
                                     }}
