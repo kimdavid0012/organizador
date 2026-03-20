@@ -16,6 +16,7 @@ const TicketPrinter = forwardRef(({ ticketData }, ref) => {
         pago = 0,
         vuelto = 0,
         vendedor = 'Local',
+        canalVenta = 'LOCAL',
         notas = ''
     } = ticketData;
 
@@ -34,6 +35,10 @@ const TicketPrinter = forwardRef(({ ticketData }, ref) => {
                     <div className="ticket-meta">
                         <span>{new Date(fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</span>
                         <span>Vendedor: {vendedor}</span>
+                    </div>
+                    <div className="ticket-meta">
+                        <span>Canal</span>
+                        <span>{canalVenta}</span>
                     </div>
                     <p>----------------------------------------</p>
                     <p>{cliente}</p>

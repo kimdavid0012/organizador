@@ -6,6 +6,8 @@ import { generateId } from '../../utils/helpers';
 import TicketPrinter from './TicketPrinter';
 import './PosCaja.css';
 
+const SALES_CHANNELS = ['LOCAL', 'PAGINA WEB', 'WHATSAPP', 'MODATEX', 'DISTRITO', 'CHLOE'];
+
 export default function PosCaja() {
     const { state, addPosSale } = useData();
     const { user } = useAuth();
@@ -15,6 +17,7 @@ export default function PosCaja() {
     const [search, setSearch] = useState('');
     const [cart, setCart] = useState([]);
     const [cliente, setCliente] = useState('Cons. Final');
+    const [canalVenta, setCanalVenta] = useState('LOCAL');
     const [notasDePedido, setNotasDePedido] = useState('');
     const [descuentoRef, setDescuentoRef] = useState(0);
     const [descuentoGlobal, setDescuentoGlobal] = useState(0);
@@ -122,6 +125,7 @@ export default function PosCaja() {
         setDescuentoGlobal(0);
         setSearch('');
         setCliente('Cons. Final');
+        setCanalVenta('LOCAL');
         setNotasDePedido('');
     };
 
@@ -143,6 +147,7 @@ export default function PosCaja() {
             fecha: new Date().toISOString(),
             vendedor: user.name,
             cliente: cliente || 'Cons. Final',
+            canalVenta,
             notas: notasDePedido || '',
             items: cart,
             subtotal,
@@ -279,6 +284,19 @@ export default function PosCaja() {
                             onChange={(e) => setCliente(e.target.value)}
                             placeholder="Ej: Consumidor Final, Juan Pérez..."
                         />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)' }}>Canal:</span>
+                        <select
+                            className="form-input"
+                            style={{ width: 180 }}
+                            value={canalVenta}
+                            onChange={(e) => setCanalVenta(e.target.value)}
+                        >
+                            {SALES_CHANNELS.map((channel) => (
+                                <option key={channel} value={channel}>{channel}</option>
+                            ))}
+                        </select>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 2, minWidth: '100%' }}>
                         <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)' }}>Recordatorio/Fecha:</span>

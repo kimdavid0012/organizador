@@ -66,7 +66,7 @@ export default function PosHistorial() {
                                     {v.cliente}
                                     {v.notas && <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Nota: {v.notas}</div>}
                                 </td>
-                                <td>EFVO/LOC</td>
+                                <td>{v.canalVenta || 'LOCAL'}</td>
                                 <td style={{ fontWeight: 'bold' }}>${v.total.toFixed(2)}</td>
                                 <td>{v.items.reduce((acc, i) => acc + i.cantidad, 0)}</td>
                                 <td style={{ textAlign: 'right' }}>
@@ -78,7 +78,7 @@ export default function PosHistorial() {
                         ))}
                         {filteredVentas.length === 0 && (
                             <tr>
-                                <td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                <td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                                     No hay ventas registradas aún.
                                 </td>
                             </tr>
