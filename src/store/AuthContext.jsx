@@ -7,11 +7,17 @@ const AuthContext = createContext();
 
 const KNOWN_USERS = {
     'kimdavid0012@gmail.com': { role: 'admin', name: 'kimdavid0012' },
-    'giselakim.wk@gmail.com': { role: 'marketing', name: 'Gisela Marketing' }
+    'giselakim.wk@gmail.com': { role: 'marketing', name: 'Gisela Marketing' },
+    'nadia@celavie.com': { role: 'encargada', name: 'Nadia' },
+    'juan@celavie.com': { role: 'pedidos', name: 'Juan' },
+    'naara@celavie.com': { role: 'deposito', name: 'Naara' }
 };
 
 const KNOWN_USER_SECTIONS = {
-    'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb']
+    'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb'],
+    'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb'],
+    'juan@celavie.com': ['kanban', 'pedidos'],
+    'naara@celavie.com': ['kanban', 'talleres']
 };
 
 // All available sections in the app
@@ -20,9 +26,9 @@ const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clien
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
     admin: [...ALL_SECTIONS],
-    encargada: ['pos', 'articulos', 'kanban', 'library', 'pedidos', 'clientes', 'cortes', 'talleres', 'empleados', 'settings'],
-    deposito: ['talleres', 'articulos', 'clientes'],
-    pedidos: ['pedidos', 'articulos', 'clientes'],
+    encargada: ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb'],
+    deposito: ['kanban', 'talleres'],
+    pedidos: ['kanban', 'pedidos'],
     marketing: ['pedidos', 'marketing', 'paginaweb'],
     pendiente: [] // New users get no access until admin assigns a role
 };
@@ -111,6 +117,9 @@ export function AuthProvider({ children }) {
                         const parsed = permsSnap.data();
                         const merged = { ...DEFAULT_ROLE_PERMISSIONS, ...parsed };
                         merged.admin = [...ALL_SECTIONS];
+                        merged.encargada = [...DEFAULT_ROLE_PERMISSIONS.encargada];
+                        merged.deposito = [...DEFAULT_ROLE_PERMISSIONS.deposito];
+                        merged.pedidos = [...DEFAULT_ROLE_PERMISSIONS.pedidos];
                         merged.marketing = [...DEFAULT_ROLE_PERMISSIONS.marketing];
                         setRolePermissions(merged);
                     }
