@@ -480,11 +480,12 @@ function FabricModal({ tela, onClose }) {
 }
 
 export default function FabricCatalog() {
-    const { state, addTela } = useData();
+    const { state, addTela, updateConfig } = useData();
     const { telas } = state;
     const { t } = useI18n();
     const { user } = useAuth();
     const [editingTela, setEditingTela] = useState(null);
+    const [paymentDrafts, setPaymentDrafts] = useState({});
 
     const handleAddAndOpen = () => { addTela({ nombre: '' }); setTimeout(() => setEditingTela('latest'), 50); };
     const resolvedEditTela = editingTela === 'latest' ? telas[telas.length - 1] : (editingTela ? telas.find(t => t.id === editingTela) : null);
@@ -519,19 +520,69 @@ export default function FabricCatalog() {
         return { totalR, totalV };
     }, [telas, state.config.cortes, state.config.cotizacionUSD]);
 
+    const providerPayments = state.config.fabricPayments || [];
+
     const providerSummary = useMemo(() => {
         const grouped = {};
         telas.forEach((tela) => {
             const provider = tela.proveedor || 'Sin proveedor';
             const totalValue = (parseFloat(tela.precioPorUnidad) || 0) * (parseFloat(tela.cantidadTotal) || 0);
-            const paid = (tela.pagosUSD || []).reduce((acc, pago) => acc + (parseFloat(pago.montoUSD) || 0), 0);
             if (!grouped[provider]) grouped[provider] = { totalValue: 0, paid: 0, fallados: 0 };
             grouped[provider].totalValue += totalValue;
-            grouped[provider].paid += paid;
             grouped[provider].fallados += (tela.coloresStock || []).reduce((acc, color) => acc + ((color.items || []).filter((item) => Number(item.fallado || 0) > 0).length), 0);
         });
+
+        providerPayments.forEach((payment) => {
+            const provider = payment.proveedor || 'Sin proveedor';
+            if (!grouped[provider]) grouped[provider] = { totalValue: 0, paid: 0, fallados: 0 };
+            grouped[provider].paid += parseFloat(payment.montoUSD) || 0;
+        });
+
         return Object.entries(grouped);
-    }, [telas]);
+    }, [telas, providerPayments]);
+
+    const updatePaymentDraft = (provider, field, value) => {
+        setPaymentDrafts((prev) => ({
+            ...prev,
+            [provider]: {
+                fecha: prev[provider]?.fecha || new Date().toISOString().slice(0, 10),
+                montoUSD: prev[provider]?.montoUSD || '',
+                cotizacion: prev[provider]?.cotizacion || state.config.cotizacionUSD || '',
+                nota: prev[provider]?.nota || '',
+                ...prev[provider],
+                [field]: value
+            }
+        }));
+    };
+
+    const addProviderPayment = (provider) => {
+        const draft = paymentDrafts[provider];
+        if (!draft?.montoUSD) return;
+
+        updateConfig({
+            fabricPayments: [
+                {
+                    id: generateId(),
+                    proveedor: provider,
+                    fecha: draft.fecha || new Date().toISOString().slice(0, 10),
+                    montoUSD: draft.montoUSD,
+                    cotizacion: draft.cotizacion || state.config.cotizacionUSD || '',
+                    nota: draft.nota || ''
+                },
+                ...providerPayments
+            ]
+        });
+
+        setPaymentDrafts((prev) => ({
+            ...prev,
+            [provider]: {
+                fecha: new Date().toISOString().slice(0, 10),
+                montoUSD: '',
+                cotizacion: state.config.cotizacionUSD || '',
+                nota: ''
+            }
+        }));
+    };
 
     return (
         <div className="fabric-catalog">
@@ -552,11 +603,44 @@ export default function FabricCatalog() {
                     <h3 style={{ marginBottom: 12 }}>Resumen por textilera</h3>
                     <div style={{ display: 'grid', gap: 8 }}>
                         {providerSummary.map(([provider, summary], index) => (
-                            <div key={provider} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr auto', gap: 12, padding: 12, borderRadius: 12, background: `linear-gradient(90deg, hsla(${(index * 57) % 360}, 70%, 60%, 0.12), rgba(255,255,255,0.02))` }}>
-                                <div style={{ fontWeight: 'var(--fw-bold)' }}>{provider}</div>
-                                <div>US$ {summary.totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                                <div>Pagado US$ {summary.paid.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                                <div style={{ color: summary.fallados ? 'var(--warning)' : 'var(--text-secondary)' }}>Fallados: {summary.fallados}</div>
+                            <div key={provider} style={{ padding: 12, borderRadius: 12, background: `linear-gradient(90deg, hsla(${(index * 57) % 360}, 70%, 60%, 0.12), rgba(255,255,255,0.02))` }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr auto', gap: 12, alignItems: 'center' }}>
+                                    <div style={{ fontWeight: 'var(--fw-bold)' }}>{provider}</div>
+                                    <div>US$ {summary.totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                                    <div>Pagado US$ {summary.paid.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                                    <div style={{ color: summary.fallados ? 'var(--warning)' : 'var(--text-secondary)' }}>Fallados: {summary.fallados}</div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '140px 120px 120px 1fr auto', gap: 8, marginTop: 10 }}>
+                                    <input
+                                        type="date"
+                                        className="form-input"
+                                        value={paymentDrafts[provider]?.fecha || new Date().toISOString().slice(0, 10)}
+                                        onChange={(e) => updatePaymentDraft(provider, 'fecha', e.target.value)}
+                                    />
+                                    <input
+                                        type="number"
+                                        className="form-input"
+                                        placeholder="Pago USD"
+                                        value={paymentDrafts[provider]?.montoUSD || ''}
+                                        onChange={(e) => updatePaymentDraft(provider, 'montoUSD', e.target.value)}
+                                    />
+                                    <input
+                                        type="number"
+                                        className="form-input"
+                                        placeholder="Coti"
+                                        value={paymentDrafts[provider]?.cotizacion || state.config.cotizacionUSD || ''}
+                                        onChange={(e) => updatePaymentDraft(provider, 'cotizacion', e.target.value)}
+                                    />
+                                    <input
+                                        className="form-input"
+                                        placeholder="Nota del pago"
+                                        value={paymentDrafts[provider]?.nota || ''}
+                                        onChange={(e) => updatePaymentDraft(provider, 'nota', e.target.value)}
+                                    />
+                                    <button className="btn btn-sm btn-primary" onClick={() => addProviderPayment(provider)}>
+                                        Agregar pago
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
