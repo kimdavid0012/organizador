@@ -17,7 +17,7 @@ const SYSTEM_ACCOUNTS = [
 ];
 
 export default function Settings() {
-    const { state, updateConfig, updatePosSettings, importMoldes, importTelas, setData } = useData();
+    const { state, syncStatus, exportBackupNow, updateConfig, updatePosSettings, importMoldes, importTelas, setData } = useData();
     const { config, moldes, telas } = state;
     const { t } = useI18n();
     const { user: currentUser, users, updateUserRole, loadAllFirebaseUsers, rolePermissions, updateRolePermissions, getAllowedSections, ALL_SECTIONS, SECTION_LABELS } = useAuth();
@@ -321,16 +321,51 @@ export default function Settings() {
                 <div className="settings-section">
                     <h3><Cloud /> Sincronización en la Nube</h3>
                     <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)', marginBottom: 12 }}>
-                        Los datos se guardan automáticamente en Firebase. Todos los usuarios comparten la misma información en tiempo real.
+                        La app guarda localmente, sigue funcionando sin internet y reintenta sincronizar sola cuando vuelve la conexión.
                     </p>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                        gap: 12,
+                        marginBottom: 16
+                    }}>
+                        <div className="glass-panel" style={{ padding: 14 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Estado</div>
+                            <div style={{ fontWeight: 'var(--fw-bold)', color: syncStatus.online ? 'var(--success)' : 'var(--warning)' }}>
+                                {syncStatus.status}
+                            </div>
+                        </div>
+                        <div className="glass-panel" style={{ padding: 14 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Conexión</div>
+                            <div style={{ fontWeight: 'var(--fw-bold)' }}>{syncStatus.online ? 'Online' : 'Offline'}</div>
+                        </div>
+                        <div className="glass-panel" style={{ padding: 14 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Cambios pendientes</div>
+                            <div style={{ fontWeight: 'var(--fw-bold)' }}>{syncStatus.pendingChanges || 0}</div>
+                        </div>
+                        <div className="glass-panel" style={{ padding: 14 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Última nube</div>
+                            <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 12 }}>
+                                {syncStatus.lastCloudSaveAt ? new Date(syncStatus.lastCloudSaveAt).toLocaleString() : 'Todavía no'}
+                            </div>
+                        </div>
+                    </div>
                     <div className="settings-csv">
                         <button className="btn btn-secondary" onClick={handleMigrateToCloud} disabled={migrating}>
                             <CloudUpload /> {migrating ? 'Migrando...' : 'Migrar datos locales a la nube'}
                         </button>
+                        <button className="btn btn-primary" onClick={exportBackupNow}>
+                            <Download /> Descargar backup ahora
+                        </button>
                     </div>
                     <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 8 }}>
-                        Usá este botón solo si tenés datos en el navegador que todavía no están en la nube.
+                        Si se corta internet, los cambios quedan locales y Firestore los sincroniza automáticamente cuando vuelve la conexión.
                     </p>
+                    {syncStatus.lastError && (
+                        <p style={{ fontSize: '11px', color: 'var(--danger)', marginTop: 8 }}>
+                            Último error: {syncStatus.lastError}
+                        </p>
+                    )}
                 </div>
             )}
 

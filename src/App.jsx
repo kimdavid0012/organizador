@@ -147,7 +147,7 @@ class ErrorBoundary extends React.Component {
 }
 
 function AppContent() {
-    const { state, addMolde, addTarea } = useData();
+    const { state, addMolde, addTarea, syncStatus } = useData();
     const { moldes, telas, config } = state;
     const { t, lang, changeLang, LANGUAGE_LABELS } = useI18n();
     const { user, users, originalAdmin, logout, switchUser, getAllowedSections } = useAuth(); // Auth integration
@@ -356,6 +356,28 @@ function AppContent() {
                             <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', marginTop: '4px' }} onClick={logout}>
                                 Cerrar Sesión
                             </button>
+                        </div>
+                        <div style={{
+                            marginBottom: 12,
+                            padding: '10px 12px',
+                            borderRadius: 10,
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid rgba(255,255,255,0.06)'
+                        }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: 4 }}>
+                                Sincronización
+                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: 'var(--fw-semibold)', color: syncStatus.online ? 'var(--success)' : 'var(--warning)' }}>
+                                {syncStatus.status}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 4 }}>
+                                {syncStatus.online ? 'Online' : 'Offline'} · Pendientes: {syncStatus.pendingChanges || 0}
+                            </div>
+                            {syncStatus.lastCloudSaveAt && (
+                                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: 4 }}>
+                                    Última nube: {new Date(syncStatus.lastCloudSaveAt).toLocaleString()}
+                                </div>
+                            )}
                         </div>
                         <div className="sidebar-storage-label">
                             <HardDrive style={{ width: 12, height: 12, display: 'inline', marginRight: 4 }} />

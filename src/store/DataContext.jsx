@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
-import { DEFAULT_DATA, loadDataFromLocal, saveDataToLocal, normalizeData } from './storage';
+import { db, firestoreOfflineReady } from './firebase';
+import { DEFAULT_DATA, loadDataFromLocal, saveDataToLocal, normalizeData, downloadBackupJSON } from './storage';
 import { generateId } from '../utils/helpers';
 import { wooService } from '../utils/wooService';
 import { metaService } from '../utils/metaService';
@@ -671,6 +671,16 @@ function dataReducer(state, action) {
 
 export function DataProvider({ children }) {
     const [state, dispatch] = useReducer(dataReducer, null, () => DEFAULT_DATA);
+    const [syncStatus, setSyncStatus] = useState({
+        online: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        hasPendingWrites: false,
+        pendingChanges: 0,
+        lastLocalSaveAt: null,
+        lastCloudSaveAt: null,
+        lastError: null,
+        status: firestoreOfflineReady ? 'Sincronizado' : 'Modo local',
+        firestoreOfflineReady
+    });
     const isFromFirestore = useRef(false);
     const saveTimeout = useRef(null);
     const initialized = useRef(false);
@@ -678,20 +688,71 @@ export function DataProvider({ children }) {
     const justSaved = useRef(false);
     const localChangeTimestamp = useRef(0); // timestamp of last local change
     const pendingCloudSave = useRef(false);
+    const pendingChangesCount = useRef(0);
 
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
 
+    const updateSyncStatus = useCallback((updates) => {
+        setSyncStatus((prev) => {
+            const next = { ...prev, ...updates };
+            let status = next.status;
+
+            if (!next.online) status = 'Sin internet';
+            else if (next.lastError) status = 'Error de sincronizacion';
+            else if (next.hasPendingWrites || next.pendingChanges > 0) status = 'Pendiente de sincronizar';
+            else if (next.firestoreOfflineReady) status = 'Sincronizado';
+            else status = 'Modo local';
+
+            return { ...next, status };
+        });
+    }, []);
+
+    useEffect(() => {
+        const handleOnline = () => updateSyncStatus({ online: true, lastError: null });
+        const handleOffline = () => updateSyncStatus({ online: false });
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, [updateSyncStatus]);
+
     // Listen for real-time updates from Firestore (watch the config doc as primary)
     useEffect(() => {
+        if (!db) {
+            updateSyncStatus({ firestoreOfflineReady: false, status: 'Modo local' });
+            return undefined;
+        }
+
         // We listen to the config doc as the "trigger" — when it changes, we reload all docs
         const configRef = doc(db, 'app-data', 'config');
-        const unsubscribe = onSnapshot(configRef, async (snap) => {
+        const unsubscribe = onSnapshot(configRef, { includeMetadataChanges: true }, async (snap) => {
+            updateSyncStatus({
+                hasPendingWrites: snap.metadata.hasPendingWrites,
+                pendingChanges: snap.metadata.hasPendingWrites ? Math.max(pendingChangesCount.current, 1) : 0,
+                ...( !snap.metadata.hasPendingWrites && snap.exists() ? { lastCloudSaveAt: new Date().toISOString() } : {} ),
+                lastError: null
+            });
+
             // Si nosotros acabamos de guardar, ignorar el echo
-            if (justSaved.current) {
+            if (justSaved.current && !snap.metadata.hasPendingWrites) {
                 justSaved.current = false;
                 pendingCloudSave.current = false;
+                pendingChangesCount.current = 0;
+                updateSyncStatus({
+                    hasPendingWrites: false,
+                    pendingChanges: 0,
+                    lastCloudSaveAt: new Date().toISOString(),
+                    lastError: null
+                });
+            }
+
+            if (snap.metadata.hasPendingWrites) {
                 return;
             }
 
@@ -744,13 +805,14 @@ export function DataProvider({ children }) {
             }
         }, (error) => {
             console.error('Firestore listener error:', error);
+            updateSyncStatus({ lastError: error.message || 'Error de conexion con Firestore' });
             const localData = loadDataFromLocal();
             if (localData) dispatch({ type: ACTION_TYPES.SET_DATA, payload: localData });
             initialized.current = true;
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [updateSyncStatus]);
 
     // Save to Firestore (debounced) when state changes from local actions
     useEffect(() => {
@@ -765,6 +827,12 @@ export function DataProvider({ children }) {
         saveDataToLocal(state);
         localChangeTimestamp.current = Date.now();
         pendingCloudSave.current = true;
+        pendingChangesCount.current += 1;
+        updateSyncStatus({
+            lastLocalSaveAt: new Date().toISOString(),
+            pendingChanges: pendingChangesCount.current,
+            lastError: null
+        });
 
         // Debounce saves to Firestore (800ms)
         if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -774,18 +842,64 @@ export function DataProvider({ children }) {
                 const { saveDataToFirestore } = await import('./storage');
                 justSaved.current = true;
                 await saveDataToFirestore(currentState);
+                if (!navigator.onLine) {
+                    updateSyncStatus({
+                        pendingChanges: pendingChangesCount.current,
+                        hasPendingWrites: true
+                    });
+                    return;
+                }
                 pendingCloudSave.current = false;
+                pendingChangesCount.current = 0;
+                updateSyncStatus({
+                    pendingChanges: 0,
+                    hasPendingWrites: false,
+                    lastCloudSaveAt: new Date().toISOString(),
+                    lastError: null
+                });
             } catch (err) {
                 justSaved.current = false;
-                pendingCloudSave.current = false;
+                pendingCloudSave.current = true;
                 console.error('❌ Error saving to Firestore:', err);
+                updateSyncStatus({
+                    pendingChanges: pendingChangesCount.current,
+                    lastError: err.message || 'No se pudo guardar en la nube'
+                });
             }
         }, 800);
 
         return () => {
             if (saveTimeout.current) clearTimeout(saveTimeout.current);
         };
-    }, [state]);
+    }, [state, updateSyncStatus]);
+
+    useEffect(() => {
+        if (!syncStatus.online || !pendingCloudSave.current || !stateRef.current) return;
+
+        const retryTimer = setTimeout(async () => {
+            try {
+                const { saveDataToFirestore } = await import('./storage');
+                await saveDataToFirestore(stateRef.current);
+                pendingCloudSave.current = false;
+                pendingChangesCount.current = 0;
+                justSaved.current = true;
+                updateSyncStatus({
+                    pendingChanges: 0,
+                    hasPendingWrites: false,
+                    lastCloudSaveAt: new Date().toISOString(),
+                    lastError: null
+                });
+            } catch (err) {
+                console.error('❌ Error reintentando sincronizacion:', err);
+                updateSyncStatus({
+                    pendingChanges: pendingChangesCount.current,
+                    lastError: err.message || 'No se pudo reintentar la sincronizacion'
+                });
+            }
+        }, 1200);
+
+        return () => clearTimeout(retryTimer);
+    }, [syncStatus.online, syncStatus.pendingChanges, updateSyncStatus]);
 
     const actions = useCallback(() => ({
         addMolde: (data) => dispatch({ type: ACTION_TYPES.ADD_MOLDE, payload: data }),
@@ -979,13 +1093,14 @@ export function DataProvider({ children }) {
         saveReservation: (reserva) => dispatch({ type: ACTION_TYPES.SAVE_RESERVATION, payload: reserva }),
         deleteReservation: (id) => dispatch({ type: ACTION_TYPES.DELETE_RESERVATION, payload: id }),
 
+        exportBackupNow: () => downloadBackupJSON(stateRef.current),
         setData: (data) => dispatch({ type: ACTION_TYPES.SET_DATA, payload: data }),
     }), []);
 
     if (!state) return null;
 
     return (
-        <DataContext.Provider value={{ state, ...actions() }}>
+        <DataContext.Provider value={{ state, syncStatus, ...actions() }}>
             {children}
         </DataContext.Provider>
     );
