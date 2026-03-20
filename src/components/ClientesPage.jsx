@@ -5,6 +5,49 @@ import ClienteModal from './ClienteModal';
 import { wooService } from '../utils/wooService';
 import { generateId } from '../utils/helpers';
 
+const ARGENTINA_PROVINCES = {
+    B: 'Buenos Aires',
+    C: 'Ciudad Autonoma de Buenos Aires',
+    K: 'Catamarca',
+    H: 'Chaco',
+    U: 'Chubut',
+    X: 'Cordoba',
+    W: 'Corrientes',
+    E: 'Entre Rios',
+    P: 'Formosa',
+    Y: 'Jujuy',
+    L: 'La Pampa',
+    F: 'La Rioja',
+    M: 'Mendoza',
+    N: 'Misiones',
+    Q: 'Neuquen',
+    R: 'Rio Negro',
+    A: 'Salta',
+    J: 'San Juan',
+    D: 'San Luis',
+    Z: 'Santa Cruz',
+    S: 'Santa Fe',
+    G: 'Santiago del Estero',
+    V: 'Tierra del Fuego',
+    T: 'Tucuman'
+};
+
+const normalizeWooPhone = (phone) => {
+    if (!phone) return '';
+    return phone.toString().replace(/\s+/g, ' ').trim();
+};
+
+const normalizeWooProvince = (billing = {}) => {
+    const stateCode = (billing.state || '').trim().toUpperCase();
+    const province = ARGENTINA_PROVINCES[stateCode] || billing.state || '';
+    const city = (billing.city || '').trim();
+
+    if (province && city && city.toLowerCase() !== province.toLowerCase()) {
+        return `${province} - ${city}`;
+    }
+    return province || city || '';
+};
+
 export default function ClientesPage() {
     const { state, addCliente, updateCliente, deleteCliente } = useData();
     const { clientes = [], posVentas = [] } = state.config;
@@ -38,9 +81,9 @@ export default function ClientesPage() {
                         id: generateId(),
                         nombre,
                         email: wc.email || '',
-                        telefono: wc.billing?.phone || '',
+                        telefono: normalizeWooPhone(wc.billing?.phone),
                         cuit: '',
-                        provincia: wc.billing?.state || wc.billing?.city || '',
+                        provincia: normalizeWooProvince(wc.billing),
                         expreso: '',
                         descuento: 0,
                         direccion: wc.billing?.address_1 || '',
@@ -126,7 +169,7 @@ export default function ClientesPage() {
                                         className="table-row-hover"
                                     >
                                         <td style={{ padding: '12px', fontWeight: 'var(--fw-medium)' }}>{cliente.nombre}</td>
-                                        <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{cliente.telefono || '-'}</td>
+                                        <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{normalizeWooPhone(cliente.telefono) || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{cliente.provincia || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--accent)' }}>{cliente.descuento ? `${cliente.descuento}%` : '-'}</td>
                                     </tr>
@@ -154,7 +197,7 @@ export default function ClientesPage() {
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: 'var(--fs-sm)' }}>
                                 <div><span style={{ color: 'var(--text-muted)' }}>CUIT:</span> <br />{viewingHistory.cuit || '-'}</div>
-                                <div><span style={{ color: 'var(--text-muted)' }}>Teléfono:</span> <br />{viewingHistory.telefono || '-'}</div>
+                                <div><span style={{ color: 'var(--text-muted)' }}>Teléfono:</span> <br />{normalizeWooPhone(viewingHistory.telefono) || '-'}</div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={14} className="text-muted" /> {viewingHistory.provincia || '-'}</div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Truck size={14} className="text-muted" /> {viewingHistory.expreso || '-'}</div>
                             </div>
