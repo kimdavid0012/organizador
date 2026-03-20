@@ -9,6 +9,7 @@ export default function PedidosOnlinePage() {
     const { state, addPedidoOnline, updatePedidoOnlineStatus, updatePedidoItem, fetchWooOrders } = useData();
     const { user } = useAuth();
     const pedidos = state.config?.pedidosOnline || [];
+    const posProductos = state.config?.posProductos || [];
 
     const [loadingWoo, setLoadingWoo] = useState(false);
     const [nuevoCliente, setNuevoCliente] = useState('');
@@ -56,12 +57,16 @@ export default function PedidosOnlinePage() {
     const handleAddItem = (pedidoId) => {
         if (!newItemDesc.trim() && !newItemProductId) return;
 
+        const selectedProduct = posProductos.find((product) => product.id === newItemProductId);
+        const selectedImage = selectedProduct?.imagenes?.[0]?.url || selectedProduct?.imagenes?.[0]?.data || '';
+
         addPedidoItem(pedidoId, {
             descripcion: newItemDesc,
             productId: newItemProductId,
             cantidad: Number(newItemCantidad),
             estado: newItemStatus,
-            comentario: newItemComment
+            comentario: newItemComment,
+            imagen: selectedImage
         });
 
         // Reset form
@@ -82,6 +87,16 @@ export default function PedidosOnlinePage() {
         } finally {
             setLoadingWoo(false);
         }
+    };
+
+    const resolveItemImage = (item) => {
+        if (item.imagen) return item.imagen;
+
+        const byProductId = posProductos.find((product) => product.id === item.productId);
+        const byName = posProductos.find((product) => (product.detalleCorto || '').trim() === (item.descripcion || item.detalle || '').trim());
+        const product = byProductId || byName;
+
+        return product?.imagenes?.[0]?.url || product?.imagenes?.[0]?.data || '';
     };
 
     return (
@@ -289,8 +304,8 @@ export default function PedidosOnlinePage() {
                                                     }}
                                                 >
                                                     <div style={{ width: 56, height: 56, borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
-                                                        {item.imagen ? (
-                                                            <img src={item.imagen} alt={item.descripcion || item.detalle} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                        {resolveItemImage(item) ? (
+                                                            <img src={resolveItemImage(item)} alt={item.descripcion || item.detalle} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                         ) : null}
                                                     </div>
                                                     <div>
