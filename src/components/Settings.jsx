@@ -8,11 +8,19 @@ import { generateId } from '../utils/helpers';
 import { exportMoldesCSV, exportTelasCSV, parseCSV } from '../utils/csvUtils';
 import './Settings.css';
 
+const SYSTEM_ACCOUNTS = [
+    { email: 'kimdavid0012@gmail.com', role: 'admin', label: 'Administrador' },
+    { email: 'giselakim.wk@gmail.com', role: 'marketing', label: 'Marketing' },
+    { email: 'nadia@celavie.com', role: 'encargada', label: 'Encargada' },
+    { email: 'naara@celavie.com', role: 'deposito', label: 'Deposito' },
+    { email: 'juan@celavie.com', role: 'pedidos', label: 'Pedidos Online' }
+];
+
 export default function Settings() {
     const { state, updateConfig, updatePosSettings, importMoldes, importTelas, setData } = useData();
     const { config, moldes, telas } = state;
     const { t } = useI18n();
-    const { user: currentUser, users, updateUserPassword, updateUserRole, loadAllFirebaseUsers, rolePermissions, updateRolePermissions, getAllowedSections, ALL_SECTIONS, SECTION_LABELS } = useAuth();
+    const { user: currentUser, users, updateUserRole, loadAllFirebaseUsers, rolePermissions, updateRolePermissions, getAllowedSections, ALL_SECTIONS, SECTION_LABELS } = useAuth();
     const [loadingUsers, setLoadingUsers] = useState(false);
     const csvInputRef = useRef(null);
     const jsonInputRef = useRef(null);
@@ -482,6 +490,30 @@ export default function Settings() {
                             💡 <strong>Para activar esto:</strong> Necesito que me pases el <strong>Client ID</strong> y <strong>Client Secret</strong> de una "OAuth 2.0 Client ID" creada en Google Cloud Console.
                         </p>
                     </div>
+                </div>
+            )}
+
+            {currentUser?.role === 'admin' && (
+                <div className="settings-section">
+                    <h3><Key /> Accesos del Sistema</h3>
+                    <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)', marginBottom: 12 }}>
+                        Estos son los mails de acceso activos. Los usuarios comunes no pueden cambiar la contraseña desde la app.
+                    </p>
+                    <div className="settings-list">
+                        {SYSTEM_ACCOUNTS.map((account) => (
+                            <div key={account.email} className="settings-list-item" style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 12, alignItems: 'center' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 'var(--fw-semibold)', color: 'var(--accent)' }}>
+                                    {account.label}
+                                </div>
+                                <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+                                    {account.email}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 10 }}>
+                        Si alguien olvida su contraseña, hay que resetearla. Firebase no permite ver la contraseña actual.
+                    </p>
                 </div>
             )}
 
