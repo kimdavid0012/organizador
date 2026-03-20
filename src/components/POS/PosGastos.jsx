@@ -8,10 +8,13 @@ export default function PosGastos() {
     const { state, addPosExpense } = useData();
     const { user } = useAuth();
     const gastosDia = state.config.posGastos || [];
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
 
     const [concepto, setConcepto] = useState('');
     const [monto, setMonto] = useState('');
     const [tipo, setTipo] = useState('RETIRO');
+
+    const gastosFiltrados = gastosDia.filter((gasto) => (gasto.fecha || '').slice(0, 10) === selectedDate);
 
     const handleAñadirGasto = () => {
         if (!concepto || !monto) {
@@ -21,7 +24,7 @@ export default function PosGastos() {
 
         addPosExpense({
             id: generateId(),
-            fecha: new Date().toISOString(),
+            fecha: `${selectedDate}T${new Date().toTimeString().slice(0, 8)}`,
             concepto,
             monto: Number(monto),
             tipo,
@@ -32,7 +35,7 @@ export default function PosGastos() {
         setMonto('');
     };
 
-    const totalGastos = gastosDia.reduce((acc, g) => acc + g.monto, 0);
+    const totalGastos = gastosFiltrados.reduce((acc, g) => acc + g.monto, 0);
 
     return (
         <div style={{ padding: 'var(--sp-4)', maxWidth: '800px', margin: '0 auto', width: '100%' }}>
@@ -44,12 +47,17 @@ export default function PosGastos() {
 
             <div style={{ background: 'var(--bg-card)', padding: 'var(--sp-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', marginBottom: 'var(--sp-4)' }}>
                 <div style={{ display: 'flex', gap: 'var(--sp-3)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    <div className="form-group" style={{ minWidth: '170px' }}>
+                        <label>Fecha</label>
+                        <input type="date" className="form-input" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+                    </div>
                     <div className="form-group" style={{ flex: 1, minWidth: '150px' }}>
                         <label>Tipo</label>
                         <select className="form-select" value={tipo} onChange={e => setTipo(e.target.value)}>
                             <option value="RETIRO">Retiro de Dinero</option>
                             <option value="PROVEEDOR">Pago a Proveedor</option>
                             <option value="VIATICO">Viáticos / Varios</option>
+                            <option value="PEDIDO">Pedido</option>
                         </select>
                     </div>
                     <div className="form-group" style={{ flex: 2, minWidth: '200px' }}>
@@ -78,7 +86,7 @@ export default function PosGastos() {
                         </tr>
                     </thead>
                     <tbody>
-                        {gastosDia.map(g => (
+                        {gastosFiltrados.map(g => (
                             <tr key={g.id} className="pos-table-row">
                                 <td>{new Date(g.fecha).toLocaleTimeString()}</td>
                                 <td>
@@ -92,7 +100,7 @@ export default function PosGastos() {
                             </tr>
                         ))}
                     </tbody>
-                    {gastosDia.length > 0 && (
+                    {gastosFiltrados.length > 0 && (
                         <tfoot>
                             <tr>
                                 <td colSpan="4" style={{ textAlign: 'right', fontWeight: 'bold', padding: 'var(--sp-3)' }}>Total Gastos Hoy:</td>
@@ -103,9 +111,9 @@ export default function PosGastos() {
                         </tfoot>
                     )}
                 </table>
-                {gastosDia.length === 0 && (
+                {gastosFiltrados.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                        No hay gastos registrados en el día de hoy.
+                        No hay gastos registrados para la fecha seleccionada.
                     </div>
                 )}
             </div>

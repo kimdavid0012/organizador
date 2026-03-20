@@ -1178,6 +1178,13 @@ export function DataProvider({ children }) {
             const currentConfig = stateRef.current.config;
             try {
                 const orders = await wooService.fetchOrders(currentConfig);
+                let productImageMap = new Map();
+                try {
+                    const products = await wooService.fetchProducts(currentConfig);
+                    productImageMap = new Map(products.map((product) => [product.id, product.images?.[0]?.src || '']));
+                } catch (error) {
+                    console.warn('No se pudieron cargar imagenes de WooCommerce para pedidos:', error);
+                }
                 const mapped = orders.map(o => ({
                     id: generateId(),
                     wooId: o.id,
@@ -1185,13 +1192,17 @@ export function DataProvider({ children }) {
                     monto: parseFloat(o.total),
                     metodoPago: o.payment_method_title,
                     envio: o.shipping_lines[0]?.method_title || 'N/A',
-                    estado: o.status === 'processing' ? 'Pendiente' : o.status,
+                    estado: o.status === 'processing' ? 'pendiente' : (o.status === 'completed' ? 'listo' : 'pendiente'),
                     fecha: o.date_created,
                     items: o.line_items.map(li => ({
                         id: generateId(),
+                        productId: li.product_id || null,
                         detalle: li.name,
                         cantidad: li.quantity,
-                        precio: parseFloat(li.price)
+                        precio: parseFloat(li.price),
+                        imagen: li.image?.src || productImageMap.get(li.product_id) || '',
+                        comentario: '',
+                        estado: 'ok'
                     }))
                 }));
                 dispatch({ type: ACTION_TYPES.IMPORT_WOO_ORDERS, payload: mapped });

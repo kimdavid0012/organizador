@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
 import { generateId, formatDate } from '../utils/helpers';
-import { Plus, CheckCircle, AlertCircle, XCircle, ChevronDown, ChevronUp, Save, MessageSquare, RefreshCw } from 'lucide-react';
+import { Plus, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Save, RefreshCw } from 'lucide-react';
 import './PedidosOnlinePage.css';
 
 export default function PedidosOnlinePage() {
@@ -30,6 +30,7 @@ export default function PedidosOnlinePage() {
 
     const canCreateOrder = user.role === 'encargada' || user.role === 'admin';
     const canProcessOrder = user.role === 'pedidos' || user.role === 'marketing' || user.role === 'admin';
+    const canApproveOrder = user.role === 'encargada' || user.role === 'admin';
 
     const handleCreatePedido = (e) => {
         e.preventDefault();
@@ -191,7 +192,8 @@ export default function PedidosOnlinePage() {
                             </div>
                             <div className="pedido-actions">
                                 {pedido.estado === 'pendiente' && <span className="badge badge-warning">Pendiente</span>}
-                                {pedido.estado === 'listo' && <span className="badge badge-success"><CheckCircle size={14} /> Listo</span>}
+                                {pedido.estado === 'listo-juan' && <span className="badge" style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--warning)' }}><CheckCircle size={14} /> Listo Juan</span>}
+                                {pedido.estado === 'listo' && <span className="badge badge-success"><CheckCircle size={14} /> Listo Nadia</span>}
                                 {pedido.estado === 'incompleto' && <span className="badge badge-error"><AlertCircle size={14} /> Incompleto</span>}
                                 {expandedPedidoId === pedido.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                             </div>
@@ -226,13 +228,13 @@ export default function PedidosOnlinePage() {
 
                                 {canProcessOrder && (
                                     <div className="pedido-status-controls">
-                                        <label>Marcar estado del pedido:</label>
+                                        <label>Preparacion del pedido:</label>
                                         <div className="status-buttons">
                                             <button
-                                                className={`btn ${pedido.estado === 'listo' ? 'btn-success' : 'btn-outline'}`}
-                                                onClick={() => updatePedidoOnlineStatus(pedido.id, 'listo')}
+                                                className={`btn ${pedido.estado === 'listo-juan' ? 'btn-success' : 'btn-outline'}`}
+                                                onClick={() => updatePedidoOnlineStatus(pedido.id, 'listo-juan')}
                                             >
-                                                <CheckCircle size={16} /> Todo Listo
+                                                <CheckCircle size={16} /> Listo Juan
                                             </button>
                                             <button
                                                 className={`btn ${pedido.estado === 'incompleto' ? 'btn-error' : 'btn-outline'}`}
@@ -250,6 +252,21 @@ export default function PedidosOnlinePage() {
                                     </div>
                                 )}
 
+                                {canApproveOrder && (
+                                    <div className="pedido-status-controls">
+                                        <label>Chequeo de Nadia:</label>
+                                        <div className="status-buttons">
+                                            <button
+                                                className={`btn ${pedido.estado === 'listo' ? 'btn-success' : 'btn-outline'}`}
+                                                onClick={() => updatePedidoOnlineStatus(pedido.id, 'listo')}
+                                                disabled={pedido.estado !== 'listo-juan'}
+                                            >
+                                                <CheckCircle size={16} /> Listo Nadia
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="pedido-items-section">
                                     <h4>Anotaciones / Faltantes</h4>
 
@@ -261,8 +278,9 @@ export default function PedidosOnlinePage() {
                                                 <div
                                                     key={item.id}
                                                     style={{
-                                                        display: 'flex',
-                                                        justifyContent: 'space-between',
+                                                        display: 'grid',
+                                                        gridTemplateColumns: '56px 1fr auto',
+                                                        gap: 12,
                                                         alignItems: 'center',
                                                         background: 'rgba(255,255,255,0.02)',
                                                         padding: '8px 12px',
@@ -270,14 +288,30 @@ export default function PedidosOnlinePage() {
                                                         borderLeft: `3px solid ${item.estado === 'falta' ? 'var(--danger)' : (item.estado === 'reemplazo' ? 'var(--warning)' : 'var(--success)')}`
                                                     }}
                                                 >
+                                                    <div style={{ width: 56, height: 56, borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
+                                                        {item.imagen ? (
+                                                            <img src={item.imagen} alt={item.descripcion || item.detalle} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                        ) : null}
+                                                    </div>
                                                     <div>
                                                         <div style={{ fontWeight: 'var(--fw-medium)', fontSize: '13px' }}>
                                                             {item.descripcion || item.detalle}
                                                         </div>
                                                         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                                                             Cant: {item.cantidad} {item.precio ? `· $${item.precio}` : ''}
-                                                            {item.comentario && ` · ${item.comentario}`}
                                                         </div>
+                                                        {(user.role === 'pedidos' || user.role === 'admin') ? (
+                                                            <input
+                                                                type="text"
+                                                                className="form-control form-control-sm"
+                                                                placeholder="Comentario de Juan"
+                                                                value={item.comentario || ''}
+                                                                onChange={e => updatePedidoItem(pedido.id, item.id, { comentario: e.target.value })}
+                                                                style={{ marginTop: 6 }}
+                                                            />
+                                                        ) : (
+                                                            item.comentario && <div style={{ fontSize: '11px', color: 'var(--warning)', marginTop: 6 }}>Juan: {item.comentario}</div>
+                                                        )}
                                                     </div>
                                                     {item.estado && <span className={`badge badge-${item.estado === 'falta' ? 'error' : (item.estado === 'reemplazo' ? 'warning' : 'success')}`} style={{ fontSize: '10px' }}>
                                                         {item.estado}

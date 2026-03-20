@@ -61,6 +61,10 @@
     border-left-color: var(--success);
 }
 
+.pedido-card.estado-listo-juan {
+    border-left-color: var(--warning);
+}
+
 .pedido-card.estado-incompleto {
     border-left-color: var(--error);
 }
@@ -264,9 +268,20 @@
 }
 
 @media (max-width: 768px) {
+    .pedidos-page {
+        padding: 12px;
+    }
+
+    .pedido-header {
+        padding: 14px;
+    }
+
+    .pedido-body {
+        padding: 14px;
+    }
+
     .pedidos-form-row {
-        flex-direction: column;
-        align-items: stretch;
+        grid-template-columns: 1fr;
     }
 
     .status-buttons {
@@ -286,5 +301,13 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 4px;
+    }
+
+    .pedido-actions {
+        gap: 8px;
+    }
+
+    .pedido-details-grid {
+        grid-template-columns: 1fr;
     }
 }

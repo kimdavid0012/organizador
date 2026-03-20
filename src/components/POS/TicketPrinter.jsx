@@ -95,7 +95,7 @@ const TicketPrinter = forwardRef(({ ticketData }, ref) => {
                     <br />
                     <p style={{ textAlign: 'center', fontSize: '11px', fontWeight: 'bold' }}>COMPROBANTE NO VÁLIDO COMO FACTURA</p>
                     <br />
-                    <p style={{ textAlign: 'center', fontSize: '11px' }}>CAMBIOS UNICAMENTE SOLO POR FALLA</p>
+                    <p style={{ textAlign: 'center', fontSize: '11px' }}>CAMBIOS UNICAMENTE POR FALLA</p>
                     <br />
                 </div>
             </div>

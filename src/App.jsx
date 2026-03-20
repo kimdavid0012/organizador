@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes
+    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3
 } from 'lucide-react';
 import { DataProvider, useData } from './store/DataContext';
 import { I18nProvider, useI18n } from './store/I18nContext';
@@ -20,6 +20,9 @@ import PosPage from './components/POS/PosPage';
 import MarketingSection from './components/MarketingSection.jsx';
 import PaginaWebSection from './components/PaginaWebSection.jsx';
 import ConteoMercaderiaPage from './components/ConteoMercaderiaPage.jsx';
+import FotosPage from './components/FotosPage.jsx';
+import MesanPage from './components/MesanPage.jsx';
+import BankPaymentsPage from './components/BankPaymentsPage.jsx';
 import MoldModal from './components/MoldModal';
 import TaskModal from './components/TaskModal';
 import Login from './components/Login';
@@ -168,6 +171,17 @@ function AppContent() {
 
     const storage = getStorageUsage();
 
+    useEffect(() => {
+        const theme = state?.config?.uiTheme || {};
+        const root = document.documentElement;
+        root.style.setProperty('--bg-primary', theme.backgroundColor || '#0a0a12');
+        root.style.setProperty('--accent', theme.accentColor || '#8b5cf6');
+        root.style.setProperty('--accent-hover', theme.accentColor || '#7c3aed');
+        root.style.setProperty('--accent-light', `${theme.accentColor || '#8b5cf6'}22`);
+        root.style.setProperty('--bg-card', theme.surfaceColor || 'rgba(25, 25, 40, 0.55)');
+        root.style.setProperty('--text-primary', theme.textColor || '#f0f0fa');
+    }, [state?.config?.uiTheme]);
+
     // Filter moldes
     const filteredMoldes = useMemo(() => {
         return moldes.filter(m => {
@@ -246,6 +260,9 @@ function AppContent() {
         { id: 'marketing', icon: Megaphone, label: 'Marketing' },
         { id: 'paginaweb', icon: Globe, label: 'Página Web' },
         { id: 'conteomercaderia', icon: Boxes, label: 'Conteo Mercadería' },
+        { id: 'fotos', icon: Camera, label: 'Fotos' },
+        { id: 'mesan', icon: BarChart3, label: 'Mesan' },
+        { id: 'banking', icon: Landmark, label: 'Banco y MP' },
         { id: 'settings', icon: SettingsIcon, label: t('navConfiguracion') },
     ];
 
@@ -352,6 +369,7 @@ function AppContent() {
                                     <option value="deposito">📦 Depósito (Naara)</option>
                                     <option value="pedidos">🌐 Pedidos Online (Juan)</option>
                                     <option value="marketing">📣 Marketing (Gisela)</option>
+                                    <option value="fotos">📸 Fotos (Rocio)</option>
                                 </select>
                             )}
 
@@ -430,6 +448,9 @@ function AppContent() {
                     {view === 'marketing' && <MarketingSection />}
                     {view === 'paginaweb' && <PaginaWebSection />}
                     {view === 'conteomercaderia' && <ConteoMercaderiaPage />}
+                    {view === 'fotos' && <FotosPage />}
+                    {view === 'mesan' && <MesanPage />}
+                    {view === 'banking' && <BankPaymentsPage />}
                     {view === 'articulos' && <PosProductos />}
                     {view === 'clientes' && <ClientesPage />}
                 </div>

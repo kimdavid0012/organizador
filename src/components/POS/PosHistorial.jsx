@@ -7,15 +7,19 @@ export default function PosHistorial() {
     const { state } = useData();
     const ventas = state.config.posVentas || [];
     const [search, setSearch] = useState('');
+    const [selectedDate, setSelectedDate] = useState('');
     const [ticketToPrint, setTicketToPrint] = useState(null);
     const [isPrinting, setIsPrinting] = useState(false);
     const ticketRef = useRef(null);
 
-    const filteredVentas = ventas.filter(v =>
-        v.nroComprobante.includes(search) ||
-        v.fecha.includes(search) ||
-        v.vendedor.toLowerCase().includes(search.toLowerCase())
-    ).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const filteredVentas = ventas.filter(v => {
+        const matchesSearch =
+            v.nroComprobante.includes(search) ||
+            v.fecha.includes(search) ||
+            v.vendedor.toLowerCase().includes(search.toLowerCase());
+        const matchesDate = !selectedDate || (v.fecha || '').slice(0, 10) === selectedDate;
+        return matchesSearch && matchesDate;
+    }).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
     const handlePrint = (ticket) => {
         setTicketToPrint(ticket);
@@ -31,14 +35,17 @@ export default function PosHistorial() {
         <div style={{ padding: 'var(--sp-4)', display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--sp-4)' }}>
                 <h2>Historial de Comprobantes</h2>
-                <div className="pos-search" style={{ margin: 0 }}>
-                    <Search size={18} />
-                    <input
-                        type="text"
-                        placeholder="Buscar comprobante..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                    />
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <div className="pos-search" style={{ margin: 0 }}>
+                        <Search size={18} />
+                        <input
+                            type="text"
+                            placeholder="Buscar comprobante..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                        />
+                    </div>
+                    <input type="date" className="form-input" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ width: 160 }} />
                 </div>
             </div>
 

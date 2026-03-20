@@ -7,10 +7,12 @@ import { generateId } from '../../utils/helpers';
 export default function PosZClose() {
     const { state, performZClose } = useData();
     const { user } = useAuth();
+    const [selectedDate, setSelectedDate] = React.useState('');
 
     const ventas = state.config.posVentas || [];
     const gastos = state.config.posGastos || [];
     const cierresHistory = state.config.posCerradoZ || [];
+    const filteredHistory = cierresHistory.filter((entry) => !selectedDate || (entry.fecha || '').slice(0, 10) === selectedDate);
 
     // Calculations
     const totalVentas = ventas.reduce((acc, v) => acc + v.total, 0);
@@ -88,7 +90,10 @@ export default function PosZClose() {
             {/* Historial Corto de Cierres Z */}
             {cierresHistory.length > 0 && (
                 <div style={{ background: 'var(--bg-card)', padding: 'var(--sp-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
-                    <h3 style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}><AlertTriangle size={18} /> Últimos Cierres Z</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><AlertTriangle size={18} /> Últimos Cierres Z</h3>
+                        <input type="date" className="form-input" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ width: 160 }} />
+                    </div>
                     <div className="pos-table-container">
                         <table className="pos-table" style={{ fontSize: '13px' }}>
                             <thead>
@@ -102,7 +107,7 @@ export default function PosZClose() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {cierresHistory.slice(0, 10).map(c => (
+                                {filteredHistory.slice(0, 10).map(c => (
                                     <tr key={c.id} className="pos-table-row">
                                         <td>{new Date(c.fecha).toLocaleString()}</td>
                                         <td>{c.responsable}</td>

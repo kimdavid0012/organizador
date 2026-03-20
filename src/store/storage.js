@@ -51,11 +51,21 @@ export const DEFAULT_DATA = {
         clientes: [],
         pedidosOnline: [],
         mercaderiaConteos: [],
+        fotoTasks: [],
+        mesanMovimientos: [],
+        bankPayments: [],
+        fabricPayments: [],
         posPermissions: { encargadaCanCloseZ: false, encargadaCanAddExpenses: false },
         posCerradoZ: [],
         posGastos: [],
         posProductos: [],
         posVentas: [],
+        uiTheme: {
+            backgroundColor: '#0a0a12',
+            accentColor: '#8b5cf6',
+            surfaceColor: 'rgba(25, 25, 40, 0.55)',
+            textColor: '#f0f0fa'
+        },
         marketing: {
             metaToken: '',
             metaAdAccountId: '938112566730962',
@@ -74,11 +84,11 @@ export const DEFAULT_DATA = {
             aiReport: '',
             lastSyncedAt: null
         },
-        paginaWebCache: {
-            allProducts: [],
-            productStatsById: {},
-            lastLoadedAt: null
-        }
+            paginaWebCache: {
+                allProducts: [],
+                productStatsById: {},
+                lastLoadedAt: null
+            }
     }
 };
 
@@ -102,11 +112,19 @@ export function normalizeData(parsed) {
             clientes: parsed.config?.clientes || [],
             pedidosOnline: parsed.config?.pedidosOnline || [],
             mercaderiaConteos: parsed.config?.mercaderiaConteos || [],
+            fotoTasks: parsed.config?.fotoTasks || [],
+            mesanMovimientos: parsed.config?.mesanMovimientos || [],
+            bankPayments: parsed.config?.bankPayments || [],
+            fabricPayments: parsed.config?.fabricPayments || [],
             posPermissions: parsed.config?.posPermissions || { encargadaCanCloseZ: false, encargadaCanAddExpenses: false },
             posCerradoZ: parsed.config?.posCerradoZ || [],
             posGastos: parsed.config?.posGastos || [],
             posProductos: parsed.config?.posProductos || [],
             posVentas: parsed.config?.posVentas || [],
+            uiTheme: {
+                ...DEFAULT_DATA.config.uiTheme,
+                ...parsed.config?.uiTheme
+            },
             marketing: {
                 ...DEFAULT_DATA.config.marketing,
                 ...parsed.config?.marketing,

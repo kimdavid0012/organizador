@@ -10,18 +10,20 @@ const KNOWN_USERS = {
     'giselakim.wk@gmail.com': { role: 'marketing', name: 'Gisela Marketing' },
     'nadia@celavie.com': { role: 'encargada', name: 'Nadia' },
     'juan@celavie.com': { role: 'pedidos', name: 'Juan' },
-    'naara@celavie.com': { role: 'deposito', name: 'Naara' }
+    'naara@celavie.com': { role: 'deposito', name: 'Naara' },
+    'rocio@celavie.com': { role: 'fotos', name: 'Rocio' }
 };
 
 const KNOWN_USER_SECTIONS = {
     'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb'],
     'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia'],
     'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia'],
-    'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia']
+    'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia'],
+    'rocio@celavie.com': ['fotos']
 };
 
 // All available sections in the app
-const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'paginaweb', 'conteomercaderia', 'settings'];
+const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'paginaweb', 'conteomercaderia', 'fotos', 'mesan', 'banking', 'settings'];
 
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
@@ -30,6 +32,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
     deposito: ['kanban', 'talleres', 'conteomercaderia'],
     pedidos: ['kanban', 'pedidos', 'conteomercaderia'],
     marketing: ['pedidos', 'marketing', 'paginaweb'],
+    fotos: ['fotos'],
     pendiente: [] // New users get no access until admin assigns a role
 };
 
@@ -49,6 +52,9 @@ const SECTION_LABELS = {
     marketing: 'Marketing',
     paginaweb: 'Pagina Web',
     conteomercaderia: 'Conteo Mercaderia',
+    fotos: 'Fotos',
+    mesan: 'Mesan',
+    banking: 'Banco y MP',
     settings: 'Configuración'
 };
 

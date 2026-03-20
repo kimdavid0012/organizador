@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { Plus, Edit2, Trash2, X, Save, Scissors, Camera, Loader, ChevronDown, ChevronRight, Hash, Trash } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useI18n } from '../store/I18nContext';
+import { useAuth } from '../store/AuthContext';
 import ImageUploader from './ImageUploader';
 import ImageGallery from './ImageGallery';
 import { generateId } from '../utils/helpers';
@@ -10,6 +11,7 @@ import './FabricCatalog.css';
 function FabricModal({ tela, onClose }) {
     const { state, updateTela, deleteTela, addImageToTela, removeImageFromTela } = useData();
     const { t } = useI18n();
+    const { user } = useAuth();
     const [form, setForm] = useState({ ...tela });
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [scanning, setScanning] = useState(false);
@@ -146,6 +148,23 @@ function FabricModal({ tela, onClose }) {
     const prezzoU = parseFloat(form.precioPorUnidad) || 0;
     const valorTotal = prezzoU * totalCantidad;
     const unidad = form.unidadPrecio === 'kg' ? 'kg' : 'mts';
+    const isAdmin = user?.role === 'admin';
+    const pagosUSD = form.pagosUSD || [];
+    const totalPagadoUSD = pagosUSD.reduce((acc, pago) => acc + (parseFloat(pago.montoUSD) || 0), 0);
+    const deudaUSD = Math.max(0, valorTotal - totalPagadoUSD);
+
+    const addPagoUSD = () => {
+        const pagos = [...pagosUSD, { id: generateId(), fecha: new Date().toISOString().slice(0, 10), montoUSD: '', cotizacion: state.config.cotizacionUSD || '', nota: '' }];
+        handleChange('pagosUSD', pagos);
+    };
+
+    const updatePagoUSD = (index, field, value) => {
+        const pagos = [...pagosUSD];
+        pagos[index] = { ...pagos[index], [field]: value };
+        handleChange('pagosUSD', pagos);
+    };
+
+    const removePagoUSD = (index) => handleChange('pagosUSD', pagosUSD.filter((_, idx) => idx !== index));
 
     // Talonario Scanner
     const handleScanTalonario = async (e) => {
@@ -421,6 +440,32 @@ function FabricModal({ tela, onClose }) {
                         <textarea className="form-textarea" value={form.notas || ''} onChange={(e) => handleChange('notas', e.target.value)} rows={2} />
                     </div>
 
+                    {isAdmin && (
+                        <div className="form-group" style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)', padding: 'var(--sp-4)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+                                <div>
+                                    <div style={{ fontWeight: 'var(--fw-bold)' }}>Pagos en dolares y deuda</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                        Valor tela: US$ {valorTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })} · Pagado: US$ {totalPagadoUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })} · Debe: US$ {deudaUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                    </div>
+                                </div>
+                                <button className="btn btn-sm btn-secondary" onClick={addPagoUSD}><Plus size={14} /> Agregar pago</button>
+                            </div>
+
+                            <div style={{ display: 'grid', gap: 8 }}>
+                                {pagosUSD.map((pago, index) => (
+                                    <div key={pago.id} style={{ display: 'grid', gridTemplateColumns: '120px 120px 120px 1fr auto', gap: 8, alignItems: 'center' }}>
+                                        <input type="date" className="form-input" value={pago.fecha || ''} onChange={(e) => updatePagoUSD(index, 'fecha', e.target.value)} />
+                                        <input type="number" className="form-input" placeholder="USD" value={pago.montoUSD || ''} onChange={(e) => updatePagoUSD(index, 'montoUSD', e.target.value)} />
+                                        <input type="number" className="form-input" placeholder="Coti" value={pago.cotizacion || ''} onChange={(e) => updatePagoUSD(index, 'cotizacion', e.target.value)} />
+                                        <input className="form-input" placeholder="Nota / textilera" value={pago.nota || ''} onChange={(e) => updatePagoUSD(index, 'nota', e.target.value)} />
+                                        <button className="btn-icon" onClick={() => removePagoUSD(index)}><Trash2 size={14} /></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="form-group">
                         <ImageGallery imagenes={form.imagenes || []} onRemove={handleRemoveImage} />
                         <ImageUploader onUpload={handleImageUpload} />
@@ -438,6 +483,7 @@ export default function FabricCatalog() {
     const { state, addTela } = useData();
     const { telas } = state;
     const { t } = useI18n();
+    const { user } = useAuth();
     const [editingTela, setEditingTela] = useState(null);
 
     const handleAddAndOpen = () => { addTela({ nombre: '' }); setTimeout(() => setEditingTela('latest'), 50); };
@@ -473,6 +519,20 @@ export default function FabricCatalog() {
         return { totalR, totalV };
     }, [telas, state.config.cortes, state.config.cotizacionUSD]);
 
+    const providerSummary = useMemo(() => {
+        const grouped = {};
+        telas.forEach((tela) => {
+            const provider = tela.proveedor || 'Sin proveedor';
+            const totalValue = (parseFloat(tela.precioPorUnidad) || 0) * (parseFloat(tela.cantidadTotal) || 0);
+            const paid = (tela.pagosUSD || []).reduce((acc, pago) => acc + (parseFloat(pago.montoUSD) || 0), 0);
+            if (!grouped[provider]) grouped[provider] = { totalValue: 0, paid: 0, fallados: 0 };
+            grouped[provider].totalValue += totalValue;
+            grouped[provider].paid += paid;
+            grouped[provider].fallados += (tela.coloresStock || []).reduce((acc, color) => acc + ((color.items || []).filter((item) => Number(item.fallado || 0) > 0).length), 0);
+        });
+        return Object.entries(grouped);
+    }, [telas]);
+
     return (
         <div className="fabric-catalog">
             <div className="fabric-catalog-header">
@@ -486,6 +546,22 @@ export default function FabricCatalog() {
                 </div>
                 <button className="btn btn-primary" onClick={handleAddAndOpen}><Plus size={18} /> {t('nuevaTela')}</button>
             </div>
+
+            {user?.role === 'admin' && providerSummary.length > 0 && (
+                <div className="glass-panel" style={{ padding: 'var(--sp-4)', marginBottom: 16 }}>
+                    <h3 style={{ marginBottom: 12 }}>Resumen por textilera</h3>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                        {providerSummary.map(([provider, summary], index) => (
+                            <div key={provider} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr auto', gap: 12, padding: 12, borderRadius: 12, background: `linear-gradient(90deg, hsla(${(index * 57) % 360}, 70%, 60%, 0.12), rgba(255,255,255,0.02))` }}>
+                                <div style={{ fontWeight: 'var(--fw-bold)' }}>{provider}</div>
+                                <div>US$ {summary.totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                                <div>Pagado US$ {summary.paid.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                                <div style={{ color: summary.fallados ? 'var(--warning)' : 'var(--text-secondary)' }}>Fallados: {summary.fallados}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {telas.length === 0 ? (
                 <div className="fabric-empty">

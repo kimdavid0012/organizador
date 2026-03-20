@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Columns3, Users, Tag, CalendarRange, Download, Upload, Database, Plus, Trash2, HardDrive, AlertTriangle, FileJson, Scissors, Factory, Key, Lock, Shield, Eye, EyeOff, Cloud, CloudUpload, Megaphone } from 'lucide-react';
+import { Columns3, Users, Tag, CalendarRange, Download, Upload, Database, Plus, Trash2, HardDrive, AlertTriangle, FileJson, Scissors, Factory, Key, Lock, Shield, Eye, EyeOff, Cloud, CloudUpload, Megaphone, Palette } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useI18n } from '../store/I18nContext';
 import { useAuth } from '../store/AuthContext';
@@ -13,7 +13,8 @@ const SYSTEM_ACCOUNTS = [
     { email: 'giselakim.wk@gmail.com', role: 'marketing', label: 'Marketing' },
     { email: 'nadia@celavie.com', role: 'encargada', label: 'Encargada' },
     { email: 'naara@celavie.com', role: 'deposito', label: 'Deposito' },
-    { email: 'juan@celavie.com', role: 'pedidos', label: 'Pedidos Online' }
+    { email: 'juan@celavie.com', role: 'pedidos', label: 'Pedidos Online' },
+    { email: 'rocio@celavie.com', role: 'fotos', label: 'Fotos' }
 ];
 
 export default function Settings() {
@@ -316,6 +317,57 @@ export default function Settings() {
                 </div>
             )}
 
+            {currentUser?.role === 'admin' && (
+                <div className="settings-section">
+                    <h3><Palette /> Apariencia</h3>
+                    <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)', marginBottom: 12 }}>
+                        Cambiá el fondo y color principal de la interfaz con una paleta simple.
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">Fondo</label>
+                            <input
+                                type="color"
+                                className="form-input"
+                                value={config.uiTheme?.backgroundColor || '#0a0a12'}
+                                onChange={(e) => updateConfig({ uiTheme: { ...(config.uiTheme || {}), backgroundColor: e.target.value } })}
+                                style={{ minHeight: 44 }}
+                            />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">Color principal</label>
+                            <input
+                                type="color"
+                                className="form-input"
+                                value={config.uiTheme?.accentColor || '#8b5cf6'}
+                                onChange={(e) => updateConfig({ uiTheme: { ...(config.uiTheme || {}), accentColor: e.target.value } })}
+                                style={{ minHeight: 44 }}
+                            />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">Superficie</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={config.uiTheme?.surfaceColor || 'rgba(25, 25, 40, 0.55)'}
+                                onChange={(e) => updateConfig({ uiTheme: { ...(config.uiTheme || {}), surfaceColor: e.target.value } })}
+                                placeholder="rgba(25, 25, 40, 0.55)"
+                            />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">Texto</label>
+                            <input
+                                type="color"
+                                className="form-input"
+                                value={config.uiTheme?.textColor || '#f0f0fa'}
+                                onChange={(e) => updateConfig({ uiTheme: { ...(config.uiTheme || {}), textColor: e.target.value } })}
+                                style={{ minHeight: 44 }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Cloud Sync Info (Admin Only) */}
             {currentUser?.role === 'admin' && (
                 <div className="settings-section">
@@ -599,6 +651,7 @@ export default function Settings() {
                                         <option value="deposito">📦 Depósito</option>
                                         <option value="pedidos">🌐 Pedidos Online</option>
                                         <option value="marketing">📣 Marketing</option>
+                                        <option value="fotos">📸 Fotos</option>
                                         <option value="pendiente">⏳ Pendiente (sin acceso)</option>
                                     </select>
                                     <div style={{ fontSize: '11px', color: u.role === 'pendiente' ? 'var(--danger)' : 'var(--success)', fontWeight: 'var(--fw-bold)' }}>
