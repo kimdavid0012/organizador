@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon
+    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes
 } from 'lucide-react';
 import { DataProvider, useData } from './store/DataContext';
 import { I18nProvider, useI18n } from './store/I18nContext';
@@ -19,6 +19,7 @@ import PedidosOnlinePage from './components/PedidosOnlinePage';
 import PosPage from './components/POS/PosPage';
 import MarketingSection from './components/MarketingSection.jsx';
 import PaginaWebSection from './components/PaginaWebSection.jsx';
+import ConteoMercaderiaPage from './components/ConteoMercaderiaPage.jsx';
 import MoldModal from './components/MoldModal';
 import TaskModal from './components/TaskModal';
 import Login from './components/Login';
@@ -244,6 +245,7 @@ function AppContent() {
         { id: 'empleados', icon: Users, label: 'Empleados' },
         { id: 'marketing', icon: Megaphone, label: 'Marketing' },
         { id: 'paginaweb', icon: Globe, label: 'Página Web' },
+        { id: 'conteomercaderia', icon: Boxes, label: 'Conteo Mercadería' },
         { id: 'settings', icon: SettingsIcon, label: t('navConfiguracion') },
     ];
 
@@ -427,6 +429,7 @@ function AppContent() {
                     {view === 'pedidos' && <PedidosOnlinePage />}
                     {view === 'marketing' && <MarketingSection />}
                     {view === 'paginaweb' && <PaginaWebSection />}
+                    {view === 'conteomercaderia' && <ConteoMercaderiaPage />}
                     {view === 'articulos' && <PosProductos />}
                     {view === 'clientes' && <ClientesPage />}
                 </div>

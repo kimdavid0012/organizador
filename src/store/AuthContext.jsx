@@ -17,17 +17,17 @@ const KNOWN_USER_SECTIONS = {
     'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb'],
     'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb'],
     'juan@celavie.com': ['kanban', 'pedidos'],
-    'naara@celavie.com': ['kanban', 'talleres']
+    'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia']
 };
 
 // All available sections in the app
-const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'paginaweb', 'settings'];
+const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'paginaweb', 'conteomercaderia', 'settings'];
 
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
     admin: [...ALL_SECTIONS],
     encargada: ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb'],
-    deposito: ['kanban', 'talleres'],
+    deposito: ['kanban', 'talleres', 'conteomercaderia'],
     pedidos: ['kanban', 'pedidos'],
     marketing: ['pedidos', 'marketing', 'paginaweb'],
     pendiente: [] // New users get no access until admin assigns a role
@@ -48,6 +48,7 @@ const SECTION_LABELS = {
     empleados: 'Empleados',
     marketing: 'Marketing',
     paginaweb: 'Pagina Web',
+    conteomercaderia: 'Conteo Mercaderia',
     settings: 'Configuración'
 };
 
