@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { PlusCircle, Receipt, Trash2, Wallet } from 'lucide-react';
+import { Camera, PlusCircle, Receipt, Search, Trash2, Wallet } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
+import ImageUploader from './ImageUploader';
+import ImageGallery from './ImageGallery';
+import { generateId } from '../utils/helpers';
 
 const MOVEMENT_TYPES = [
     { value: 'deuda', label: 'Deuda / Ticket' },
@@ -9,6 +12,12 @@ const MOVEMENT_TYPES = [
 ];
 
 const normalizeText = (value) => (value || '').toString().trim();
+const normalizeComparable = (value) => normalizeText(value)
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]/g, '');
+const normalizePhone = (value) => normalizeText(value).replace(/\D/g, '');
 const toNumber = (value) => Number.parseFloat(value || 0) || 0;
 const formatMoney = (value) => `$${Math.round(Number(value || 0)).toLocaleString('es-AR')}`;
 const getTodayLocalDate = () => {
@@ -20,7 +29,8 @@ const getTodayLocalDate = () => {
 };
 const getDateLabel = (value) => {
     if (!value) return 'Sin fecha';
-    const [year, month, day] = value.split('-');
+    const safeValue = String(value).slice(0, 10);
+    const [year, month, day] = safeValue.split('-');
     return year && month && day ? `${day}/${month}/${year}` : value;
 };
 
@@ -28,7 +38,7 @@ export default function SaldoPage() {
     const { state, updateConfig } = useData();
     const { user } = useAuth();
     const [selectedClientId, setSelectedClientId] = useState('');
-    const [searchTerm, setSearchTerm] = useState('');
+    const [debtSearchTerm, setDebtSearchTerm] = useState('');
     const [movementType, setMovementType] = useState(MOVEMENT_TYPES[0].value);
     const [useDate, setUseDate] = useState(true);
     const [fecha, setFecha] = useState(getTodayLocalDate());
@@ -42,19 +52,10 @@ export default function SaldoPage() {
 
     const clientes = state.config?.clientes || [];
     const saldoMovimientos = state.config?.saldoMovimientos || [];
-
-    const filteredClientes = useMemo(() => {
-        const query = normalizeText(searchTerm).toLowerCase();
-        if (!query) return clientes;
-        return clientes.filter((cliente) => (
-            [
-                cliente.nombre,
-                cliente.cuit,
-                cliente.telefono,
-                cliente.email
-            ].some((value) => normalizeText(value).toLowerCase().includes(query))
-        ));
-    }, [clientes, searchTerm]);
+    const saldoClienteFotos = state.config?.saldoClienteFotos || {};
+    const currentSales = state.config?.posVentas || [];
+    const archivedSales = (state.config?.posCerradoZ || []).flatMap((close) => close.detalleVentas || []);
+    const allSales = [...currentSales, ...archivedSales];
 
     const groupedClients = useMemo(() => {
         const map = new Map();
@@ -65,14 +66,16 @@ export default function SaldoPage() {
             const signedAmount = movement.tipo === 'pago'
                 ? -Math.abs(toNumber(movement.monto))
                 : Math.abs(toNumber(movement.monto));
+            const key = clientId || clientName;
 
-            if (!map.has(clientId || clientName)) {
-                map.set(clientId || clientName, {
-                    key: clientId || clientName,
+            if (!map.has(key)) {
+                map.set(key, {
+                    key,
                     clienteId: clientId,
                     clienteNombre: clientName,
                     cuit: normalizeText(movement.cuit),
                     telefono: normalizeText(movement.telefono),
+                    email: normalizeText(movement.email),
                     movimientos: [],
                     saldo: 0,
                     totalDeuda: 0,
@@ -81,7 +84,7 @@ export default function SaldoPage() {
                 });
             }
 
-            const current = map.get(clientId || clientName);
+            const current = map.get(key);
             current.movimientos.push(movement);
             current.saldo += signedAmount;
             current.totalDeuda += movement.tipo === 'deuda' ? Math.abs(toNumber(movement.monto)) : 0;
@@ -94,9 +97,15 @@ export default function SaldoPage() {
                 const linkedClient = clientes.find((cliente) => String(cliente.id) === String(group.clienteId));
                 return {
                     ...group,
+                    clienteId: linkedClient?.id || group.clienteId,
                     clienteNombre: linkedClient?.nombre || group.clienteNombre,
                     cuit: linkedClient?.cuit || group.cuit,
                     telefono: linkedClient?.telefono || group.telefono,
+                    email: linkedClient?.email || group.email,
+                    wooId: linkedClient?.wooId || '',
+                    provincia: linkedClient?.provincia || '',
+                    ciudad: linkedClient?.ciudad || '',
+                    direccion: linkedClient?.direccion || '',
                     movimientos: [...group.movimientos].sort((left, right) => (right.fecha || '').localeCompare(left.fecha || ''))
                 };
             })
@@ -106,9 +115,103 @@ export default function SaldoPage() {
             });
     }, [saldoMovimientos, clientes]);
 
-    const selectedGroup = groupedClients.find((group) => String(group.clienteId || group.key) === String(selectedClientId))
-        || groupedClients[0]
-        || null;
+    const selectedClient = useMemo(() => {
+        if (selectedClientId) {
+            return clientes.find((cliente) => String(cliente.id) === String(selectedClientId)) || null;
+        }
+        return null;
+    }, [clientes, selectedClientId]);
+
+    const selectedGroup = useMemo(() => {
+        if (selectedClientId) {
+            const fromGroups = groupedClients.find((group) => String(group.clienteId || group.key) === String(selectedClientId));
+            if (fromGroups) return fromGroups;
+            if (selectedClient) {
+                return {
+                    key: String(selectedClient.id),
+                    clienteId: selectedClient.id,
+                    clienteNombre: selectedClient.nombre,
+                    cuit: selectedClient.cuit || '',
+                    telefono: selectedClient.telefono || '',
+                    email: selectedClient.email || '',
+                    wooId: selectedClient.wooId || '',
+                    provincia: selectedClient.provincia || '',
+                    ciudad: selectedClient.ciudad || '',
+                    direccion: selectedClient.direccion || '',
+                    movimientos: [],
+                    saldo: 0,
+                    totalDeuda: 0,
+                    totalPagado: 0,
+                    ultimaFecha: ''
+                };
+            }
+        }
+        return groupedClients.find((group) => group.saldo > 0) || groupedClients[0] || null;
+    }, [groupedClients, selectedClient, selectedClientId]);
+
+    const debtClients = useMemo(() => {
+        const query = normalizeComparable(debtSearchTerm);
+        return groupedClients
+            .filter((item) => item.saldo > 0)
+            .filter((item) => {
+                if (!query) return true;
+                return [
+                    item.clienteNombre,
+                    item.cuit,
+                    item.telefono,
+                    item.email
+                ].some((value) => normalizeComparable(value).includes(query));
+            });
+    }, [groupedClients, debtSearchTerm]);
+
+    const selectedClientSales = useMemo(() => {
+        if (!selectedGroup) return [];
+
+        const clientId = String(selectedGroup.clienteId || '').trim();
+        const clientWooId = String(selectedGroup.wooId || '').trim();
+        const clientName = normalizeComparable(selectedGroup.clienteNombre);
+        const clientPhone = normalizePhone(selectedGroup.telefono);
+
+        return allSales
+            .filter((sale) => {
+                const saleClientId = String(sale.clienteId || '').trim();
+                const saleWooId = String(sale.wooCustomerId || sale.clienteWooId || sale.cliente?.wooId || '').trim();
+                const saleClientName = normalizeComparable(
+                    sale.clienteNombre ||
+                    sale.nombreCliente ||
+                    sale.cliente?.nombre ||
+                    sale.cliente
+                );
+                const salePhone = normalizePhone(
+                    sale.telefonoCliente ||
+                    sale.clienteTelefono ||
+                    sale.cliente?.telefono ||
+                    ''
+                );
+
+                return (
+                    (clientId && saleClientId && clientId === saleClientId) ||
+                    (clientWooId && saleWooId && clientWooId === saleWooId) ||
+                    (clientName && saleClientName && clientName === saleClientName) ||
+                    (clientPhone && salePhone && clientPhone === salePhone)
+                );
+            })
+            .sort((left, right) => new Date(right.fecha || 0) - new Date(left.fecha || 0));
+    }, [allSales, selectedGroup]);
+
+    const salesSummary = useMemo(() => {
+        const lastSale = selectedClientSales[0] || null;
+        const totalPurchased = selectedClientSales.reduce((acc, sale) => acc + toNumber(sale.totalFinal || sale.total), 0);
+        return {
+            lastSale,
+            totalPurchased,
+            purchaseCount: selectedClientSales.length
+        };
+    }, [selectedClientSales]);
+
+    const selectedClientPhotos = selectedGroup
+        ? (saldoClienteFotos[String(selectedGroup.clienteId || selectedGroup.key)] || [])
+        : [];
 
     const totalSaldo = groupedClients.reduce((acc, item) => acc + item.saldo, 0);
     const totalDebt = groupedClients.reduce((acc, item) => acc + item.totalDeuda, 0);
@@ -127,6 +230,7 @@ export default function SaldoPage() {
                     clienteNombre: client.nombre,
                     cuit: client.cuit || '',
                     telefono: client.telefono || '',
+                    email: client.email || '',
                     tipo: movementType,
                     fecha: useDate ? fecha : '',
                     ticket: normalizeText(ticket),
@@ -150,6 +254,37 @@ export default function SaldoPage() {
         });
     };
 
+    const addTicketPhoto = (image) => {
+        if (!selectedGroup) return;
+        const key = String(selectedGroup.clienteId || selectedGroup.key);
+        updateConfig({
+            saldoClienteFotos: {
+                ...saldoClienteFotos,
+                [key]: [
+                    {
+                        id: generateId(),
+                        ...image,
+                        tipo: 'Ticket',
+                        createdAt: new Date().toISOString(),
+                        createdBy: user.email
+                    },
+                    ...(saldoClienteFotos[key] || [])
+                ]
+            }
+        });
+    };
+
+    const removeTicketPhoto = (imageId) => {
+        if (!selectedGroup) return;
+        const key = String(selectedGroup.clienteId || selectedGroup.key);
+        updateConfig({
+            saldoClienteFotos: {
+                ...saldoClienteFotos,
+                [key]: (saldoClienteFotos[key] || []).filter((image) => image.id !== imageId)
+            }
+        });
+    };
+
     return (
         <div className="saldo-page" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 16 }}>
             <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
@@ -157,7 +292,7 @@ export default function SaldoPage() {
                     <Wallet size={22} /> Saldo de Clientes
                 </h2>
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                    Registrá deuda por ticket o pagos parciales para clientes con cuenta corriente, sin perder historial.
+                    Registrá deuda por ticket o pagos parciales y seguí cada cuenta con historial, fotos y datos reales del cliente.
                 </p>
             </div>
 
@@ -175,13 +310,13 @@ export default function SaldoPage() {
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: '#93c5fd' }}>{formatMoney(totalPaid)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Clientes con saldo</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Clientes con deuda</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{clientsWithDebt}</div>
                 </div>
             </div>
 
             <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 12 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1.2fr) repeat(4, minmax(140px, 1fr)) auto', gap: 12, alignItems: 'end' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1.4fr) repeat(4, minmax(140px, 1fr)) auto', gap: 12, alignItems: 'end' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">Cliente</label>
                         <select className="form-select" value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)}>
@@ -238,61 +373,70 @@ export default function SaldoPage() {
             <div className="saldo-layout" style={{ display: 'grid', gridTemplateColumns: '360px minmax(0, 1fr)', gap: 16 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 12, alignContent: 'start' }}>
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Buscar cliente</label>
-                        <input
-                            className="form-input"
-                            value={searchTerm}
-                            onChange={(event) => setSearchTerm(event.target.value)}
-                            placeholder="Nombre, CUIT, teléfono o email..."
-                        />
+                        <label className="form-label">Clientes con deuda</label>
+                        <div style={{ position: 'relative' }}>
+                            <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                            <input
+                                className="form-input"
+                                value={debtSearchTerm}
+                                onChange={(event) => setDebtSearchTerm(event.target.value)}
+                                placeholder="Buscar entre los que deben..."
+                                style={{ paddingLeft: 38 }}
+                            />
+                        </div>
                     </div>
 
                     <div style={{ display: 'grid', gap: 10, maxHeight: '65vh', overflowY: 'auto' }}>
-                        {filteredClientes.map((cliente) => {
-                            const group = groupedClients.find((item) => String(item.clienteId) === String(cliente.id));
-                            const saldo = group?.saldo || 0;
-                            return (
-                                <button
-                                    key={cliente.id}
-                                    type="button"
-                                    className="saldo-client-card"
-                                    onClick={() => setSelectedClientId(cliente.id)}
-                                    style={{
-                                        textAlign: 'left',
-                                        padding: 14,
-                                        borderRadius: 14,
-                                        border: String(selectedGroup?.clienteId) === String(cliente.id) ? '1px solid rgba(20,184,166,0.45)' : '1px solid rgba(255,255,255,0.06)',
-                                        background: String(selectedGroup?.clienteId) === String(cliente.id) ? 'rgba(20,184,166,0.08)' : 'rgba(255,255,255,0.03)',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                                        <div>
-                                            <div style={{ fontWeight: 'var(--fw-semibold)' }}>{cliente.nombre}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                                                {cliente.cuit || 'Sin CUIT'} {cliente.telefono ? `· ${cliente.telefono}` : ''}
-                                            </div>
-                                        </div>
-                                        <div style={{ fontWeight: 'var(--fw-bold)', color: saldo > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                                            {formatMoney(saldo)}
+                        {debtClients.length === 0 ? (
+                            <div style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.03)', color: 'var(--text-muted)', fontSize: 13 }}>
+                                No hay clientes con deuda para mostrar.
+                            </div>
+                        ) : debtClients.map((cliente) => (
+                            <button
+                                key={cliente.key}
+                                type="button"
+                                className="saldo-client-card"
+                                onClick={() => setSelectedClientId(String(cliente.clienteId))}
+                                style={{
+                                    textAlign: 'left',
+                                    padding: 14,
+                                    borderRadius: 14,
+                                    border: String(selectedGroup?.clienteId || selectedGroup?.key) === String(cliente.clienteId || cliente.key) ? '1px solid rgba(20,184,166,0.45)' : '1px solid rgba(255,255,255,0.06)',
+                                    background: String(selectedGroup?.clienteId || selectedGroup?.key) === String(cliente.clienteId || cliente.key) ? 'rgba(20,184,166,0.08)' : 'rgba(255,255,255,0.03)',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                                    <div>
+                                        <div style={{ fontWeight: 'var(--fw-semibold)' }}>{cliente.clienteNombre}</div>
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                                            {cliente.cuit || 'Sin CUIT'} {cliente.telefono ? `· ${cliente.telefono}` : ''}
                                         </div>
                                     </div>
-                                </button>
-                            );
-                        })}
+                                    <div style={{ fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>
+                                        {formatMoney(cliente.saldo)}
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
                     </div>
                 </div>
 
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 14 }}>
                     {!selectedGroup ? (
-                        <div style={{ color: 'var(--text-muted)' }}>Seleccioná un cliente para ver su saldo y movimientos.</div>
+                        <div style={{ color: 'var(--text-muted)' }}>Seleccioná un cliente para ver su saldo, compras y tickets.</div>
                     ) : (
                         <>
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', flexWrap: 'wrap' }}>
                                 <div>
                                     <h3 style={{ margin: 0 }}>{selectedGroup.clienteNombre}</h3>
                                     <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
-                                        {selectedGroup.cuit || 'Sin CUIT'} {selectedGroup.telefono ? `· ${selectedGroup.telefono}` : ''}
+                                        {selectedGroup.cuit || 'Sin CUIT'}
+                                        {selectedGroup.telefono ? ` · ${selectedGroup.telefono}` : ''}
+                                        {selectedGroup.email ? ` · ${selectedGroup.email}` : ''}
+                                    </div>
+                                    <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                                        {[selectedGroup.provincia, selectedGroup.ciudad, selectedGroup.direccion].filter(Boolean).join(' · ') || 'Sin dirección cargada'}
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
@@ -315,6 +459,50 @@ export default function SaldoPage() {
                                 <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.03)' }}>
                                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Último movimiento</div>
                                     <div style={{ fontWeight: 'var(--fw-bold)' }}>{getDateLabel(selectedGroup.ultimaFecha)}</div>
+                                </div>
+                                <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.03)' }}>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Última compra</div>
+                                    <div style={{ fontWeight: 'var(--fw-bold)' }}>
+                                        {salesSummary.lastSale ? getDateLabel(String(salesSummary.lastSale.fecha).slice(0, 10)) : '-'}
+                                    </div>
+                                </div>
+                                <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.03)' }}>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Veces que compró</div>
+                                    <div style={{ fontWeight: 'var(--fw-bold)' }}>{salesSummary.purchaseCount}</div>
+                                </div>
+                                <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.03)' }}>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Total comprado</div>
+                                    <div style={{ fontWeight: 'var(--fw-bold)' }}>{formatMoney(salesSummary.totalPurchased)}</div>
+                                </div>
+                            </div>
+
+                            <div className="saldo-profile-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(320px, 0.9fr)', gap: 16 }}>
+                                <div className="glass-panel" style={{ padding: 'var(--sp-4)', background: 'rgba(255,255,255,0.02)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 'var(--fw-semibold)' }}>
+                                        <Camera size={16} /> Tickets y fotos adjuntas
+                                    </div>
+                                    <ImageGallery imagenes={selectedClientPhotos} onRemove={removeTicketPhoto} />
+                                    <ImageUploader onUpload={addTicketPhoto} />
+                                </div>
+
+                                <div className="glass-panel" style={{ padding: 'var(--sp-4)', background: 'rgba(255,255,255,0.02)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 'var(--fw-semibold)' }}>
+                                        <Receipt size={16} /> Datos del dashboard
+                                    </div>
+                                    <div style={{ display: 'grid', gap: 10 }}>
+                                        <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Cantidad de movimientos de saldo</div>
+                                            <strong>{selectedGroup.movimientos.length}</strong>
+                                        </div>
+                                        <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Tickets/fotos cargadas</div>
+                                            <strong>{selectedClientPhotos.length}</strong>
+                                        </div>
+                                        <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Último total de compra</div>
+                                            <strong>{salesSummary.lastSale ? formatMoney(salesSummary.lastSale.totalFinal || salesSummary.lastSale.total) : '-'}</strong>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
