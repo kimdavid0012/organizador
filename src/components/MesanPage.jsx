@@ -170,6 +170,15 @@ export default function MesanPage() {
             }, 0);
     }, [fecha, movimientos, ventasDiarias]);
 
+    const gastoTotalAcumuladoARS = useMemo(() => (
+        movimientos
+            .filter((item) => item.fecha <= fecha && (item.moneda || 'ARS') === 'ARS')
+            .reduce((acc, item) => {
+                const signedAmount = toSignedAmount(item);
+                return signedAmount < 0 ? acc + Math.abs(signedAmount) : acc;
+            }, 0)
+    ), [fecha, movimientos]);
+
     const categorySummary = useMemo(() => {
         const byCategory = {};
         monthMovements.forEach((item) => {
@@ -507,6 +516,10 @@ export default function MesanPage() {
                                 <div style={{ fontSize: '2.3rem', fontWeight: 'var(--fw-bold)', color: saldoAcumuladoARS < 0 ? '#fca5a5' : 'var(--success)' }}>
                                     {saldoAcumuladoARS < 0 ? '-' : ''}${Math.abs(saldoAcumuladoARS).toLocaleString('es-AR')}
                                 </div>
+                                <div style={{ marginTop: 12, fontSize: 14, color: 'var(--text-secondary)' }}>Gasto total acumulado</div>
+                                <div style={{ fontSize: '1.35rem', fontWeight: 'var(--fw-bold)', color: '#fca5a5' }}>
+                                    ${gastoTotalAcumuladoARS.toLocaleString('es-AR')}
+                                </div>
                                 <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-muted)' }}>
                                     Incluye venta diaria, ingresos y gastos en ARS hasta el {getDateLabel(fecha)}. No se reinicia cada mes.
                                 </div>
@@ -554,6 +567,23 @@ export default function MesanPage() {
                                 <span style={{ color: 'var(--text-secondary)' }}>Saldo total en pesos arrastrado desde enero</span>
                                 <strong style={{ color: saldoAcumuladoARS < 0 ? '#fca5a5' : 'var(--success)', fontSize: '1.05rem' }}>
                                     {saldoAcumuladoARS < 0 ? '-' : ''}${Math.abs(saldoAcumuladoARS).toLocaleString('es-AR')}
+                                </strong>
+                            </div>
+                            <div
+                                style={{
+                                    padding: 14,
+                                    borderRadius: 14,
+                                    background: 'rgba(255,255,255,0.03)',
+                                    border: '1px solid rgba(255,255,255,0.06)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    gap: 12,
+                                    flexWrap: 'wrap'
+                                }}
+                            >
+                                <span style={{ color: 'var(--text-secondary)' }}>Gasto total acumulado</span>
+                                <strong style={{ color: '#fca5a5', fontSize: '1.05rem' }}>
+                                    ${gastoTotalAcumuladoARS.toLocaleString('es-AR')}
                                 </strong>
                             </div>
                         </div>
