@@ -19,17 +19,17 @@
 
   --border-color: rgba(255, 255, 255, 0.06);
   --border-light: rgba(255, 255, 255, 0.1);
-  --border-focus: rgba(139, 92, 246, 0.6);
+  --border-focus: rgba(20, 184, 166, 0.55);
 
   --text-primary: #f0f0fa;
   --text-secondary: #a0a0c0;
   --text-muted: #6c6c8a;
   --text-white: #ffffff;
 
-  --accent: #8b5cf6;
-  --accent-hover: #7c3aed;
-  --accent-light: rgba(139, 92, 246, 0.12);
-  --accent-glow: rgba(139, 92, 246, 0.25);
+  --accent: #14b8a6;
+  --accent-hover: #0f766e;
+  --accent-light: rgba(20, 184, 166, 0.12);
+  --accent-glow: rgba(20, 184, 166, 0.25);
 
   --success: #34d399;
   --success-bg: rgba(52, 211, 153, 0.1);
@@ -116,9 +116,9 @@ body {
   font-family: var(--font-family);
   background: var(--bg-primary);
   background-image:
-    radial-gradient(circle 800px at 10% 20%, rgba(139, 92, 246, 0.15), transparent),
+    radial-gradient(circle 800px at 10% 20%, rgba(20, 184, 166, 0.16), transparent),
     radial-gradient(circle 600px at 90% 80%, rgba(59, 130, 246, 0.12), transparent),
-    radial-gradient(circle 400px at 50% 50%, rgba(236, 72, 153, 0.08), transparent);
+    radial-gradient(circle 400px at 50% 50%, rgba(34, 197, 94, 0.08), transparent);
   color: var(--text-primary);
   line-height: 1.5;
   overflow: hidden;
@@ -287,13 +287,13 @@ body {
 }
 
 .btn-primary {
-  background: rgba(139, 92, 246, 0.8) !important;
-  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+  background: rgba(20, 184, 166, 0.82) !important;
+  box-shadow: 0 4px 15px rgba(20, 184, 166, 0.28);
 }
 
 .btn-primary:hover {
-  background: rgba(139, 92, 246, 1) !important;
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.6);
+  background: rgba(15, 118, 110, 1) !important;
+  box-shadow: 0 6px 20px rgba(20, 184, 166, 0.4);
   transform: translateY(-1px);
 }
 /* ---- Mobile Global ---- */

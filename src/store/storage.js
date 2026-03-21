@@ -53,6 +53,13 @@ const DEFAULT_MARKETING = {
     openaiKey: ''
 };
 
+const DEFAULT_ACCENT_COLOR = '#14b8a6';
+const LEGACY_PURPLE_ACCENTS = new Set(['#8b5cf6', '#7c3aed', '#a855f7', '#c084fc']);
+const normalizeStoredAccentColor = (value) => {
+    const normalized = (value || '').toLowerCase();
+    return LEGACY_PURPLE_ACCENTS.has(normalized) ? DEFAULT_ACCENT_COLOR : (value || DEFAULT_ACCENT_COLOR);
+};
+
 const normalizeMarketingConfig = (marketing = {}) => ({
     ...DEFAULT_MARKETING,
     ...marketing,
@@ -92,7 +99,7 @@ export const DEFAULT_DATA = {
         posVentas: [],
         uiTheme: {
             backgroundColor: '#0a0a12',
-            accentColor: '#8b5cf6',
+            accentColor: DEFAULT_ACCENT_COLOR,
             surfaceColor: 'rgba(25, 25, 40, 0.55)',
             textColor: '#f0f0fa'
         },
@@ -144,7 +151,8 @@ export function normalizeData(parsed) {
             posVentas: parsed.config?.posVentas || [],
             uiTheme: {
                 ...DEFAULT_DATA.config.uiTheme,
-                ...parsed.config?.uiTheme
+                ...parsed.config?.uiTheme,
+                accentColor: normalizeStoredAccentColor(parsed.config?.uiTheme?.accentColor)
             },
             marketing: normalizeMarketingConfig(parsed.config?.marketing),
             marketingCache: {

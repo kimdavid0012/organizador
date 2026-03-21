@@ -33,6 +33,15 @@ import AIAssistant from './components/AIAssistant';
 import { firebaseConfigured, firebaseConfigMissingKeys } from './store/firebase';
 import './App.css';
 
+const LEGACY_PURPLE_ACCENTS = new Set(['#8b5cf6', '#7c3aed', '#a855f7', '#c084fc']);
+const DEFAULT_ACCENT = '#14b8a6';
+const DEFAULT_ACCENT_HOVER = '#0f766e';
+
+const normalizeAccentColor = (value) => {
+    const normalized = (value || '').toLowerCase();
+    return LEGACY_PURPLE_ACCENTS.has(normalized) ? DEFAULT_ACCENT : (value || DEFAULT_ACCENT);
+};
+
 // ===== Mobile Bottom Nav with "More" popup =====
 function MobileNav({ navItems, view, setView }) {
     const [showMore, setShowMore] = useState(false);
@@ -77,9 +86,9 @@ function MobileNav({ navItems, view, setView }) {
                                     style={{
                                         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                                         padding: '14px 8px', borderRadius: 12, cursor: 'pointer',
-                                        background: view === item.id ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.03)',
-                                        color: view === item.id ? 'var(--accent, #8b5cf6)' : 'var(--text-secondary)',
-                                        border: view === item.id ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid transparent',
+                                        background: view === item.id ? 'rgba(20, 184, 166, 0.15)' : 'rgba(255,255,255,0.03)',
+                                        color: view === item.id ? `var(--accent, ${DEFAULT_ACCENT})` : 'var(--text-secondary)',
+                                        border: view === item.id ? '1px solid rgba(20, 184, 166, 0.3)' : '1px solid transparent',
                                         transition: 'all 0.15s'
                                     }}
                                 >
@@ -174,10 +183,11 @@ function AppContent() {
     useEffect(() => {
         const theme = state?.config?.uiTheme || {};
         const root = document.documentElement;
+        const accentColor = normalizeAccentColor(theme.accentColor);
         root.style.setProperty('--bg-primary', theme.backgroundColor || '#0a0a12');
-        root.style.setProperty('--accent', theme.accentColor || '#8b5cf6');
-        root.style.setProperty('--accent-hover', theme.accentColor || '#7c3aed');
-        root.style.setProperty('--accent-light', `${theme.accentColor || '#8b5cf6'}22`);
+        root.style.setProperty('--accent', accentColor);
+        root.style.setProperty('--accent-hover', accentColor === DEFAULT_ACCENT ? DEFAULT_ACCENT_HOVER : accentColor);
+        root.style.setProperty('--accent-light', `${accentColor}22`);
         root.style.setProperty('--bg-card', theme.surfaceColor || 'rgba(25, 25, 40, 0.55)');
         root.style.setProperty('--text-primary', theme.textColor || '#f0f0fa');
     }, [state?.config?.uiTheme]);
