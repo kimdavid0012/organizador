@@ -38,6 +38,8 @@ export default function PedidosOnlinePage() {
         .toString()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+-\s+/g, ' ')
+        .replace(/,\s+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
         .toLowerCase();
@@ -67,6 +69,8 @@ export default function PedidosOnlinePage() {
             || getImageFromSource(product.thumbnail)
             || getImageFromSource(product.foto)
             || getImageFromSource(product.photo)
+            || getImageFromSource(product.imagenBase64)
+            || getImageFromSource(product.imageBase64)
             || '';
     };
 
@@ -139,8 +143,10 @@ export default function PedidosOnlinePage() {
             || getImageFromSource(item?.foto);
         if (directImage) return directImage;
 
-        const byProductId = productsById.get(String(item?.productId || ''));
+        const byProductId = productsById.get(String(item?.productId || ''))
+            || posProductos.find((product) => String(product?.wooId || '') === String(item?.productId || ''));
         const targetName = normalizeText(item?.descripcion || item?.detalle);
+        const compactTargetName = targetName.split(' ').slice(0, 2).join(' ');
         const byName = posProductos.find((product) => {
             const names = [
                 product?.detalleCorto,
@@ -148,7 +154,11 @@ export default function PedidosOnlinePage() {
                 product?.descripcion,
                 product?.detalle
             ].map(normalizeText).filter(Boolean);
-            return targetName && names.includes(targetName);
+            return targetName && (
+                names.includes(targetName)
+                || names.some((name) => name.startsWith(targetName) || targetName.startsWith(name))
+                || (compactTargetName && names.some((name) => name.includes(compactTargetName)))
+            );
         });
         const product = byProductId || byName;
 
