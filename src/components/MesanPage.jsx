@@ -1,9 +1,62 @@
-import React, { useMemo, useState } from 'react';
-import { BarChart3, Plus, Wallet } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { BarChart3, Plus, Upload, Wallet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
 
 const CATEGORIES = ['Alquiler', 'Servicios', 'Proveedor', 'Logistica', 'Comida', 'Publicidad', 'Varios'];
+const MONTH_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const CHANNEL_LABELS = {
+    EFECTIVO: 'Efectivo',
+    MERCADO_PAGO: 'Mercado Pago',
+    BANCO: 'Banco',
+    USD: 'USD',
+    AI: 'AI'
+};
+
+const normalizeText = (value) => (value || '').toString().replace(/\u00a0/g, ' ').trim();
+const getMonthKey = (value) => (value || '').slice(0, 7);
+const getMonthLabel = (monthKey) => {
+    const [year, month] = monthKey.split('-');
+    return `${MONTH_LABELS[(Number(month) || 1) - 1] || month} ${year}`;
+};
+const getDateLabel = (value) => {
+    const [year, month, day] = (value || '').split('-');
+    return year && month && day ? `${day}/${month}/${year}` : value;
+};
+const parseExcelNumber = (value) => {
+    if (typeof value === 'number') return value;
+    if (value === null || value === undefined || value === '') return 0;
+    const normalized = value.toString().trim().replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.');
+    const parsed = Number.parseFloat(normalized);
+    return Number.isNaN(parsed) ? 0 : parsed;
+};
+const formatExcelDate = (value) => {
+    if (!value) return '';
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+    if (typeof value === 'number') {
+        const parsed = XLSX.SSF.parse_date_code(value);
+        if (parsed) return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)).toISOString().slice(0, 10);
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+};
+const inferLegacySign = (item) => {
+    if (item?.tipo === 'ingreso' || item?.tipo === 'saldo') return 1;
+    if (item?.tipo === 'gasto') return -1;
+    return -1;
+};
+const toSignedAmount = (item) => {
+    const value = Number(item?.monto || 0);
+    if (item?.tipo) return value;
+    return Math.abs(value) * inferLegacySign(item);
+};
+const getMovementType = (signedAmount, concepto, categoria) => {
+    const normalizedConcept = normalizeText(concepto).toUpperCase();
+    const normalizedCategory = normalizeText(categoria).toUpperCase();
+    if (normalizedConcept === 'SALDO ANTERIOR' || normalizedCategory === 'SALDO ANTERIOR') return 'saldo';
+    return signedAmount >= 0 ? 'ingreso' : 'gasto';
+};
 
 export default function MesanPage() {
     const { state, updateConfig } = useData();
@@ -12,6 +65,7 @@ export default function MesanPage() {
     const [concepto, setConcepto] = useState('');
     const [categoria, setCategoria] = useState(CATEGORIES[0]);
     const [monto, setMonto] = useState('');
+    const fileInputRef = useRef(null);
 
     if (user.role !== 'admin') {
         return <div style={{ padding: 'var(--sp-4)' }}>Solo visible para administrador.</div>;
@@ -26,21 +80,98 @@ export default function MesanPage() {
             fecha,
             concepto: item.concepto,
             categoria: item.tipo,
-            monto: Number(item.monto || 0),
-            syncedFromPos: true
+            monto: -Math.abs(Number(item.monto || 0)),
+            syncedFromPos: true,
+            canal: 'POS',
+            moneda: 'ARS',
+            tipo: 'gasto'
         }));
 
+    const ventaActual = ventasDiarias.find((item) => item.fecha === fecha) || {};
     const legacyVentaDia = movimientos.find((item) => item.fecha === fecha && Number(item.ventasDia || 0) > 0)?.ventasDia || 0;
-    const ventaDelDia = ventasDiarias.find((item) => item.fecha === fecha)?.monto || legacyVentaDia || 0;
+    const ventaDelDia = Number(ventaActual.monto || ventaActual.efectivo || legacyVentaDia || 0);
     const movimientosDia = [...gastosPosDia, ...movimientos.filter((item) => item.fecha === fecha)];
 
-    const weeklySummary = useMemo(() => {
+    const monthKey = getMonthKey(fecha);
+    const monthMovements = movimientos.filter((item) => getMonthKey(item.fecha) === monthKey);
+
+    const categorySummary = useMemo(() => {
         const byCategory = {};
-        [...movimientos, ...gastosPosDia].forEach((item) => {
-            byCategory[item.categoria] = (byCategory[item.categoria] || 0) + Number(item.monto || 0);
+        monthMovements.forEach((item) => {
+            if ((item.moneda || 'ARS') !== 'ARS') return;
+            const signedAmount = toSignedAmount(item);
+            if (signedAmount >= 0) return;
+            const key = normalizeText(item.categoria) || 'Sin categoria';
+            byCategory[key] = (byCategory[key] || 0) + Math.abs(signedAmount);
         });
         return Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
-    }, [movimientos, gastosPosDia]);
+    }, [monthMovements]);
+
+    const monthlyGroups = useMemo(() => {
+        const grouped = new Map();
+
+        movimientos.forEach((item) => {
+            const movementMonthKey = getMonthKey(item.fecha);
+            if (!movementMonthKey) return;
+
+            if (!grouped.has(movementMonthKey)) {
+                grouped.set(movementMonthKey, { monthKey: movementMonthKey, byDay: new Map() });
+            }
+
+            const monthGroup = grouped.get(movementMonthKey);
+            if (!monthGroup.byDay.has(item.fecha)) {
+                monthGroup.byDay.set(item.fecha, { fecha: item.fecha, movements: [], venta: ventasDiarias.find((entry) => entry.fecha === item.fecha) || null });
+            }
+            monthGroup.byDay.get(item.fecha).movements.push(item);
+        });
+
+        ventasDiarias.forEach((entry) => {
+            const entryMonthKey = getMonthKey(entry.fecha);
+            if (!entryMonthKey) return;
+
+            if (!grouped.has(entryMonthKey)) {
+                grouped.set(entryMonthKey, { monthKey: entryMonthKey, byDay: new Map() });
+            }
+
+            const monthGroup = grouped.get(entryMonthKey);
+            if (!monthGroup.byDay.has(entry.fecha)) {
+                monthGroup.byDay.set(entry.fecha, { fecha: entry.fecha, movements: [], venta: entry });
+            } else {
+                monthGroup.byDay.get(entry.fecha).venta = entry;
+            }
+        });
+
+        return Array.from(grouped.values())
+            .sort((left, right) => right.monthKey.localeCompare(left.monthKey))
+            .map((monthGroup) => {
+                const days = Array.from(monthGroup.byDay.values())
+                    .sort((left, right) => right.fecha.localeCompare(left.fecha))
+                    .map((dayGroup) => {
+                        const arsExpenses = dayGroup.movements
+                            .filter((item) => (item.moneda || 'ARS') === 'ARS' && toSignedAmount(item) < 0)
+                            .reduce((acc, item) => acc + Math.abs(toSignedAmount(item)), 0);
+                        const arsIncome = dayGroup.movements
+                            .filter((item) => (item.moneda || 'ARS') === 'ARS' && toSignedAmount(item) > 0)
+                            .reduce((acc, item) => acc + toSignedAmount(item), 0);
+                        const usdNet = dayGroup.movements
+                            .filter((item) => (item.moneda || 'ARS') === 'USD')
+                            .reduce((acc, item) => acc + toSignedAmount(item), 0);
+
+                        return {
+                            ...dayGroup,
+                            arsExpenses,
+                            arsIncome,
+                            usdNet
+                        };
+                    });
+
+                return {
+                    monthKey: monthGroup.monthKey,
+                    label: getMonthLabel(monthGroup.monthKey),
+                    days
+                };
+            });
+    }, [movimientos, ventasDiarias]);
 
     const addMovement = () => {
         if (!concepto.trim() || !monto) return;
@@ -51,7 +182,10 @@ export default function MesanPage() {
                     fecha,
                     concepto: concepto.trim(),
                     categoria,
-                    monto: Number(monto)
+                    monto: Math.abs(Number(monto)),
+                    canal: 'EFECTIVO',
+                    moneda: 'ARS',
+                    tipo: 'gasto'
                 },
                 ...movimientos
             ]
@@ -66,11 +200,118 @@ export default function MesanPage() {
             mesanVentasDiarias: [
                 ...nextEntries,
                 {
+                    ...ventaActual,
                     fecha,
-                    monto: Number(value || 0)
+                    monto: Number(value || 0),
+                    efectivo: Number(value || 0)
                 }
             ]
         });
+    };
+
+    const importMesanWorkbook = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const buffer = await file.arrayBuffer();
+            const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+            const importedMovements = [];
+            const ventasMap = new Map(ventasDiarias.map((item) => [item.fecha, { ...item }]));
+
+            workbook.SheetNames.forEach((sheetName) => {
+                const worksheet = workbook.Sheets[sheetName];
+                const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+                rows.slice(1).forEach((row, index) => {
+                    const [rawFecha, rawConcepto, rawCategoria, rawEfectivo, rawMercadoPago, rawBanco, rawUsd, rawAi] = row;
+                    const parsedDate = formatExcelDate(rawFecha);
+                    if (!parsedDate) return;
+
+                    const conceptoValue = normalizeText(rawConcepto);
+                    const categoriaValue = normalizeText(rawCategoria);
+                    const columns = [
+                        { canal: 'EFECTIVO', moneda: 'ARS', amount: parseExcelNumber(rawEfectivo) },
+                        { canal: 'MERCADO_PAGO', moneda: 'ARS', amount: parseExcelNumber(rawMercadoPago) },
+                        { canal: 'BANCO', moneda: 'ARS', amount: parseExcelNumber(rawBanco) },
+                        { canal: 'USD', moneda: 'USD', amount: parseExcelNumber(rawUsd) },
+                        { canal: 'AI', moneda: 'ARS', amount: parseExcelNumber(rawAi) }
+                    ].filter((item) => item.amount !== 0);
+
+                    columns.forEach((column, columnIndex) => {
+                        const signedAmount = Number(column.amount);
+                        const normalizedCategory = categoriaValue.toUpperCase();
+                        const normalizedConcept = conceptoValue.toUpperCase();
+                        const isMesanSale = column.canal === 'EFECTIVO' && normalizedCategory === 'MESAN' && normalizedConcept === 'MESAN' && signedAmount > 0;
+
+                        if (isMesanSale) {
+                            const previous = ventasMap.get(parsedDate) || { fecha: parsedDate, monto: 0, efectivo: 0, mercadoPago: 0, banco: 0, usd: 0 };
+                            ventasMap.set(parsedDate, {
+                                ...previous,
+                                fecha: parsedDate,
+                                monto: signedAmount,
+                                efectivo: signedAmount,
+                                importedSheet: sheetName
+                            });
+                            return;
+                        }
+
+                        importedMovements.push({
+                            id: `mesan-import-${sheetName}-${index + 1}-${columnIndex + 1}`,
+                            fecha: parsedDate,
+                            concepto: conceptoValue || 'Sin concepto',
+                            categoria: categoriaValue || 'Sin categoria',
+                            monto: signedAmount,
+                            canal: column.canal,
+                            moneda: column.moneda,
+                            tipo: getMovementType(signedAmount, conceptoValue, categoriaValue),
+                            importedBatchId: `mesan-${file.name.toLowerCase().replace(/\s+/g, '-')}-${sheetName.toLowerCase()}`,
+                            importedSheet: sheetName,
+                            source: file.name
+                        });
+                    });
+                });
+            });
+
+            const existingKeys = new Set(
+                movimientos.map((item) => [
+                    item.fecha,
+                    normalizeText(item.concepto),
+                    normalizeText(item.categoria),
+                    item.canal || 'EFECTIVO',
+                    item.moneda || 'ARS',
+                    Number(item.monto || 0),
+                    item.tipo || 'legacy'
+                ].join('|'))
+            );
+
+            const freshMovements = importedMovements.filter((item) => {
+                const key = [
+                    item.fecha,
+                    normalizeText(item.concepto),
+                    normalizeText(item.categoria),
+                    item.canal || 'EFECTIVO',
+                    item.moneda || 'ARS',
+                    Number(item.monto || 0),
+                    item.tipo || 'legacy'
+                ].join('|');
+                return !existingKeys.has(key);
+            });
+
+            const mergedVentas = Array.from(ventasMap.values()).sort((left, right) => right.fecha.localeCompare(left.fecha));
+
+            updateConfig({
+                mesanMovimientos: [...freshMovements, ...movimientos],
+                mesanVentasDiarias: mergedVentas
+            });
+
+            alert(`Se importaron ${freshMovements.length} movimientos y ${mergedVentas.length} dias de venta desde ${file.name}.`);
+        } catch (error) {
+            console.error('Error importando Excel de Mesan:', error);
+            alert(`No pude importar ese Excel: ${error.message}`);
+        } finally {
+            event.target.value = '';
+        }
     };
 
     return (
@@ -80,12 +321,27 @@ export default function MesanPage() {
                     <BarChart3 size={22} /> Mesan
                 </h2>
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                    Gastos diarios del local y control simple de ventas del dia.
+                    Gastos diarios del local, ventas por fecha e importacion por mes desde Excel sin perder los datos ya guardados.
                 </p>
             </div>
 
-            <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(220px, 1fr)', gap: 12, alignItems: 'end', marginBottom: 16 }}>
+            <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div>
+                        <h3 style={{ margin: 0 }}>Importar Excel mensual</h3>
+                        <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)' }}>
+                            Cada hoja se toma como un mes. Se importan gastos, saldos, Mercado Pago, Banco, USD y AI, sin borrar memoria anterior.
+                        </p>
+                    </div>
+                    <div>
+                        <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importMesanWorkbook} />
+                        <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
+                            <Upload size={16} /> Importar Excel de Mesan
+                        </button>
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(220px, 1fr)', gap: 12, alignItems: 'end' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">Fecha</label>
                         <input type="date" className="form-input" value={fecha} onChange={(event) => setFecha(event.target.value)} />
@@ -119,16 +375,30 @@ export default function MesanPage() {
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <h3 style={{ marginBottom: 12 }}>Movimientos del {fecha}</h3>
                     <div style={{ display: 'grid', gap: 8 }}>
-                        {movimientosDia.map((item) => (
-                            <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto', gap: 12, padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
-                                <div>
-                                    <div style={{ fontWeight: 'var(--fw-semibold)' }}>{item.concepto}</div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.categoria}{item.syncedFromPos ? ' · POS' : ''}</div>
+                        {movimientosDia.map((item) => {
+                            const signedAmount = toSignedAmount(item);
+                            const isNegative = signedAmount < 0;
+                            const displayAmount = Math.abs(signedAmount);
+                            return (
+                                <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr auto auto', gap: 12, padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 'var(--fw-semibold)' }}>{item.concepto}</div>
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                            {item.categoria || 'Sin categoria'}
+                                            {` · ${CHANNEL_LABELS[item.canal] || item.canal || 'Efectivo'}`}
+                                            {item.moneda === 'USD' ? ' · USD' : ''}
+                                            {item.syncedFromPos ? ' · POS' : ''}
+                                        </div>
+                                    </div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                        Venta dia: ${Number(ventaDelDia || 0).toLocaleString('es-AR')}
+                                    </div>
+                                    <div style={{ color: isNegative ? '#fca5a5' : 'var(--success)', fontWeight: 'var(--fw-bold)' }}>
+                                        {isNegative ? '-' : '+'}{item.moneda === 'USD' ? 'US$' : '$'}{displayAmount.toLocaleString('es-AR')}
+                                    </div>
                                 </div>
-                                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Venta dia: ${Number(ventaDelDia || 0).toLocaleString('es-AR')}</div>
-                                <div style={{ color: '#fca5a5', fontWeight: 'var(--fw-bold)' }}>-${Number(item.monto || 0).toLocaleString('es-AR')}</div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -137,18 +407,97 @@ export default function MesanPage() {
                         <Wallet size={18} /> Resumen por categoria
                     </h3>
                     <div style={{ display: 'grid', gap: 10 }}>
-                        {weeklySummary.map(([name, total]) => (
+                        {categorySummary.map(([name, total]) => (
                             <div key={name}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
                                     <span>{name}</span>
                                     <strong>${Number(total).toLocaleString('es-AR')}</strong>
                                 </div>
                                 <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.05)' }}>
-                                    <div style={{ height: '100%', borderRadius: 999, width: `${Math.min(100, Number(total) / 2000)}%`, background: 'linear-gradient(90deg, var(--accent), #34d399)' }} />
+                                    <div style={{ height: '100%', borderRadius: 999, width: `${Math.min(100, Number(total) / 50000)}%`, background: 'linear-gradient(90deg, var(--accent), #34d399)' }} />
                                 </div>
                             </div>
                         ))}
                     </div>
+                </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 12 }}>
+                <div>
+                    <h3 style={{ margin: 0 }}>Historial por mes y por dia</h3>
+                    <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)' }}>
+                        Cada dia muestra venta cargada, gastos, ingresos, USD y movimientos extra del Excel.
+                    </p>
+                </div>
+
+                <div style={{ display: 'grid', gap: 10 }}>
+                    {monthlyGroups.map((monthGroup, monthIndex) => (
+                        <details key={monthGroup.monthKey} open={monthIndex === 0} style={{ borderRadius: 16, background: 'rgba(255,255,255,0.03)', overflow: 'hidden' }}>
+                            <summary style={{ listStyle: 'none', cursor: 'pointer', padding: 16, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div>
+                                    <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 18 }}>{monthGroup.label}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{monthGroup.days.length} dias con movimientos</div>
+                                </div>
+                            </summary>
+
+                            <div style={{ padding: '0 16px 16px', display: 'grid', gap: 10 }}>
+                                {monthGroup.days.map((dayGroup) => (
+                                    <details key={dayGroup.fecha} open={dayGroup.fecha === fecha} style={{ borderRadius: 14, background: 'rgba(10, 12, 24, 0.55)', overflow: 'hidden' }}>
+                                        <summary style={{ listStyle: 'none', cursor: 'pointer', padding: 14, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 'var(--fw-semibold)' }}>{getDateLabel(dayGroup.fecha)}</div>
+                                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{dayGroup.movements.length} movimientos</div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Venta ${Number(dayGroup.venta?.monto || dayGroup.venta?.efectivo || 0).toLocaleString('es-AR')}</span>
+                                                <span style={{ fontSize: 12, color: '#fca5a5' }}>Gastos ${dayGroup.arsExpenses.toLocaleString('es-AR')}</span>
+                                                <span style={{ fontSize: 12, color: 'var(--success)' }}>Ingresos ${dayGroup.arsIncome.toLocaleString('es-AR')}</span>
+                                                {dayGroup.usdNet !== 0 && (
+                                                    <span style={{ fontSize: 12, color: dayGroup.usdNet < 0 ? '#fca5a5' : 'var(--success)' }}>
+                                                        USD {dayGroup.usdNet < 0 ? '-' : '+'}{Math.abs(dayGroup.usdNet).toLocaleString('es-AR')}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </summary>
+
+                                        <div style={{ padding: '0 14px 14px', display: 'grid', gap: 8 }}>
+                                            {dayGroup.movements.map((item) => {
+                                                const signedAmount = toSignedAmount(item);
+                                                const isNegative = signedAmount < 0;
+                                                return (
+                                                    <div
+                                                        key={item.id}
+                                                        style={{
+                                                            display: 'grid',
+                                                            gridTemplateColumns: 'minmax(0, 1.3fr) auto auto',
+                                                            gap: 12,
+                                                            padding: 12,
+                                                            borderRadius: 12,
+                                                            background: isNegative ? 'rgba(239,68,68,0.09)' : 'rgba(34,197,94,0.09)',
+                                                            alignItems: 'center'
+                                                        }}
+                                                    >
+                                                        <div style={{ minWidth: 0 }}>
+                                                            <div style={{ fontWeight: 'var(--fw-semibold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {item.concepto}
+                                                            </div>
+                                                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                                                {item.categoria || 'Sin categoria'} · {CHANNEL_LABELS[item.canal] || item.canal || 'Efectivo'} · {item.moneda || 'ARS'}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{item.tipo || (isNegative ? 'gasto' : 'ingreso')}</div>
+                                                        <div style={{ fontWeight: 'var(--fw-bold)', color: isNegative ? '#fca5a5' : 'var(--success)' }}>
+                                                            {isNegative ? '-' : '+'}{item.moneda === 'USD' ? 'US$' : '$'}{Math.abs(signedAmount).toLocaleString('es-AR')}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </details>
+                                ))}
+                            </div>
+                        </details>
+                    ))}
                 </div>
             </div>
         </div>
