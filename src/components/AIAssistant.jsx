@@ -35,7 +35,170 @@ const getAllowedAssistantActions = (user, state) => {
     return new Set();
 };
 
-const buildSystemPrompt = ({ lang, user, state, allowedActionList, isNadiaProfile }) => `Sos "CELA IA", la asistente interna del sistema CELAVIE.
+const normalizeText = (value) => (value || '').toString().trim();
+const normalizeComparable = (value) => normalizeText(value)
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]/g, '');
+const normalizePhone = (value) => normalizeText(value).replace(/\D/g, '');
+const toNumber = (value) => Number.parseFloat(value || 0) || 0;
+
+const collectAssistantSales = (config = {}) => {
+    const currentSales = Array.isArray(config?.posVentas) ? config.posVentas : [];
+    const closedSales = (Array.isArray(config?.posCerradoZ) ? config.posCerradoZ : [])
+        .flatMap((close) => Array.isArray(close?.detalleVentas) ? close.detalleVentas : []);
+    return [...currentSales, ...closedSales];
+};
+
+const buildAssistantSnapshot = (state) => {
+    const config = state?.config || {};
+    const products = Array.isArray(config.posProductos) ? config.posProductos : [];
+    const clientes = Array.isArray(config.clientes) ? config.clientes : [];
+    const bankPayments = Array.isArray(config.bankPayments) ? config.bankPayments : [];
+    const mesanSales = Array.isArray(config.mesanVentasDiarias) ? config.mesanVentasDiarias : [];
+    const mesanMovements = Array.isArray(config.mesanMovimientos) ? config.mesanMovimientos : [];
+    const cortes = Array.isArray(config.cortes) ? config.cortes : [];
+    const conteos = Array.isArray(config.mercaderiaConteos) ? config.mercaderiaConteos : [];
+    const pedidosOnline = Array.isArray(config.pedidosOnline) ? config.pedidosOnline : [];
+    const allSales = collectAssistantSales(config);
+
+    const last30Days = new Date();
+    last30Days.setDate(last30Days.getDate() - 30);
+
+    const salesByClient = new Map();
+    const salesByProduct = new Map();
+    const salesByChannel = new Map();
+
+    allSales.forEach((sale) => {
+        const total = toNumber(sale.totalFinal || sale.total);
+        const saleDate = sale.fecha ? new Date(sale.fecha) : null;
+        const clientName = normalizeText(
+            sale.clienteNombre ||
+            sale.nombreCliente ||
+            sale.cliente?.nombre ||
+            sale.cliente ||
+            'Consumidor final'
+        ) || 'Consumidor final';
+        const clientKey = normalizeComparable(clientName) || clientName;
+        const channel = normalizeText(sale.canalVenta || 'LOCAL') || 'LOCAL';
+
+        const currentClient = salesByClient.get(clientKey) || {
+            nombre: clientName,
+            totalGastado: 0,
+            compras: 0,
+            ultimaCompra: ''
+        };
+        currentClient.totalGastado += total;
+        currentClient.compras += 1;
+        currentClient.ultimaCompra = currentClient.ultimaCompra && currentClient.ultimaCompra > (sale.fecha || '')
+            ? currentClient.ultimaCompra
+            : (sale.fecha || '');
+        salesByClient.set(clientKey, currentClient);
+        salesByChannel.set(channel, (salesByChannel.get(channel) || 0) + total);
+
+        (Array.isArray(sale.items) ? sale.items : []).forEach((item) => {
+            const key = normalizeComparable(item.codigoInterno || item.detalleCorto || item.id);
+            if (!key) return;
+            const current = salesByProduct.get(key) || {
+                codigoInterno: normalizeText(item.codigoInterno),
+                detalleCorto: normalizeText(item.detalleCorto) || 'Sin nombre',
+                unidadesVendidas: 0,
+                unidades30d: 0,
+                facturacion: 0
+            };
+            const units = toNumber(item.cantidad || 0);
+            current.unidadesVendidas += units;
+            current.facturacion += toNumber(item.importe || (item.precioUnitario || item.precioOriginal || 0) * units);
+            if (saleDate && !Number.isNaN(saleDate.getTime()) && saleDate >= last30Days) {
+                current.unidades30d += units;
+            }
+            salesByProduct.set(key, current);
+        });
+    });
+
+    const mesanCash = mesanSales.reduce((acc, item) => acc + toNumber(item.monto || item.efectivo || 0), 0);
+    const bancoIncome = bankPayments.filter((entry) => entry.metodo === 'Banco').reduce((acc, entry) => acc + toNumber(entry.monto || 0), 0);
+    const mercadoPagoIncome = bankPayments.filter((entry) => entry.metodo === 'Mercado Pago').reduce((acc, entry) => acc + toNumber(entry.monto || 0), 0);
+    const totalIncome = mesanCash + bancoIncome + mercadoPagoIncome;
+    const mesanExpenses = mesanMovements.reduce((acc, item) => {
+        const amount = toNumber(item.monto || 0);
+        return (item.moneda || 'ARS') === 'ARS' && amount < 0 ? acc + Math.abs(amount) : acc;
+    }, 0);
+
+    const topClients = Array.from(salesByClient.values())
+        .sort((a, b) => b.totalGastado - a.totalGastado)
+        .slice(0, 8);
+
+    const topProducts = Array.from(salesByProduct.values())
+        .sort((a, b) => b.facturacion - a.facturacion)
+        .slice(0, 8);
+
+    const lowStockProducts = products
+        .filter((product) => toNumber(product.stock || 0) <= toNumber(product.alertaStockMinimo || 0))
+        .slice(0, 12)
+        .map((product) => ({
+            codigoInterno: product.codigoInterno,
+            detalleCorto: product.detalleCorto,
+            stock: toNumber(product.stock || 0),
+            alertaStockMinimo: toNumber(product.alertaStockMinimo || 0)
+        }));
+
+    const productionSuggestions = products
+        .map((product) => {
+            const key = normalizeComparable(product.codigoInterno || product.detalleCorto);
+            const perf = salesByProduct.get(key);
+            return {
+                codigoInterno: product.codigoInterno,
+                detalleCorto: product.detalleCorto,
+                stock: toNumber(product.stock || 0),
+                ventas30d: perf?.unidades30d || 0
+            };
+        })
+        .filter((item) => item.ventas30d > 0)
+        .sort((a, b) => (b.ventas30d - a.ventas30d) || (a.stock - b.stock))
+        .slice(0, 12);
+
+    const onlineReady = pedidosOnline.filter((pedido) => pedido.estado === 'listo').length;
+    const onlinePending = pedidosOnline.filter((pedido) => pedido.estado !== 'listo').length;
+    const pendingWorkshopArticles = cortes.reduce((acc, corte) => (
+        acc + (Array.isArray(corte.moldesData) ? corte.moldesData : [])
+            .filter((item) => normalizeText(item.tallerAsignado || item.taller) && !normalizeText(item.estadoTaller || '').toLowerCase().includes('ingres'))
+            .length
+    ), 0);
+
+    return {
+        financial: {
+            mesanCashIncomeARS: mesanCash,
+            bancoIncomeARS: bancoIncome,
+            mercadoPagoIncomeARS: mercadoPagoIncome,
+            totalIncomeARS: totalIncome,
+            mesanExpensesARS: mesanExpenses
+        },
+        commercial: {
+            totalClientes: clientes.length,
+            topClients,
+            salesByChannel: Array.from(salesByChannel.entries())
+                .map(([canal, total]) => ({ canal, total }))
+                .sort((a, b) => b.total - a.total)
+        },
+        inventory: {
+            totalProducts: products.length,
+            lowStockProducts,
+            topProducts,
+            productionSuggestions
+        },
+        operations: {
+            cortes: cortes.length,
+            pendingWorkshopArticles,
+            conteosMercaderia: conteos.length,
+            pedidosOnlineListos: onlineReady,
+            pedidosOnlinePendientes: onlinePending
+        }
+    };
+};
+
+const buildSystemPrompt = ({ lang, user, state, allowedActionList, isNadiaProfile, dashboardSnapshot }) => `Sos "CELA IA", la asistente interna del sistema CELAVIE.
 
 IDIOMA:
 - Respondé siempre en el idioma del usuario.
@@ -45,6 +208,7 @@ IDIOMA:
 
 ROL PRINCIPAL:
 - No sos solo un chatbot: sos una guía experta del sistema.
+- Tenés que operar como un "Jarvis" del negocio: entender lo que está pasando en el dashboard, absorber los datos actuales y responder en base a esos datos.
 - Tenés que orientar a cada usuario sobre qué pantalla usar, qué paso sigue y qué dato falta.
 - Antes de ejecutar cambios, explicá brevemente qué vas a hacer si eso ayuda a evitar errores.
 - Cuando te pidan una acción concreta, ejecutala usando etiquetas <action>JSON</action>.
@@ -79,6 +243,8 @@ REGLAS OPERATIVAS IMPORTANTES:
 - Pedidos Online puede depender de pedidos, artículos POS y datos de WooCommerce.
 - Clientes puede cruzarse con ventas POS.
 - Mesan y Banco/MP son módulos distintos: no mezclar gastos de Mesan con ingresos bancarios salvo que el usuario lo pida explícitamente.
+- Para preguntas comerciales y financieras, usá los datos del snapshot operativo inyectado abajo como fuente principal.
+- Si te preguntan "qué cliente compró más", "cuánto stock queda", "si conviene producir", "qué canal rindió más" o "qué pasó este mes", respondé con los datos del snapshot y explicá el criterio.
 - No inventes datos existentes si no están en el contexto.
 
 PERMISOS DEL USUARIO ACTUAL:
@@ -114,6 +280,8 @@ ACCIONES DISPONIBLES:
 
 FORMA DE RESPONDER:
 - Si el usuario solo pregunta cómo hacer algo, respondé con pasos concretos dentro del sistema.
+- Si el usuario hace preguntas analíticas, respondé como analista del negocio usando cifras y rankings del sistema.
+- Si el usuario pregunta por conveniencia de producir un artículo, evaluá ventas recientes, stock actual y pendientes operativos antes de responder.
 - Si el usuario quiere que lo hagas, además de explicarlo ejecutá la acción.
 - Si ejecutás acciones, después resumí en una o dos líneas lo que hiciste.
 - Podés ejecutar varias acciones en una misma respuesta.
@@ -127,6 +295,9 @@ CONTEXTO ACTUAL:
 - Productos POS: ${state.config?.posProductos?.length || 0}
 - Talleres: ${(state.config?.talleres || []).join(', ') || 'sin talleres'}
 - Secciones útiles según el rol: guiá al usuario dentro de lo que puede ver, pero si pregunta por algo de admin podés explicarlo igual.
+
+SNAPSHOT OPERATIVO ACTUAL:
+${JSON.stringify(dashboardSnapshot, null, 2)}
 `;
 
 export default function AIAssistant() {
@@ -147,14 +318,16 @@ export default function AIAssistant() {
     const normalizedEmail = getNormalizedEmail(user);
     const assistantVisible = canAccessAssistant(user, originalAdmin);
     const allowedAssistantActions = useMemo(() => getAllowedAssistantActions(user, state), [user, state]);
+    const dashboardSnapshot = useMemo(() => buildAssistantSnapshot(state), [state]);
     const allowedActionList = allowedAssistantActions.size ? Array.from(allowedAssistantActions).join(', ') : 'ninguna';
     const systemPrompt = useMemo(() => buildSystemPrompt({
         lang,
         user,
         state,
         allowedActionList,
-        isNadiaProfile: normalizedEmail === NADIA_EMAIL || user?.name === 'Nadia'
-    }), [lang, user, state, allowedActionList, normalizedEmail]);
+        isNadiaProfile: normalizedEmail === NADIA_EMAIL || user?.name === 'Nadia',
+        dashboardSnapshot
+    }), [lang, user, state, allowedActionList, normalizedEmail, dashboardSnapshot]);
 
     // Detect UI language for speech recognition
     const getLangCode = () => {
@@ -419,8 +592,8 @@ export default function AIAssistant() {
                 body: JSON.stringify({
                     model: 'gpt-4o-mini',
                     messages: apiMessages,
-                    max_tokens: 500,
-                    temperature: 0.7
+                    max_tokens: 900,
+                    temperature: 0.4
                 })
             });
 
