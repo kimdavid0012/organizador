@@ -106,6 +106,34 @@ export default function MesanPage() {
 
     const monthKey = getMonthKey(fecha);
     const monthMovements = movimientos.filter((item) => getMonthKey(item.fecha) === monthKey);
+    const saldoAcumuladoARS = useMemo(() => {
+        const ventasPorFecha = new Map(
+            ventasDiarias.map((item) => [
+                item.fecha,
+                Number(item.monto || item.efectivo || 0)
+            ])
+        );
+
+        const fechas = new Set([
+            ...movimientos
+                .filter((item) => (item.moneda || 'ARS') === 'ARS' && item.fecha)
+                .map((item) => item.fecha),
+            ...ventasDiarias
+                .filter((item) => item.fecha)
+                .map((item) => item.fecha)
+        ]);
+
+        return Array.from(fechas)
+            .filter((item) => item <= fecha)
+            .sort((left, right) => left.localeCompare(right))
+            .reduce((acc, currentFecha) => {
+                const venta = ventasPorFecha.get(currentFecha) || 0;
+                const netoMovimientos = movimientos
+                    .filter((item) => item.fecha === currentFecha && (item.moneda || 'ARS') === 'ARS')
+                    .reduce((total, item) => total + toSignedAmount(item), 0);
+                return acc + venta + netoMovimientos;
+            }, 0);
+    }, [fecha, movimientos, ventasDiarias]);
 
     const categorySummary = useMemo(() => {
         const byCategory = {};
@@ -386,32 +414,74 @@ export default function MesanPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <h3 style={{ marginBottom: 12 }}>Movimientos del {fecha}</h3>
-                    <div style={{ display: 'grid', gap: 8 }}>
-                        {movimientosDia.map((item) => {
-                            const signedAmount = toSignedAmount(item);
-                            const isNegative = signedAmount < 0;
-                            const displayAmount = Math.abs(signedAmount);
-                            return (
-                                <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr auto auto', gap: 12, padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
-                                    <div>
-                                        <div style={{ fontWeight: 'var(--fw-semibold)' }}>{item.concepto}</div>
-                                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                            {item.categoria || 'Sin categoria'}
-                                            {` · ${CHANNEL_LABELS[item.canal] || item.canal || 'Efectivo'}`}
-                                            {item.moneda === 'USD' ? ' · USD' : ''}
-                                            {item.syncedFromPos ? ' · POS' : ''}
+                    {movimientosDia.length === 0 ? (
+                        <div
+                            style={{
+                                minHeight: 260,
+                                borderRadius: 18,
+                                background: 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(16,185,129,0.05))',
+                                border: '1px solid rgba(255,255,255,0.06)',
+                                display: 'grid',
+                                placeItems: 'center',
+                                padding: 24
+                            }}
+                        >
+                            <div style={{ textAlign: 'center', maxWidth: 460 }}>
+                                <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 8 }}>Saldo total en pesos arrastrado desde enero</div>
+                                <div style={{ fontSize: '2.3rem', fontWeight: 'var(--fw-bold)', color: saldoAcumuladoARS < 0 ? '#fca5a5' : 'var(--success)' }}>
+                                    {saldoAcumuladoARS < 0 ? '-' : ''}${Math.abs(saldoAcumuladoARS).toLocaleString('es-AR')}
+                                </div>
+                                <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-muted)' }}>
+                                    Incluye venta diaria, ingresos y gastos en ARS hasta el {getDateLabel(fecha)}. No se reinicia cada mes.
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                            {movimientosDia.map((item) => {
+                                const signedAmount = toSignedAmount(item);
+                                const isNegative = signedAmount < 0;
+                                const displayAmount = Math.abs(signedAmount);
+                                return (
+                                    <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.4fr auto auto', gap: 12, padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 'var(--fw-semibold)' }}>{item.concepto}</div>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                                {item.categoria || 'Sin categoria'}
+                                                {` · ${CHANNEL_LABELS[item.canal] || item.canal || 'Efectivo'}`}
+                                                {item.moneda === 'USD' ? ' · USD' : ''}
+                                                {item.syncedFromPos ? ' · POS' : ''}
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                            Venta dia: ${Number(ventaDelDia || 0).toLocaleString('es-AR')}
+                                        </div>
+                                        <div style={{ color: isNegative ? '#fca5a5' : 'var(--success)', fontWeight: 'var(--fw-bold)' }}>
+                                            {isNegative ? '-' : '+'}{item.moneda === 'USD' ? 'US$' : '$'}{displayAmount.toLocaleString('es-AR')}
                                         </div>
                                     </div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                        Venta dia: ${Number(ventaDelDia || 0).toLocaleString('es-AR')}
-                                    </div>
-                                    <div style={{ color: isNegative ? '#fca5a5' : 'var(--success)', fontWeight: 'var(--fw-bold)' }}>
-                                        {isNegative ? '-' : '+'}{item.moneda === 'USD' ? 'US$' : '$'}{displayAmount.toLocaleString('es-AR')}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                );
+                            })}
+                            <div
+                                style={{
+                                    marginTop: 8,
+                                    padding: 14,
+                                    borderRadius: 14,
+                                    background: 'rgba(255,255,255,0.03)',
+                                    border: '1px solid rgba(255,255,255,0.06)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    gap: 12,
+                                    flexWrap: 'wrap'
+                                }}
+                            >
+                                <span style={{ color: 'var(--text-secondary)' }}>Saldo total en pesos arrastrado desde enero</span>
+                                <strong style={{ color: saldoAcumuladoARS < 0 ? '#fca5a5' : 'var(--success)', fontSize: '1.05rem' }}>
+                                    {saldoAcumuladoARS < 0 ? '-' : ''}${Math.abs(saldoAcumuladoARS).toLocaleString('es-AR')}
+                                </strong>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
