@@ -11,7 +11,7 @@ OBJETIVO DEL INFORME:
 - Decir si el local es rentable o no con los datos disponibles.
 - Explicar por qué.
 - Detectar fugas de dinero, problemas operativos y oportunidades.
-- Analizar ventas, stock, rotación, clientes, ingresos digitales, gastos y producción.
+- Analizar ventas, stock, rotación, clientes, ingresos totales, gastos, deuda con proveedores y producción.
 - Indicar si conviene volver a cortar algún artículo, cuáles, y por qué.
 - Priorizar acciones concretas para mejorar rentabilidad.
 
@@ -62,6 +62,9 @@ REGLAS:
 - Respondé siempre en español rioplatense profesional.
 - No inventes datos ausentes.
 - Si algo no alcanza para concluir, decilo.
+- El ingreso total del local se calcula con Mesan (efectivo/POS local) + Banco + Mercado Pago.
+- No tomes solo Mesan como ingreso total.
+- Considerá la deuda total en dólares con textileras como un pasivo relevante del negocio.
 - Si ves artículos con ventas fuertes y stock bajo, marcá si conviene volver a cortar.
 - Si ves stock alto y ventas bajas, marcá que no conviene reponer.
 - Priorizá claridad ejecutiva y sentido comercial real, no teoría.
@@ -129,6 +132,8 @@ export default function InformesPage() {
         const clientes = state.config?.clientes || [];
         const cortes = state.config?.cortes || [];
         const conteos = state.config?.mercaderiaConteos || [];
+        const telas = state.telas || [];
+        const fabricPayments = state.config?.fabricPayments || [];
         const now = new Date();
         const last30Days = new Date(now);
         last30Days.setDate(last30Days.getDate() - 30);
@@ -266,6 +271,39 @@ export default function InformesPage() {
         const mesanSalesARS = mesanSales.reduce((acc, item) => acc + toNumber(item.monto || item.efectivo || 0), 0);
         const totalIncomeWithMesan = digitalIncome + mesanSalesARS;
 
+        const supplierDebtMap = {};
+        telas.forEach((tela) => {
+            const proveedor = normalizeText(tela.proveedor || 'Sin proveedor') || 'Sin proveedor';
+            const totalValueUSD = toNumber(tela.precioPorUnidad || 0) * toNumber(tela.cantidadTotal || 0);
+            supplierDebtMap[proveedor] = supplierDebtMap[proveedor] || {
+                proveedor,
+                totalValueUSD: 0,
+                paidUSD: 0,
+                debtUSD: 0
+            };
+            supplierDebtMap[proveedor].totalValueUSD += totalValueUSD;
+        });
+
+        fabricPayments.forEach((payment) => {
+            const proveedor = normalizeText(payment.proveedor || 'Sin proveedor') || 'Sin proveedor';
+            supplierDebtMap[proveedor] = supplierDebtMap[proveedor] || {
+                proveedor,
+                totalValueUSD: 0,
+                paidUSD: 0,
+                debtUSD: 0
+            };
+            supplierDebtMap[proveedor].paidUSD += toNumber(payment.montoUSD || 0);
+        });
+
+        const textileDebtByProvider = Object.values(supplierDebtMap)
+            .map((provider) => ({
+                ...provider,
+                debtUSD: Math.max(0, provider.totalValueUSD - provider.paidUSD)
+            }))
+            .sort((a, b) => b.debtUSD - a.debtUSD);
+
+        const totalTextileDebtUSD = textileDebtByProvider.reduce((acc, provider) => acc + provider.debtUSD, 0);
+
         const topExpenseCategories = Object.entries(
             mesanMovements.reduce((acc, item) => {
                 const amount = toNumber(item.monto || 0);
@@ -289,16 +327,21 @@ export default function InformesPage() {
         return {
             generatedAt: new Date().toISOString(),
             profitabilitySnapshot: {
-                totalPosRevenue: totalRevenue,
-                revenueLast30Days: revenue30d,
-                totalTickets,
-                ticketsLast30Days: tickets30d,
-                digitalIncome,
-                totalIncomeWithMesan,
+                mesanCashIncomeTotalARS: totalRevenue,
+                mesanCashIncomeLast30DaysARS: revenue30d,
+                totalMesanDays: totalTickets,
+                mesanDaysLast30Days: tickets30d,
+                digitalIncomeTotalARS: digitalIncome,
+                totalOperationalIncomeARS: totalIncomeWithMesan,
                 bancoIncome,
                 mercadoPagoIncome,
                 mesanExpensesARS,
-                mesanSalesARS
+                mesanSalesARS,
+                totalTextileDebtUSD
+            },
+            suppliers: {
+                totalTextileDebtUSD,
+                textileDebtByProvider
             },
             inventory: {
                 totalProducts: products.length,
@@ -324,7 +367,7 @@ export default function InformesPage() {
             },
             topExpenseCategories
         };
-    }, [allSales, state.config, state.config?.clientes]);
+    }, [allSales, state.config, state.config?.clientes, state.telas]);
 
     const generateBusinessReport = async () => {
         const openaiKey = state.config?.marketing?.openaiKey;
@@ -402,11 +445,11 @@ export default function InformesPage() {
             <div className="informes-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Venta Mesan acumulada</div>
-                    <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(reportData.profitabilitySnapshot.totalPosRevenue)}</div>
+                    <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(reportData.profitabilitySnapshot.mesanCashIncomeTotalARS)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Venta Mesan últimos 30 días</div>
-                    <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(reportData.profitabilitySnapshot.revenueLast30Days)}</div>
+                    <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(reportData.profitabilitySnapshot.mesanCashIncomeLast30DaysARS)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Gasto Mesan acumulado</div>
@@ -414,7 +457,13 @@ export default function InformesPage() {
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Ingresos Banco + MP + Mesan</div>
-                    <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>{formatMoney(reportData.profitabilitySnapshot.totalIncomeWithMesan)}</div>
+                    <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>{formatMoney(reportData.profitabilitySnapshot.totalOperationalIncomeARS)}</div>
+                </div>
+                <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Deuda total textileras (USD)</div>
+                    <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: '#fbbf24' }}>
+                        US$ {Math.round(reportData.profitabilitySnapshot.totalTextileDebtUSD).toLocaleString('es-AR')}
+                    </div>
                 </div>
             </div>
 
