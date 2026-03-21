@@ -243,6 +243,22 @@ export default function InformesPage() {
         const bancoIncome = bankPayments.filter((entry) => entry.metodo === 'Banco').reduce((acc, entry) => acc + toNumber(entry.monto || 0), 0);
         const mercadoPagoIncome = bankPayments.filter((entry) => entry.metodo === 'Mercado Pago').reduce((acc, entry) => acc + toNumber(entry.monto || 0), 0);
 
+        const mesanSales30d = mesanSales.reduce((acc, item) => {
+            const saleDate = item?.fecha ? new Date(`${item.fecha}T00:00:00`) : null;
+            if (!saleDate || Number.isNaN(saleDate.getTime()) || saleDate < last30Days) return acc;
+            return acc + toNumber(item.monto || item.efectivo || 0);
+        }, 0);
+        const mesanSalesDays = mesanSales.filter((item) => toNumber(item.monto || item.efectivo || 0) > 0).length;
+        const mesanSalesDays30d = mesanSales.filter((item) => {
+            const saleDate = item?.fecha ? new Date(`${item.fecha}T00:00:00`) : null;
+            return saleDate && !Number.isNaN(saleDate.getTime()) && saleDate >= last30Days && toNumber(item.monto || item.efectivo || 0) > 0;
+        }).length;
+
+        totalRevenue = mesanSales.reduce((acc, item) => acc + toNumber(item.monto || item.efectivo || 0), 0);
+        revenue30d = mesanSales30d;
+        totalTickets = mesanSalesDays;
+        tickets30d = mesanSalesDays30d;
+
         const mesanExpensesARS = mesanMovements.reduce((acc, item) => {
             const amount = toNumber(item.monto || 0);
             return (item.moneda || 'ARS') === 'ARS' && amount < 0 ? acc + Math.abs(amount) : acc;
@@ -384,17 +400,17 @@ export default function InformesPage() {
                     Informe ejecutivo del local con IA: rentabilidad, ventas, gastos, stock, producción y recomendaciones de recorte.
                 </p>
                 <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-                    POS tomado para informes desde {posReportsStartDate.split('-').reverse().join('/')} para evitar contar ventas de prueba anteriores.
+                    La base financiera de informes toma Mesan directo. POS solo se usa como apoyo desde {posReportsStartDate.split('-').reverse().join('/')} para no arrastrar ventas de prueba anteriores.
                 </div>
             </div>
 
             <div className="informes-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Facturación POS total</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Venta Mesan acumulada</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(reportData.profitabilitySnapshot.totalPosRevenue)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Facturación últimos 30 días</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Venta Mesan últimos 30 días</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(reportData.profitabilitySnapshot.revenueLast30Days)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
