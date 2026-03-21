@@ -18,6 +18,7 @@ export default function PedidosOnlinePage() {
     const [nuevaFormaPago, setNuevaFormaPago] = useState('');
     const [nuevaFormaEnvio, setNuevaFormaEnvio] = useState('');
     const [nuevoOrigen, setNuevoOrigen] = useState('Modatex');
+    const [nuevoPedidoFotos, setNuevoPedidoFotos] = useState([]);
 
     // For expanding orders
     const [expandedPedidoId, setExpandedPedidoId] = useState(null);
@@ -28,6 +29,7 @@ export default function PedidosOnlinePage() {
     const [newItemCantidad, setNewItemCantidad] = useState(1);
     const [newItemStatus, setNewItemStatus] = useState('falta'); // 'falta' | 'reemplazo' | 'ok'
     const [newItemComment, setNewItemComment] = useState('');
+    const [newItemImage, setNewItemImage] = useState('');
     const [imageErrors, setImageErrors] = useState({});
 
     const canCreateOrder = user.role === 'encargada' || user.role === 'admin';
@@ -80,6 +82,36 @@ export default function PedidosOnlinePage() {
             .map((product) => [String(product.id), product])
     ), [posProductos]);
 
+    const readFilesAsDataUrls = async (files) => Promise.all(
+        Array.from(files || []).map((file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve({
+                id: generateId(),
+                nombre: file.name,
+                tipo: file.type,
+                dataUrl: reader.result
+            });
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        }))
+    );
+
+    const handlePedidoPhotosChange = async (event) => {
+        const files = event.target.files;
+        if (!files?.length) return;
+        const uploaded = await readFilesAsDataUrls(files);
+        setNuevoPedidoFotos((prev) => [...prev, ...uploaded]);
+        event.target.value = '';
+    };
+
+    const handleNewItemPhotoChange = async (event) => {
+        const files = event.target.files;
+        if (!files?.length) return;
+        const [uploaded] = await readFilesAsDataUrls(files);
+        setNewItemImage(uploaded?.dataUrl || '');
+        event.target.value = '';
+    };
+
     const handleCreatePedido = (e) => {
         e.preventDefault();
         if (!nuevoCliente.trim() || !nuevoNumero.trim()) return;
@@ -90,7 +122,8 @@ export default function PedidosOnlinePage() {
             monto: nuevoMonto,
             formaPago: nuevaFormaPago,
             formaEnvio: nuevaFormaEnvio,
-            origen: nuevoOrigen
+            origen: nuevoOrigen,
+            fotosAdjuntas: nuevoPedidoFotos
         });
 
         setNuevoCliente('');
@@ -99,6 +132,7 @@ export default function PedidosOnlinePage() {
         setNuevaFormaPago('');
         setNuevaFormaEnvio('');
         setNuevoOrigen('Modatex');
+        setNuevoPedidoFotos([]);
     };
 
     const handleAddItem = (pedidoId) => {
@@ -113,7 +147,7 @@ export default function PedidosOnlinePage() {
             cantidad: Number(newItemCantidad),
             estado: newItemStatus,
             comentario: newItemComment,
-            imagen: selectedImage
+            imagen: newItemImage || selectedImage
         });
 
         // Reset form
@@ -122,6 +156,7 @@ export default function PedidosOnlinePage() {
         setNewItemCantidad(1);
         setNewItemStatus('falta');
         setNewItemComment('');
+        setNewItemImage('');
     };
 
     const handleFetchWooOrders = async () => {
@@ -247,10 +282,29 @@ export default function PedidosOnlinePage() {
                                 <option value="Local">Local</option>
                             </select>
                         </div>
+                        <div className="form-group">
+                            <label>Foto / Nota escrita</label>
+                            <input
+                                type="file"
+                                className="form-control"
+                                accept="image/*"
+                                multiple
+                                onChange={handlePedidoPhotosChange}
+                            />
+                        </div>
                         <button type="submit" className="btn btn-primary" style={{ height: '42px' }}>
                             <Plus size={18} /> Agregar
                         </button>
                     </div>
+                    {nuevoPedidoFotos.length > 0 && (
+                        <div className="pedido-upload-preview">
+                            {nuevoPedidoFotos.map((foto) => (
+                                <div key={foto.id} className="pedido-upload-thumb">
+                                    <img src={foto.dataUrl} alt={foto.nombre || 'Adjunto'} />
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </form>
             )}
 
@@ -329,6 +383,29 @@ export default function PedidosOnlinePage() {
                                             >
                                                 Restaurar a Pendiente
                                             </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {Array.isArray(pedido.fotosAdjuntas) && pedido.fotosAdjuntas.length > 0 && (
+                                    <div className="pedido-photo-block">
+                                        <div className="pedido-photo-block__title">Referencia visual para Juan</div>
+                                        <div className="pedido-photo-grid">
+                                            {pedido.fotosAdjuntas.map((foto) => {
+                                                const imageSrc = foto?.dataUrl || foto?.url || foto?.src || '';
+                                                if (!imageSrc) return null;
+                                                return (
+                                                    <a
+                                                        key={foto.id || imageSrc}
+                                                        href={imageSrc}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="pedido-photo-card"
+                                                    >
+                                                        <img src={imageSrc} alt={foto.nombre || 'Adjunto del pedido'} />
+                                                    </a>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
@@ -436,7 +513,7 @@ export default function PedidosOnlinePage() {
                                     {canProcessOrder && (
                                         <div className="add-item-form">
                                             <h5>Agregar Artículo al Pedido</h5>
-                                            <div className="add-item-row" style={{ display: 'grid', gridTemplateColumns: '1.2fr 80px 1fr 1fr auto', gap: 8 }}>
+                                            <div className="add-item-row pedido-add-item-grid">
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                                     <select
                                                         className="form-select form-select-sm"
@@ -484,6 +561,14 @@ export default function PedidosOnlinePage() {
                                                     value={newItemComment}
                                                     onChange={e => setNewItemComment(e.target.value)}
                                                 />
+                                                <label className="pedido-inline-upload">
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handleNewItemPhotoChange}
+                                                    />
+                                                    {newItemImage ? 'Foto cargada' : 'Subir foto'}
+                                                </label>
                                                 <button
                                                     className="btn btn-sm btn-primary"
                                                     onClick={() => handleAddItem(pedido.id)}
@@ -492,6 +577,11 @@ export default function PedidosOnlinePage() {
                                                     <Save size={14} />
                                                 </button>
                                             </div>
+                                            {newItemImage && (
+                                                <div className="pedido-item-upload-preview">
+                                                    <img src={newItemImage} alt="Foto manual del item" />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
