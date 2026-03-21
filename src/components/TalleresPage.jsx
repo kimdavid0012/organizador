@@ -6,6 +6,10 @@ import { useAuth } from '../store/AuthContext';
 
 const normalizeText = (value) => (value || '').toString().trim();
 const normalizeUpper = (value) => normalizeText(value).toUpperCase();
+const normalizeComparable = (value) => normalizeUpper(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]/g, '');
 const formatTallerLabel = (value) => normalizeText(value)
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -18,17 +22,46 @@ const extractCorteNumber = (value) => {
 
 const diffDays = (start, end) => {
     if (!start || !end) return null;
-    const startDate = new Date(start);
-    const endDate = new Date(end);
+    const startDate = new Date(`${start}T12:00:00`);
+    const endDate = new Date(`${end}T12:00:00`);
     if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return null;
     return Math.max(0, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)));
 };
 
 const daysElapsed = (date) => {
     if (!date) return null;
-    const startDate = new Date(date);
+    const startDate = new Date(`${date}T12:00:00`);
     if (Number.isNaN(startDate.getTime())) return null;
     return Math.max(0, Math.round((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+};
+
+const getMatchScore = (articleCandidates, conteo) => {
+    const conteoCandidates = [
+        conteo.articuloFabrica,
+        conteo.articuloVenta,
+        conteo.codigoInterno,
+        conteo.articulo,
+        conteo.descripcion
+    ]
+        .map(normalizeComparable)
+        .filter(Boolean);
+
+    let best = 0;
+    articleCandidates.forEach((articleCandidate) => {
+        conteoCandidates.forEach((conteoCandidate) => {
+            if (!articleCandidate || !conteoCandidate) return;
+            if (articleCandidate === conteoCandidate) best = Math.max(best, 120);
+            else if (articleCandidate.includes(conteoCandidate) || conteoCandidate.includes(articleCandidate)) best = Math.max(best, 90);
+            else {
+                const prefixLength = Math.min(articleCandidate.length, conteoCandidate.length, 10);
+                if (prefixLength >= 5 && articleCandidate.slice(0, prefixLength) === conteoCandidate.slice(0, prefixLength)) {
+                    best = Math.max(best, 65);
+                }
+            }
+        });
+    });
+
+    return best;
 };
 
 export default function TalleresPage() {
@@ -89,15 +122,7 @@ export default function TalleresPage() {
             const taller = normalizeUpper(item.taller);
             if (!taller) return;
 
-            const articleKeys = [
-                normalizeUpper(item.articuloFabrica),
-                normalizeUpper(item.articuloVenta),
-                normalizeUpper(item.codigoInterno),
-                normalizeUpper(item.articulo),
-                normalizeUpper(item.descripcion)
-            ].filter(Boolean);
-
-            const signature = [extractCorteNumber(item.numeroCorte), taller, ...articleKeys].join('|');
+            const signature = [extractCorteNumber(item.numeroCorte), taller].join('|');
             if (!map.has(signature)) {
                 map.set(signature, []);
             }
@@ -117,6 +142,7 @@ export default function TalleresPage() {
         cortes.forEach((corte) => {
             const corteNumber = extractCorteNumber(corte?.nombre);
             const corteDate = corte?.fecha || '';
+            const usedConteoIds = new Set();
 
             (corte.moldesData || []).forEach((item) => {
                 const tallerName = formatTallerLabel(item.tallerAsignado || item.taller);
@@ -130,15 +156,37 @@ export default function TalleresPage() {
                     normalizeUpper(item.articuloVenta),
                     normalizeUpper(item.descripcion)
                 ].filter(Boolean);
+                const comparableArticleCandidates = articleCandidates.map(normalizeComparable).filter(Boolean);
+
+                const groupKey = [corteNumber, normalizeUpper(tallerName)].join('|');
+                const groupConteos = (conteosByTaller.get(groupKey) || []).filter((conteo) => !usedConteoIds.has(conteo.id));
 
                 let matchedConteo = null;
-                for (const articleKey of articleCandidates) {
-                    const signature = [corteNumber, normalizeUpper(tallerName), articleKey].join('|');
-                    const matches = conteosByTaller.get(signature);
-                    if (matches?.length) {
-                        matchedConteo = matches[0];
-                        break;
+                let matchedScore = 0;
+
+                for (const conteo of groupConteos) {
+                    let score = getMatchScore(comparableArticleCandidates, conteo);
+
+                    if (Number(item.cantidad || 0) > 0 && Number(conteo.cantidadOriginal || 0) > 0 && Number(item.cantidad || 0) === Number(conteo.cantidadOriginal || 0)) {
+                        score += 10;
                     }
+
+                    if (score > matchedScore) {
+                        matchedScore = score;
+                        matchedConteo = conteo;
+                    }
+                }
+
+                if (matchedConteo && matchedScore < 60) {
+                    matchedConteo = null;
+                }
+
+                if (!matchedConteo && groupConteos.length === 1 && (corte.moldesData || []).length === 1) {
+                    matchedConteo = groupConteos[0];
+                }
+
+                if (matchedConteo?.id) {
+                    usedConteoIds.add(matchedConteo.id);
                 }
 
                 const diasIngreso = diffDays(corteDate, matchedConteo?.fechaIngreso);
@@ -185,8 +233,11 @@ export default function TalleresPage() {
             const completed = assigned.filter((item) => item.matchedConteoId);
             const inProgress = assigned.filter((item) => !item.matchedConteoId);
             const deliveryDays = completed.map((item) => item.diasIngreso).filter((value) => value !== null);
-            const avgDays = deliveryDays.length ? Math.round(deliveryDays.reduce((sum, value) => sum + value, 0) / deliveryDays.length) : 0;
-            const delayedThreshold = avgDays > 0 ? avgDays + 3 : 10;
+            const pendingDays = inProgress.map((item) => item.diasPendientes).filter((value) => value !== null);
+            const avgDeliveryDays = deliveryDays.length ? Math.round(deliveryDays.reduce((sum, value) => sum + value, 0) / deliveryDays.length) : null;
+            const currentAvgDays = pendingDays.length ? Math.round(pendingDays.reduce((sum, value) => sum + value, 0) / pendingDays.length) : null;
+            const avgDays = avgDeliveryDays ?? currentAvgDays;
+            const delayedThreshold = avgDeliveryDays && avgDeliveryDays > 0 ? avgDeliveryDays + 3 : 12;
             const delayed = inProgress.filter((item) => (item.diasPendientes || 0) > delayedThreshold);
             const totalCost = assigned.reduce((sum, item) => sum + ((item.costoTaller || 0) * (item.cantidad || 0)), 0);
             const fallados = assigned.reduce((sum, item) => sum + (item.fallado || 0), 0);
@@ -194,10 +245,12 @@ export default function TalleresPage() {
             let score = null;
             if (assigned.length > 0) {
                 score = 100;
-                if (avgDays > 10) score -= 18;
-                else if (avgDays > 5) score -= 8;
+                if ((avgDeliveryDays ?? currentAvgDays ?? 0) > 20) score -= 25;
+                else if ((avgDeliveryDays ?? currentAvgDays ?? 0) > 12) score -= 15;
+                else if ((avgDeliveryDays ?? currentAvgDays ?? 0) > 7) score -= 8;
                 if (fallados > 0) score -= Math.min(25, fallados * 3);
                 if (delayed.length > 0) score -= Math.min(30, Math.round((delayed.length / assigned.length) * 30));
+                if (completed.length === 0 && inProgress.length > 0) score -= 8;
                 score = Math.max(0, Math.round(score));
             }
 
@@ -206,8 +259,10 @@ export default function TalleresPage() {
                 completed: completed.length,
                 inProgress,
                 avgDays,
-                minDays: deliveryDays.length ? Math.min(...deliveryDays) : 0,
-                maxDays: deliveryDays.length ? Math.max(...deliveryDays) : 0,
+                avgDeliveryDays,
+                currentAvgDays,
+                minDays: deliveryDays.length ? Math.min(...deliveryDays) : null,
+                maxDays: deliveryDays.length ? Math.max(...deliveryDays) : null,
                 delayed: delayed.length,
                 fallados,
                 totalCost,
@@ -343,7 +398,7 @@ export default function TalleresPage() {
                                     { value: selectedStats.total, label: 'Asignados', bg: 'var(--accent-light)', color: 'var(--accent)' },
                                     { value: selectedStats.completed, label: 'Ingresados', bg: 'var(--success-bg)', color: 'var(--success)' },
                                     { value: selectedStats.inProgress.length, label: 'Pendientes', bg: 'var(--warning-bg)', color: 'var(--warning)' },
-                                    { value: selectedStats.avgDays || '—', label: 'Promedio taller', bg: selectedStats.avgDays <= 5 ? 'var(--success-bg)' : selectedStats.avgDays <= 10 ? 'var(--warning-bg)' : 'var(--danger-bg)', color: selectedStats.avgDays <= 5 ? 'var(--success)' : selectedStats.avgDays <= 10 ? 'var(--warning)' : 'var(--danger)', suffix: 'd' },
+                                    { value: selectedStats.avgDays ?? '—', label: 'Promedio taller', bg: selectedStats.avgDays === null ? 'var(--glass-bg)' : selectedStats.avgDays <= 5 ? 'var(--success-bg)' : selectedStats.avgDays <= 10 ? 'var(--warning-bg)' : 'var(--danger-bg)', color: selectedStats.avgDays === null ? 'var(--text-muted)' : selectedStats.avgDays <= 5 ? 'var(--success)' : selectedStats.avgDays <= 10 ? 'var(--warning)' : 'var(--danger)', suffix: selectedStats.avgDays === null ? '' : 'd' },
                                     { value: selectedStats.fallados || 0, label: 'Fallados', bg: selectedStats.fallados > 0 ? 'var(--danger-bg)' : 'var(--glass-bg)', color: selectedStats.fallados > 0 ? 'var(--danger)' : 'var(--text-muted)' },
                                     ...(user?.role === 'admin' ? [{ value: `$${selectedStats.totalCost.toLocaleString('es-AR')}`, label: 'Costo total', bg: 'rgba(52,211,153,0.08)', color: 'var(--success)', icon: DollarSign }] : [])
                                 ].map((metric, index) => (
@@ -359,7 +414,7 @@ export default function TalleresPage() {
                                 ))}
                             </div>
 
-                            {selectedStats.completed > 0 && (
+                            {(selectedStats.completed > 0 || selectedStats.currentAvgDays !== null) && (
                                 <div style={{
                                     marginTop: 'var(--sp-3)',
                                     padding: 'var(--sp-2) var(--sp-3)',
@@ -372,9 +427,9 @@ export default function TalleresPage() {
                                     flexWrap: 'wrap',
                                     gap: 8
                                 }}>
-                                    <span>Min: <strong style={{ color: 'var(--success)' }}>{selectedStats.minDays}d</strong></span>
-                                    <span>Prom: <strong style={{ color: 'var(--warning)' }}>{selectedStats.avgDays}d</strong></span>
-                                    <span>Max: <strong style={{ color: 'var(--danger)' }}>{selectedStats.maxDays}d</strong></span>
+                                    <span>Min: <strong style={{ color: 'var(--success)' }}>{selectedStats.minDays ?? '—'}{selectedStats.minDays !== null ? 'd' : ''}</strong></span>
+                                    <span>Prom: <strong style={{ color: 'var(--warning)' }}>{selectedStats.avgDays ?? '—'}{selectedStats.avgDays !== null ? 'd' : ''}</strong></span>
+                                    <span>Max: <strong style={{ color: 'var(--danger)' }}>{selectedStats.maxDays ?? '—'}{selectedStats.maxDays !== null ? 'd' : ''}</strong></span>
                                     <span>Ranking: <strong style={{ color: getScoreColor(selectedStats.score) }}>{selectedStats.score ?? '—'}</strong></span>
                                 </div>
                             )}
