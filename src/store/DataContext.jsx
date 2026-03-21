@@ -11,6 +11,11 @@ const DataContext = createContext(null);
 const normalizeProductCode = (value) => (value || '').toString().trim().toUpperCase();
 
 const normalizeText = (value) => (value || '').toString().trim();
+const normalizeComparable = (value) => normalizeText(value)
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]/g, '');
 
 const countEntries = (value) => Array.isArray(value) ? value.length : 0;
 
@@ -81,6 +86,100 @@ const upsertPosProducts = (existingProducts = [], incomingProducts = []) => {
 
     return merged;
 };
+
+const buildComparableKeys = (...values) => {
+    const keys = values
+        .map((value) => normalizeComparable(value))
+        .filter(Boolean);
+    return Array.from(new Set(keys));
+};
+
+const collectAllSales = (config = {}) => {
+    const currentSales = Array.isArray(config?.posVentas) ? config.posVentas : [];
+    const closedSales = (Array.isArray(config?.posCerradoZ) ? config.posCerradoZ : [])
+        .flatMap((close) => Array.isArray(close?.detalleVentas) ? close.detalleVentas : []);
+    const onlineSales = (Array.isArray(config?.pedidosOnline) ? config.pedidosOnline : [])
+        .filter((pedido) => pedido?.estado === 'listo')
+        .map((pedido) => ({
+            id: pedido.id,
+            canal: 'online',
+            items: Array.isArray(pedido.items) ? pedido.items.map((item) => ({
+                id: item.productId || item.id,
+                codigoInterno: item.codigoInterno || item.articuloVenta || item.articulo || '',
+                detalleCorto: item.detalle || item.descripcion || '',
+                cantidad: item.cantidad || 0
+            })) : []
+        }));
+    return [...currentSales, ...closedSales, ...onlineSales];
+};
+
+const reconcilePosProductStocks = (products = [], moldes = [], config = {}) => {
+    const nextProducts = Array.isArray(products) ? products : [];
+    if (!nextProducts.length) return nextProducts;
+
+    const moldeById = new Map((Array.isArray(moldes) ? moldes : []).map((molde) => [molde.id, molde]));
+    const producedByKey = new Map();
+    const soldByKey = new Map();
+
+    (Array.isArray(config?.cortes) ? config.cortes : []).forEach((corte) => {
+        (Array.isArray(corte?.moldesData) ? corte.moldesData : []).forEach((item) => {
+            const molde = moldeById.get(item.id);
+            const produced = Math.max(0, (Number(item?.cantidad || 0) || 0) - (Number(item?.prendasFalladas || 0) || 0));
+            if (!produced) return;
+
+            const keys = buildComparableKeys(
+                molde?.codigo,
+                molde?.nombre,
+                item?.codigoInterno,
+                item?.articuloVenta,
+                item?.articulo,
+                item?.detalleCorto,
+                item?.descripcion
+            );
+
+            keys.forEach((key) => {
+                producedByKey.set(key, (producedByKey.get(key) || 0) + produced);
+            });
+        });
+    });
+
+    collectAllSales(config).forEach((sale) => {
+        (Array.isArray(sale?.items) ? sale.items : []).forEach((item) => {
+            const quantity = Number(item?.cantidad || 0) || 0;
+            if (!quantity) return;
+
+            const product = nextProducts.find((entry) => entry.id === item.id);
+            const keys = buildComparableKeys(
+                item?.codigoInterno,
+                item?.detalleCorto,
+                product?.codigoInterno,
+                product?.detalleCorto
+            );
+
+            keys.forEach((key) => {
+                soldByKey.set(key, (soldByKey.get(key) || 0) + quantity);
+            });
+        });
+    });
+
+    return nextProducts.map((product) => {
+        const keys = buildComparableKeys(product?.codigoInterno, product?.detalleCorto);
+        const produced = keys.reduce((acc, key) => acc + (producedByKey.get(key) || 0), 0);
+
+        if (!produced) return product;
+
+        const sold = keys.reduce((acc, key) => acc + (soldByKey.get(key) || 0), 0);
+        return {
+            ...product,
+            stock: Math.max(0, produced - sold)
+        };
+    });
+};
+
+const withReconciledPosProducts = (config = {}, moldes = []) => ({
+    ...config,
+    posProductos: reconcilePosProductStocks(config.posProductos || [], moldes, config)
+});
 
 const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = []) => {
     const conteos = Array.isArray(mercaderiaConteos) ? mercaderiaConteos : [];
@@ -336,15 +435,9 @@ function dataReducer(state, action) {
 
         case ACTION_TYPES.UPDATE_CONFIG: {
             const nextConfig = { ...state.config, ...action.payload };
-            if (Object.prototype.hasOwnProperty.call(action.payload, 'mercaderiaConteos')) {
-                return {
-                    ...state,
-                    config: nextConfig
-                };
-            }
             return {
                 ...state,
-                config: nextConfig
+                config: withReconciledPosProducts(nextConfig, state.moldes)
             };
         }
 
@@ -433,59 +526,62 @@ function dataReducer(state, action) {
         case ACTION_TYPES.ADD_MOLDE_TO_CORTE: {
             const { corteId, moldeId } = action.payload;
             const cortes = state.config.cortes || [];
+            const nextConfig = {
+                ...state.config,
+                cortes: cortes.map(c => {
+                    if (c.id === corteId) {
+                        const molds = c.moldesData || [];
+                        if (!molds.find(m => m.id === moldeId)) {
+                            molds.push({ id: moldeId, cantidad: 1, costoCortador: 0, pagadoCortador: false, costoTaller: 0, pagadoTaller: false, taller: '', cortador: '', notas: '' });
+                        }
+                        return { ...c, moldesData: molds, moldeIds: molds.map(m => m.id) };
+                    }
+                    return c;
+                })
+            };
             return {
                 ...state,
-                config: {
-                    ...state.config,
-                    cortes: cortes.map(c => {
-                        if (c.id === corteId) {
-                            const molds = c.moldesData || [];
-                            if (!molds.find(m => m.id === moldeId)) {
-                                molds.push({ id: moldeId, cantidad: 1, costoCortador: 0, pagadoCortador: false, costoTaller: 0, pagadoTaller: false, taller: '', cortador: '', notas: '' });
-                            }
-                            return { ...c, moldesData: molds, moldeIds: molds.map(m => m.id) };
-                        }
-                        return c;
-                    })
-                }
+                config: withReconciledPosProducts(nextConfig, state.moldes)
             };
         }
 
         case ACTION_TYPES.REMOVE_MOLDE_FROM_CORTE: {
             const { corteId, moldeId } = action.payload;
             const cortes = state.config.cortes || [];
+            const nextConfig = {
+                ...state.config,
+                cortes: cortes.map(c => {
+                    if (c.id === corteId) {
+                        const molds = (c.moldesData || []).filter(m => m.id !== moldeId);
+                        return { ...c, moldesData: molds, moldeIds: molds.map(m => m.id) };
+                    }
+                    return c;
+                })
+            };
             return {
                 ...state,
-                config: {
-                    ...state.config,
-                    cortes: cortes.map(c => {
-                        if (c.id === corteId) {
-                            const molds = (c.moldesData || []).filter(m => m.id !== moldeId);
-                            return { ...c, moldesData: molds, moldeIds: molds.map(m => m.id) };
-                        }
-                        return c;
-                    })
-                }
+                config: withReconciledPosProducts(nextConfig, state.moldes)
             };
         }
 
         case ACTION_TYPES.UPDATE_MOLDE_IN_CORTE: {
             const { corteId, moldeId, changes } = action.payload;
             const cortes = state.config.cortes || [];
+            const nextConfig = {
+                ...state.config,
+                cortes: cortes.map(c => {
+                    if (c.id === corteId) {
+                        const molds = (c.moldesData || []).map(m =>
+                            m.id === moldeId ? { ...m, ...changes } : m
+                        );
+                        return { ...c, moldesData: molds };
+                    }
+                    return c;
+                })
+            };
             return {
                 ...state,
-                config: {
-                    ...state.config,
-                    cortes: cortes.map(c => {
-                        if (c.id === corteId) {
-                            const molds = (c.moldesData || []).map(m =>
-                                m.id === moldeId ? { ...m, ...changes } : m
-                            );
-                            return { ...c, moldesData: molds };
-                        }
-                        return c;
-                    })
-                }
+                config: withReconciledPosProducts(nextConfig, state.moldes)
             };
         }
 
@@ -546,15 +642,17 @@ function dataReducer(state, action) {
                 });
             }
 
+            const nextConfig = {
+                ...state.config,
+                posProductos: updatedPosProductos,
+                pedidosOnline: (state.config.pedidosOnline || []).map(p =>
+                    p.id === pedidoId ? { ...p, estado: newEstado } : p
+                )
+            };
+
             return {
                 ...state,
-                config: {
-                    ...state.config,
-                    posProductos: updatedPosProductos,
-                    pedidosOnline: (state.config.pedidosOnline || []).map(p =>
-                        p.id === pedidoId ? { ...p, estado: newEstado } : p
-                    )
-                }
+                config: withReconciledPosProducts(nextConfig, state.moldes)
             };
         }
 
@@ -600,10 +698,10 @@ function dataReducer(state, action) {
         case ACTION_TYPES.ADD_POS_SALE:
             return {
                 ...state,
-                config: {
+                config: withReconciledPosProducts({
                     ...state.config,
                     posVentas: [action.payload, ...(state.config.posVentas || [])]
-                }
+                }, state.moldes)
             };
         case ACTION_TYPES.IMPORT_WOO_PRODUCTS: {
             const existing = state.config.posProductos || [];
@@ -612,10 +710,10 @@ function dataReducer(state, action) {
 
             return {
                 ...state,
-                config: {
+                config: withReconciledPosProducts({
                     ...state.config,
                     posProductos: merged
-                }
+                }, state.moldes)
             };
         }
 
@@ -692,12 +790,12 @@ function dataReducer(state, action) {
         case ACTION_TYPES.PERFORM_Z_CLOSE:
             return {
                 ...state,
-                config: {
+                config: withReconciledPosProducts({
                     ...state.config,
                     posCerradoZ: [action.payload, ...(state.config.posCerradoZ || [])],
                     posVentas: [],
                     posGastos: []
-                }
+                }, state.moldes)
             };
         case ACTION_TYPES.UPDATE_POS_SETTINGS:
             return {
@@ -710,20 +808,20 @@ function dataReducer(state, action) {
         case ACTION_TYPES.ADD_POS_PRODUCT:
             return {
                 ...state,
-                config: {
+                config: withReconciledPosProducts({
                     ...state.config,
                     posProductos: upsertPosProducts(state.config.posProductos || [], [action.payload])
-                }
+                }, state.moldes)
             };
         case ACTION_TYPES.UPDATE_POS_PRODUCT:
             return {
                 ...state,
-                config: {
+                config: withReconciledPosProducts({
                     ...state.config,
                     posProductos: (state.config.posProductos || []).map(p =>
                         p.id === action.payload.id ? { ...p, ...action.payload.changes } : p
                     )
-                }
+                }, state.moldes)
             };
         case ACTION_TYPES.DELETE_POS_PRODUCT:
             return {
@@ -736,10 +834,10 @@ function dataReducer(state, action) {
         case ACTION_TYPES.IMPORT_POS_PRODUCTS:
             return {
                 ...state,
-                config: {
+                config: withReconciledPosProducts({
                     ...state.config,
                     posProductos: upsertPosProducts(state.config.posProductos || [], action.payload)
-                }
+                }, state.moldes)
             };
         case ACTION_TYPES.SAVE_MERCADERIA_CONTEOS: {
             const conteos = action.payload.map((item) => ({
@@ -812,14 +910,15 @@ function dataReducer(state, action) {
                 upsertPosProducts(state.config.posProductos || [], conteoDerivedProducts),
                 conteos
             );
+            const nextConfig = {
+                ...state.config,
+                mercaderiaConteos: conteos,
+                posProductos: mergedProducts
+            };
 
             return {
                 ...state,
-                config: {
-                    ...state.config,
-                    mercaderiaConteos: conteos,
-                    posProductos: mergedProducts
-                }
+                config: withReconciledPosProducts(nextConfig, state.moldes)
             };
         }
 
