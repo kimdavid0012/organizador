@@ -48,7 +48,7 @@ export default function PosPage() {
                 ))}
             </div>
             <div className="pos-content">
-                {activeTab === 'caja' && <PosCaja />}
+                {activeTab === 'caja' && <PosCaja onOpenCatalog={() => setActiveTab('productos')} />}
                 {activeTab === 'productos' && <PosProductos />}
                 {activeTab === 'historial' && <PosHistorial />}
                 {activeTab === 'gastos' && <PosGastos />}

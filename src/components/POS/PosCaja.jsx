@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, Trash2, Printer, CreditCard, DollarSign, Plus, Minus } from 'lucide-react';
+import { Search, Trash2, Printer, CreditCard, DollarSign, Plus, Minus, PackagePlus } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import { useAuth } from '../../store/AuthContext';
 import { generateId } from '../../utils/helpers';
@@ -40,7 +40,7 @@ const getChannelPricing = (product, channel) => {
     }
 };
 
-export default function PosCaja() {
+export default function PosCaja({ onOpenCatalog }) {
     const { state, addPosSale } = useData();
     const { user } = useAuth();
     const productos = state.config.posProductos || [];
@@ -419,6 +419,10 @@ export default function PosCaja() {
                 <div className="pos-caja-numpad">
                     <button className="pos-action-btn primary" onClick={handleCobrar} disabled={cart.length === 0}>
                         <DollarSign size={24} /> Cobranza [F6]
+                    </button>
+
+                    <button className="pos-action-btn pos-action-btn-link" onClick={() => onOpenCatalog?.()}>
+                        <PackagePlus size={22} /> Agregar Artículo
                     </button>
 
                     <button className="pos-action-btn" onClick={() => clearCaja()}>

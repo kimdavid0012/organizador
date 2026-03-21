@@ -187,12 +187,24 @@
     color: white;
     border-color: var(--accent);
     grid-column: 1 / -1;
-    font-size: var(--fs-lg);
-    padding: var(--sp-5);
+    font-size: var(--fs-md);
+    padding: var(--sp-4);
+    min-height: 120px;
 }
 
 .pos-action-btn.primary:hover {
     background: var(--accent-hover);
+}
+
+.pos-action-btn-link {
+    background: rgba(20, 184, 166, 0.08);
+    border-color: rgba(20, 184, 166, 0.28);
+    color: var(--accent);
+}
+
+.pos-action-btn-link:hover {
+    background: rgba(20, 184, 166, 0.14);
+    border-color: rgba(20, 184, 166, 0.45);
 }
 
 .pos-caja-payment-modal .pos-modal {
