@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useData } from '../store/DataContext';
 import { Plus, User, FileText, MapPin, Truck, History, Globe, RefreshCw } from 'lucide-react';
 import ClienteModal from './ClienteModal';
@@ -56,6 +56,24 @@ export default function ClientesPage() {
     const [editingCliente, setEditingCliente] = useState(null);
     const [viewingHistory, setViewingHistory] = useState(null);
     const [importingWoo, setImportingWoo] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const normalizeSearchValue = (value) => (value || '').toString().toLowerCase().trim();
+
+    const filteredClientes = useMemo(() => {
+        const query = normalizeSearchValue(searchTerm);
+        if (!query) return clientes;
+
+        return clientes.filter((cliente) => (
+            [
+                cliente.nombre,
+                cliente.cuit,
+                cliente.telefono,
+                cliente.provincia,
+                cliente.email
+            ].some((value) => normalizeSearchValue(value).includes(query))
+        ));
+    }, [clientes, searchTerm]);
 
     const handleSaveCliente = (clienteData) => {
         if (clienteData.id) {
@@ -163,22 +181,36 @@ export default function ClientesPage() {
             <div className="clientes-grid" style={{ display: 'flex', gap: '1rem', flex: 1, minHeight: 0, overflow: 'hidden' }}>
                 {/* Lista de clientes */}
                 <div className="clientes-lista" style={{ flex: '1', overflowY: 'auto', background: 'var(--bg-panel)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                    <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', position: 'sticky', top: 0, background: 'var(--bg-panel)', zIndex: 2 }}>
+                        <input
+                            type="text"
+                            className="form-input"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Buscar por cliente, CUIT, teléfono o provincia..."
+                        />
+                    </div>
                     {clientes.length === 0 ? (
                         <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                             No hay clientes registrados aún. Clic en "Nuevo Cliente" para agregar uno.
                         </div>
+                    ) : filteredClientes.length === 0 ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                            No encontré clientes para "{searchTerm}".
+                        </div>
                     ) : (
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-panel)', zIndex: 1, borderBottom: '1px solid var(--border-color)' }}>
+                            <thead style={{ position: 'sticky', top: '73px', background: 'var(--bg-panel)', zIndex: 1, borderBottom: '1px solid var(--border-color)' }}>
                                 <tr>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Nombre / Razón Social</th>
+                                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>CUIT</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Teléfono</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Provincia</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Descuento</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {clientes.map(cliente => (
+                                {filteredClientes.map(cliente => (
                                     <tr
                                         key={cliente.id}
                                         style={{
@@ -190,6 +222,7 @@ export default function ClientesPage() {
                                         className="table-row-hover"
                                     >
                                         <td style={{ padding: '12px', fontWeight: 'var(--fw-medium)' }}>{cliente.nombre}</td>
+                                        <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{cliente.cuit || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{normalizeWooPhone(cliente.telefono) || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{cliente.provincia || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--accent)' }}>{cliente.descuento ? `${cliente.descuento}%` : '-'}</td>
