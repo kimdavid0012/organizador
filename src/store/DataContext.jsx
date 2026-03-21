@@ -261,12 +261,71 @@ const dedupePosProducts = (products = []) => {
     return groups.map((group) => mergePosProductGroup(group.products));
 };
 
-const buildComparableKeys = (...values) => {
-    const keys = values
-        .map((value) => normalizeComparable(value))
+const buildComparableFragments = (value) => {
+    const raw = normalizeText(value);
+    if (!raw) return [];
+
+    const variants = new Set([raw]);
+    const parts = raw
+        .split(/[-,/|]/)
+        .map((part) => normalizeText(part))
         .filter(Boolean);
-    return Array.from(new Set(keys));
+
+    if (parts.length > 1) {
+        variants.add(parts[0]);
+        variants.add(parts.slice(0, 2).join(' '));
+    }
+
+    return Array.from(variants);
 };
+
+const buildComparableKeys = (...values) => {
+    const keys = new Set();
+
+    values.forEach((value) => {
+        buildComparableFragments(value).forEach((fragment) => {
+            const normalized = normalizeComparable(fragment);
+            if (normalized) keys.add(normalized);
+
+            buildProductCodeKeys(fragment).forEach((codeKey) => {
+                if (codeKey) keys.add(codeKey);
+            });
+        });
+    });
+
+    return Array.from(keys);
+};
+
+const collectCorteArticleKeys = (molde = {}, item = {}) => buildComparableKeys(
+    molde?.codigo,
+    molde?.nombre,
+    molde?.descripcion,
+    molde?.detalleCorto,
+    molde?.detalleLargo,
+    item?.codigoInterno,
+    item?.codigo,
+    item?.articuloVenta,
+    item?.articulo,
+    item?.articuloFabrica,
+    item?.articuloCodigo,
+    item?.detalleCorto,
+    item?.detalle,
+    item?.descripcion,
+    item?.descripcionArticulo,
+    item?.nombre,
+    item?.nombreArticulo,
+    item?.producto,
+    item?.productoNombre
+);
+
+const collectProductMatchKeys = (product = {}) => buildComparableKeys(
+    product?.codigoInterno,
+    product?.codigoBarras,
+    product?.detalleCorto,
+    product?.detalleLargo,
+    product?.descripcion,
+    product?.nombre
+);
 
 const collectAllSales = (config = {}) => {
     const currentSales = Array.isArray(config?.posVentas) ? config.posVentas : [];
@@ -301,15 +360,7 @@ const reconcilePosProductStocks = (products = [], moldes = [], config = {}) => {
             const produced = Math.max(0, (Number(item?.cantidad || 0) || 0) - (Number(item?.prendasFalladas || 0) || 0));
             if (!produced) return;
 
-            const keys = buildComparableKeys(
-                molde?.codigo,
-                molde?.nombre,
-                item?.codigoInterno,
-                item?.articuloVenta,
-                item?.articulo,
-                item?.detalleCorto,
-                item?.descripcion
-            );
+            const keys = collectCorteArticleKeys(molde, item);
 
             keys.forEach((key) => {
                 producedByKey.set(key, (producedByKey.get(key) || 0) + produced);
@@ -325,9 +376,16 @@ const reconcilePosProductStocks = (products = [], moldes = [], config = {}) => {
             const product = nextProducts.find((entry) => entry.id === item.id);
             const keys = buildComparableKeys(
                 item?.codigoInterno,
+                item?.codigo,
+                item?.articuloVenta,
+                item?.articulo,
                 item?.detalleCorto,
+                item?.detalle,
+                item?.descripcion,
                 product?.codigoInterno,
-                product?.detalleCorto
+                product?.codigoBarras,
+                product?.detalleCorto,
+                product?.detalleLargo
             );
 
             keys.forEach((key) => {
@@ -337,7 +395,7 @@ const reconcilePosProductStocks = (products = [], moldes = [], config = {}) => {
     });
 
     return nextProducts.map((product) => {
-        const keys = buildComparableKeys(product?.codigoInterno, product?.detalleCorto);
+        const keys = collectProductMatchKeys(product);
         const produced = keys.reduce((acc, key) => acc + (producedByKey.get(key) || 0), 0);
 
         if (!produced) return product;
