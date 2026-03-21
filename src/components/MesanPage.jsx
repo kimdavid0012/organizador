@@ -71,6 +71,9 @@ const getMovementType = (signedAmount, concepto, categoria) => {
     return signedAmount >= 0 ? 'ingreso' : 'gasto';
 };
 const SHEET_MONTHS = { enero: '01', febrero: '02', marzo: '03' };
+const isEmbeddedMesanItem = (item) =>
+    normalizeText(item?.importedBatchId) === MESAN_2026_GASTO_IMPORT.batchId ||
+    normalizeText(item?.batchId) === MESAN_2026_GASTO_IMPORT.batchId;
 const shouldReplaceLegacyMesanEntry = (item) => {
     const source = normalizeText(item?.source).toUpperCase();
     const importedSheet = normalizeText(item?.importedSheet).toLowerCase();
@@ -122,6 +125,23 @@ export default function MesanPage() {
     const monthKey = getMonthKey(fecha);
     const monthMovements = movimientos.filter((item) => getMonthKey(item.fecha) === monthKey);
     const saldoAcumuladoARS = useMemo(() => {
+        const closingPoint = [...(MESAN_2026_GASTO_IMPORT.closingBalances || [])]
+            .filter((item) => item.fecha <= fecha)
+            .sort((left, right) => right.fecha.localeCompare(left.fecha))[0];
+
+        if (closingPoint) {
+            const postClosingVentas = ventasDiarias
+                .filter((item) => item.fecha > closingPoint.fecha && item.fecha <= fecha)
+                .reduce((acc, item) => acc + Number(item.monto || item.efectivo || 0), 0);
+
+            const postClosingMovements = movimientos
+                .filter((item) => item.fecha > closingPoint.fecha && item.fecha <= fecha && (item.moneda || 'ARS') === 'ARS')
+                .filter((item) => item.tipo !== 'saldo')
+                .reduce((acc, item) => acc + toSignedAmount(item), 0);
+
+            return Number(closingPoint.efectivo || 0) + postClosingVentas + postClosingMovements;
+        }
+
         const ventasPorFecha = new Map(
             ventasDiarias.map((item) => [
                 item.fecha,
@@ -282,9 +302,16 @@ export default function MesanPage() {
     };
 
     useEffect(() => {
-        if (embeddedImports.includes(MESAN_2026_GASTO_IMPORT.batchId)) return;
+        const hasEmbeddedBatch = movimientos.some(isEmbeddedMesanItem) || ventasDiarias.some(isEmbeddedMesanItem);
+        const hasBrokenEmbeddedDates = [...movimientos, ...ventasDiarias].some((item) => {
+            const importedSheet = normalizeText(item?.importedSheet).toLowerCase();
+            if (!['enero', 'febrero', 'marzo'].includes(importedSheet)) return false;
+            return normalizeText(item?.fecha).slice(5, 7) !== SHEET_MONTHS[importedSheet];
+        });
+
+        if (embeddedImports.includes(MESAN_2026_GASTO_IMPORT.batchId) && hasEmbeddedBatch && !hasBrokenEmbeddedDates) return;
         applyMesanImportBatch(MESAN_2026_GASTO_IMPORT, { replaceExisting: true });
-    }, []);
+    }, [embeddedImports, movimientos, ventasDiarias]);
 
     const addMovement = () => {
         if (!concepto.trim() || !monto) return;

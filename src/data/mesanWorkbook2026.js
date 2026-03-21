@@ -11,6 +11,35 @@ export const MESAN_2026_GASTO_IMPORT = {
     "movements": 429,
     "sales": 63
   },
+  "closingBalances": [
+    {
+      "sheet": "enero",
+      "fecha": "2026-01-31",
+      "efectivo": 1513220,
+      "mercadoPago": 0,
+      "banco": 0,
+      "usd": 1200,
+      "ai": 0
+    },
+    {
+      "sheet": "febrero",
+      "fecha": "2026-02-28",
+      "efectivo": 996100,
+      "mercadoPago": 0,
+      "banco": 0,
+      "usd": 0,
+      "ai": 190000
+    },
+    {
+      "sheet": "marzo",
+      "fecha": "2026-03-20",
+      "efectivo": 1132380,
+      "mercadoPago": -1239265,
+      "banco": 0,
+      "usd": 200,
+      "ai": 0
+    }
+  ],
   "movements": [
     {
       "id": "mesan-2026-enero-1-1",
@@ -3641,7 +3670,7 @@ export const MESAN_2026_GASTO_IMPORT = {
     },
     {
       "id": "mesan-2026-febrero-139-1",
-      "fecha": "2026-06-21",
+      "fecha": "2026-02-21",
       "concepto": "CINTA",
       "categoria": "ACCESORIO",
       "monto": -15300,
@@ -3654,7 +3683,7 @@ export const MESAN_2026_GASTO_IMPORT = {
     },
     {
       "id": "mesan-2026-febrero-140-1",
-      "fecha": "2026-06-21",
+      "fecha": "2026-02-21",
       "concepto": "desayuno",
       "categoria": "COMIDA",
       "monto": -4900,
@@ -3667,7 +3696,7 @@ export const MESAN_2026_GASTO_IMPORT = {
     },
     {
       "id": "mesan-2026-febrero-141-1",
-      "fecha": "2026-06-21",
+      "fecha": "2026-02-21",
       "concepto": "FERETTERIA",
       "categoria": "LOCAL",
       "monto": -5000,
@@ -3680,7 +3709,7 @@ export const MESAN_2026_GASTO_IMPORT = {
     },
     {
       "id": "mesan-2026-febrero-142-1",
-      "fecha": "2026-06-21",
+      "fecha": "2026-02-21",
       "concepto": "JUAN",
       "categoria": "CHICAS",
       "monto": -230000,
@@ -3693,7 +3722,7 @@ export const MESAN_2026_GASTO_IMPORT = {
     },
     {
       "id": "mesan-2026-febrero-143-1",
-      "fecha": "2026-06-21",
+      "fecha": "2026-02-21",
       "concepto": "KIOSCO",
       "categoria": "KIOSCO",
       "monto": -3800,
@@ -3706,7 +3735,7 @@ export const MESAN_2026_GASTO_IMPORT = {
     },
     {
       "id": "mesan-2026-febrero-144-1",
-      "fecha": "2026-06-21",
+      "fecha": "2026-02-21",
       "concepto": "KIOSCO",
       "categoria": "KIOSCO",
       "monto": -3800,
@@ -3719,7 +3748,7 @@ export const MESAN_2026_GASTO_IMPORT = {
     },
     {
       "id": "mesan-2026-febrero-146-1",
-      "fecha": "2026-06-21",
+      "fecha": "2026-02-21",
       "concepto": "NADIA",
       "categoria": "CHICAS",
       "monto": -410000,
@@ -3732,7 +3761,7 @@ export const MESAN_2026_GASTO_IMPORT = {
     },
     {
       "id": "mesan-2026-febrero-147-1",
-      "fecha": "2026-06-21",
+      "fecha": "2026-02-21",
       "concepto": "NARA",
       "categoria": "CHICAS",
       "monto": -230000,
@@ -3745,7 +3774,7 @@ export const MESAN_2026_GASTO_IMPORT = {
     },
     {
       "id": "mesan-2026-febrero-148-1",
-      "fecha": "2026-06-21",
+      "fecha": "2026-02-21",
       "concepto": "ROCIO",
       "categoria": "CHICAS",
       "monto": -230000,
@@ -5904,6 +5933,14 @@ export const MESAN_2026_GASTO_IMPORT = {
       "batchId": "mesan-2026-gasto-26"
     },
     {
+      "fecha": "2026-02-21",
+      "monto": 340500,
+      "efectivo": 340500,
+      "importedSheet": "febrero",
+      "source": "GASTO 26.xlsx",
+      "batchId": "mesan-2026-gasto-26"
+    },
+    {
       "fecha": "2026-02-23",
       "monto": 604000,
       "efectivo": 604000,
@@ -6084,14 +6121,6 @@ export const MESAN_2026_GASTO_IMPORT = {
       "monto": 569500,
       "efectivo": 569500,
       "importedSheet": "marzo",
-      "source": "GASTO 26.xlsx",
-      "batchId": "mesan-2026-gasto-26"
-    },
-    {
-      "fecha": "2026-06-21",
-      "monto": 340500,
-      "efectivo": 340500,
-      "importedSheet": "febrero",
       "source": "GASTO 26.xlsx",
       "batchId": "mesan-2026-gasto-26"
     }
