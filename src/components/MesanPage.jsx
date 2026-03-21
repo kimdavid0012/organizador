@@ -1,8 +1,9 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, Plus, Upload, Wallet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
+import { MESAN_2026_GASTO_IMPORT } from '../data/mesanWorkbook2026';
 
 const CATEGORIES = ['Alquiler', 'Servicios', 'Proveedor', 'Logistica', 'Comida', 'Publicidad', 'Varios'];
 const MONTH_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -69,6 +70,19 @@ const getMovementType = (signedAmount, concepto, categoria) => {
     if (normalizedConcept === 'SALDO ANTERIOR' || normalizedCategory === 'SALDO ANTERIOR') return 'saldo';
     return signedAmount >= 0 ? 'ingreso' : 'gasto';
 };
+const SHEET_MONTHS = { enero: '01', febrero: '02', marzo: '03' };
+const shouldReplaceLegacyMesanEntry = (item) => {
+    const source = normalizeText(item?.source).toUpperCase();
+    const importedSheet = normalizeText(item?.importedSheet).toLowerCase();
+    const fecha = normalizeText(item?.fecha);
+    if (normalizeText(item?.importedBatchId) === MESAN_2026_GASTO_IMPORT.batchId) return true;
+    if (source === 'GASTO 26.XLSX') return true;
+    if (['enero', 'febrero', 'marzo'].includes(importedSheet)) {
+        const expectedMonth = SHEET_MONTHS[importedSheet];
+        return !fecha || fecha.slice(5, 7) !== expectedMonth;
+    }
+    return false;
+};
 
 export default function MesanPage() {
     const { state, updateConfig } = useData();
@@ -85,6 +99,7 @@ export default function MesanPage() {
 
     const movimientos = state.config.mesanMovimientos || [];
     const ventasDiarias = state.config.mesanVentasDiarias || [];
+    const embeddedImports = state.config.mesanEmbeddedImports || [];
     const gastosPosDia = (state.config.posGastos || [])
         .filter((item) => (item.fecha || '').slice(0, 10) === fecha)
         .map((item) => ({
@@ -213,6 +228,64 @@ export default function MesanPage() {
             });
     }, [movimientos, ventasDiarias]);
 
+    const applyMesanImportBatch = (batch, options = {}) => {
+        const {
+            replaceExisting = false,
+            replacePredicate = shouldReplaceLegacyMesanEntry
+        } = options;
+
+        const currentMovimientos = replaceExisting
+            ? movimientos.filter((item) => !replacePredicate(item))
+            : movimientos;
+        const currentVentas = replaceExisting
+            ? ventasDiarias.filter((item) => !replacePredicate(item))
+            : ventasDiarias;
+
+        const ventasMap = new Map(currentVentas.map((item) => [item.fecha, { ...item }]));
+        batch.sales.forEach((sale) => {
+            ventasMap.set(sale.fecha, {
+                ...ventasMap.get(sale.fecha),
+                ...sale
+            });
+        });
+
+        const existingMovementKeys = new Set(
+            currentMovimientos.map((item) => [
+                item.fecha,
+                normalizeText(item.concepto),
+                normalizeText(item.categoria),
+                item.canal || 'EFECTIVO',
+                item.moneda || 'ARS',
+                Number(item.monto || 0),
+                item.tipo || 'legacy'
+            ].join('|'))
+        );
+
+        const freshMovements = batch.movements.filter((item) => {
+            const key = [
+                item.fecha,
+                normalizeText(item.concepto),
+                normalizeText(item.categoria),
+                item.canal || 'EFECTIVO',
+                item.moneda || 'ARS',
+                Number(item.monto || 0),
+                item.tipo || 'legacy'
+            ].join('|');
+            return !existingMovementKeys.has(key);
+        });
+
+        updateConfig({
+            mesanMovimientos: [...freshMovements, ...currentMovimientos],
+            mesanVentasDiarias: Array.from(ventasMap.values()).sort((left, right) => right.fecha.localeCompare(left.fecha)),
+            mesanEmbeddedImports: Array.from(new Set([...(embeddedImports || []), batch.batchId]))
+        });
+    };
+
+    useEffect(() => {
+        if (embeddedImports.includes(MESAN_2026_GASTO_IMPORT.batchId)) return;
+        applyMesanImportBatch(MESAN_2026_GASTO_IMPORT, { replaceExisting: true });
+    }, []);
+
     const addMovement = () => {
         if (!concepto.trim() || !monto) return;
         updateConfig({
@@ -313,39 +386,15 @@ export default function MesanPage() {
                 });
             });
 
-            const existingKeys = new Set(
-                movimientos.map((item) => [
-                    item.fecha,
-                    normalizeText(item.concepto),
-                    normalizeText(item.categoria),
-                    item.canal || 'EFECTIVO',
-                    item.moneda || 'ARS',
-                    Number(item.monto || 0),
-                    item.tipo || 'legacy'
-                ].join('|'))
-            );
-
-            const freshMovements = importedMovements.filter((item) => {
-                const key = [
-                    item.fecha,
-                    normalizeText(item.concepto),
-                    normalizeText(item.categoria),
-                    item.canal || 'EFECTIVO',
-                    item.moneda || 'ARS',
-                    Number(item.monto || 0),
-                    item.tipo || 'legacy'
-                ].join('|');
-                return !existingKeys.has(key);
+            const batchId = `mesan-${file.name.toLowerCase().replace(/\s+/g, '-')}`;
+            applyMesanImportBatch({
+                batchId,
+                workbookName: file.name,
+                movements: importedMovements.map((item) => ({ ...item, importedBatchId: `${batchId}-${item.importedSheet}` })),
+                sales: Array.from(ventasMap.values()).map((sale) => ({ ...sale, source: file.name, batchId }))
             });
 
-            const mergedVentas = Array.from(ventasMap.values()).sort((left, right) => right.fecha.localeCompare(left.fecha));
-
-            updateConfig({
-                mesanMovimientos: [...freshMovements, ...movimientos],
-                mesanVentasDiarias: mergedVentas
-            });
-
-            alert(`Se importaron ${freshMovements.length} movimientos y ${mergedVentas.length} dias de venta desde ${file.name}.`);
+            alert(`Se importaron ${importedMovements.length} movimientos y ${ventasMap.size} dias de venta desde ${file.name}.`);
         } catch (error) {
             console.error('Error importando Excel de Mesan:', error);
             alert(`No pude importar ese Excel: ${error.message}`);
@@ -370,7 +419,7 @@ export default function MesanPage() {
                     <div>
                         <h3 style={{ margin: 0 }}>Importar Excel mensual</h3>
                         <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)' }}>
-                            Cada hoja se toma como un mes. Se importan gastos, saldos, Mercado Pago, Banco, USD y AI, sin borrar memoria anterior.
+                            Cada hoja se toma como un mes. El archivo base de Mesan 2026 ya queda guardado adentro de la app y tambien podés sumar otros Excel sin borrar memoria anterior.
                         </p>
                     </div>
                     <div>
