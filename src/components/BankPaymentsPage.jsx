@@ -166,7 +166,7 @@ export default function BankPaymentsPage() {
                             <div key={batch.batchId} style={{ padding: 14, borderRadius: 16, background: 'rgba(255,255,255,0.03)', display: 'grid', gap: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}>
                                     <div>
-                                        <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 18 }}>{batch.sourceName.replace('.xlsx - ', ' · ')}</div>
+                                        <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 18 }}>{batch.monthLabel || batch.sourceName.replace(/^.*? - /, '')}</div>
                                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{batch.totals.count} movimientos</div>
                                     </div>
                                     <button className="btn btn-secondary" onClick={() => importBatch(batch)} disabled={batch.alreadyLoaded}>
