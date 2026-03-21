@@ -103,6 +103,7 @@ export default function MesanPage() {
     const movimientos = state.config.mesanMovimientos || [];
     const ventasDiarias = state.config.mesanVentasDiarias || [];
     const embeddedImports = state.config.mesanEmbeddedImports || [];
+    const bankPayments = state.config.bankPayments || [];
     const gastosPosDia = (state.config.posGastos || [])
         .filter((item) => (item.fecha || '').slice(0, 10) === fecha)
         .map((item) => ({
@@ -120,6 +121,10 @@ export default function MesanPage() {
     const ventaActual = ventasDiarias.find((item) => item.fecha === fecha) || {};
     const legacyVentaDia = movimientos.find((item) => item.fecha === fecha && Number(item.ventasDia || 0) > 0)?.ventasDia || 0;
     const ventaDelDia = Number(ventaActual.monto || ventaActual.efectivo || legacyVentaDia || 0);
+    const bancoMpDelDia = bankPayments
+        .filter((item) => item.fecha === fecha)
+        .reduce((acc, item) => acc + Number(item.monto || 0), 0);
+    const ventaTotalDelDia = ventaDelDia + bancoMpDelDia;
     const movimientosDia = [...gastosPosDia, ...movimientos.filter((item) => item.fecha === fecha)];
 
     const monthKey = getMonthKey(fecha);
@@ -243,6 +248,9 @@ export default function MesanPage() {
 
                         return {
                             ...dayGroup,
+                            bancoMpTotal: bankPayments
+                                .filter((entry) => entry.fecha === dayGroup.fecha)
+                                .reduce((acc, entry) => acc + Number(entry.monto || 0), 0),
                             arsExpenses,
                             arsIncome,
                             usdNet
@@ -255,7 +263,7 @@ export default function MesanPage() {
                     days
                 };
             });
-    }, [movimientos, ventasDiarias]);
+    }, [movimientos, ventasDiarias, bankPayments]);
 
     const applyMesanImportBatch = (batch, options = {}) => {
         const {
@@ -472,9 +480,30 @@ export default function MesanPage() {
                         <input type="date" className="form-input" value={fecha} onChange={(event) => setFecha(event.target.value)} />
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Venta total del dia</label>
+                        <label className="form-label">Ingreso Mesan del dia</label>
                         <input type="number" className="form-input" value={ventaDelDia} onChange={(event) => updateVentaDia(event.target.value)} />
+                        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                            Efectivo o POS local, sin Banco ni Mercado Pago.
+                        </div>
                     </div>
+                </div>
+
+                <div
+                    style={{
+                        padding: 12,
+                        borderRadius: 14,
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.06)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        flexWrap: 'wrap'
+                    }}
+                >
+                    <span style={{ color: 'var(--text-secondary)' }}>Venta total del dia = Mesan + Banco + MP</span>
+                    <strong style={{ color: 'var(--success)', fontSize: '1.05rem' }}>
+                        ${ventaTotalDelDia.toLocaleString('es-AR')}
+                    </strong>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, alignItems: 'end' }}>
@@ -521,7 +550,7 @@ export default function MesanPage() {
                                     ${gastoTotalAcumuladoARS.toLocaleString('es-AR')}
                                 </div>
                                 <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-muted)' }}>
-                                    Incluye venta diaria, ingresos y gastos en ARS hasta el {getDateLabel(fecha)}. No se reinicia cada mes.
+                                    Incluye Mesan diario, Banco/MP y gastos en ARS hasta el {getDateLabel(fecha)}. No se reinicia cada mes.
                                 </div>
                             </div>
                         </div>
@@ -543,7 +572,7 @@ export default function MesanPage() {
                                             </div>
                                         </div>
                                         <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                            Venta dia: ${Number(ventaDelDia || 0).toLocaleString('es-AR')}
+                                            Mesan dia: ${Number(ventaDelDia || 0).toLocaleString('es-AR')}
                                         </div>
                                         <div style={{ color: isNegative ? '#fca5a5' : 'var(--success)', fontWeight: 'var(--fw-bold)' }}>
                                             {isNegative ? '-' : '+'}{item.moneda === 'USD' ? 'US$' : '$'}{displayAmount.toLocaleString('es-AR')}
@@ -614,7 +643,7 @@ export default function MesanPage() {
                 <div>
                     <h3 style={{ margin: 0 }}>Historial por mes y por dia</h3>
                     <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)' }}>
-                        Cada dia muestra venta cargada, gastos, ingresos, USD y movimientos extra del Excel.
+                        Cada dia muestra Mesan, Banco + MP, gastos, ingresos y el total real del dia.
                     </p>
                 </div>
 
@@ -637,7 +666,9 @@ export default function MesanPage() {
                                                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{dayGroup.movements.length} movimientos</div>
                                             </div>
                                             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Venta ${Number(dayGroup.venta?.monto || dayGroup.venta?.efectivo || 0).toLocaleString('es-AR')}</span>
+                                                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Mesan ${Number(dayGroup.venta?.monto || dayGroup.venta?.efectivo || 0).toLocaleString('es-AR')}</span>
+                                                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Banco + MP ${dayGroup.bancoMpTotal.toLocaleString('es-AR')}</span>
+                                                <span style={{ fontSize: 12, color: 'var(--success)' }}>Total día ${(Number(dayGroup.venta?.monto || dayGroup.venta?.efectivo || 0) + dayGroup.bancoMpTotal).toLocaleString('es-AR')}</span>
                                                 <span style={{ fontSize: 12, color: '#fca5a5' }}>Gastos ${dayGroup.arsExpenses.toLocaleString('es-AR')}</span>
                                                 <span style={{ fontSize: 12, color: 'var(--success)' }}>Ingresos ${dayGroup.arsIncome.toLocaleString('es-AR')}</span>
                                                 {dayGroup.usdNet !== 0 && (

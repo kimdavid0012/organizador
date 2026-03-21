@@ -263,12 +263,8 @@ export default function InformesPage() {
             const amount = toNumber(item.monto || 0);
             return (item.moneda || 'ARS') === 'ARS' && amount < 0 ? acc + Math.abs(amount) : acc;
         }, 0);
-        const mesanIncomeARS = mesanMovements.reduce((acc, item) => {
-            const amount = toNumber(item.monto || 0);
-            return (item.moneda || 'ARS') === 'ARS' && amount > 0 ? acc + amount : acc;
-        }, 0);
         const mesanSalesARS = mesanSales.reduce((acc, item) => acc + toNumber(item.monto || item.efectivo || 0), 0);
-        const totalIncomeWithMesan = digitalIncome + mesanIncomeARS + mesanSalesARS;
+        const totalIncomeWithMesan = digitalIncome + mesanSalesARS;
 
         const topExpenseCategories = Object.entries(
             mesanMovements.reduce((acc, item) => {
@@ -302,7 +298,6 @@ export default function InformesPage() {
                 bancoIncome,
                 mercadoPagoIncome,
                 mesanExpensesARS,
-                mesanIncomeARS,
                 mesanSalesARS
             },
             inventory: {
