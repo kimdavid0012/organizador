@@ -38,10 +38,114 @@ import './App.css';
 const LEGACY_PURPLE_ACCENTS = new Set(['#8b5cf6', '#7c3aed', '#a855f7', '#c084fc']);
 const DEFAULT_ACCENT = '#14b8a6';
 const DEFAULT_ACCENT_HOVER = '#0f766e';
+const DAILY_QUOTE_STORAGE_KEY = 'organizador_daily_inspiration_quotes';
+
+const DAILY_QUOTES = [
+    'Hoy ya es una oportunidad nueva para agradecer, respirar y volver a empezar con ganas.',
+    'Cada pequeño avance de hoy construye un futuro mucho más grande de lo que parece.',
+    'Lo que hacemos con cariño también deja huella en la vida de los demás.',
+    'Empezar el día con buena energía también es una forma de cuidar al equipo.',
+    'No hace falta que todo sea perfecto: hace falta que hoy demos lo mejor que podamos.',
+    'La vida siempre devuelve algo lindo cuando trabajamos con corazón y constancia.',
+    'A veces un buen día empieza con algo simple: estar vivos, juntos y con una nueva chance.',
+    'Todo lo que hoy ordenemos con amor mañana se transforma en tranquilidad.',
+    'Hay fuerza en cada persona de este equipo, incluso en los días más cansados.',
+    'Respirar, agradecer y seguir: a veces ahí está toda la magia del día.',
+    'Cada tarea hecha con intención suma más de lo que se ve en el momento.',
+    'La paciencia también es productividad cuando se trabaja con propósito.',
+    'Hoy puede ser un gran día si recordamos todo lo que ya hemos podido superar.',
+    'El esfuerzo compartido vale el doble cuando se hace con respeto y buena energía.',
+    'Que nunca falte gratitud por el trabajo, por la salud y por una nueva mañana.',
+    'Incluso los días intensos pueden traer algo hermoso si los atravesamos con calma.',
+    'La actitud con la que empezamos el día cambia la forma en que vivimos todo lo demás.',
+    'Cada uno aporta algo único, y eso hace especial a este equipo.',
+    'Agradecer lo que sí tenemos también nos da fuerza para ir por lo que falta.',
+    'Un día a la vez, una mejora a la vez, un paso a la vez: así se construyen cosas grandes.',
+    'La vida florece mejor donde hay compromiso, respeto y ganas de salir adelante.',
+    'Que este día nos encuentre presentes, enfocados y con el corazón liviano.',
+    'Lo bueno también se entrena: la paciencia, la alegría y la forma de mirar el día.',
+    'Trabajar con amor propio y con respeto por los demás también es crecer.',
+    'Hoy puede pasar algo muy bueno, aunque todavía no lo sepamos.',
+    'Valorar lo cotidiano también es una forma profunda de felicidad.',
+    'Cada amanecer trae la posibilidad de hacerlo un poco mejor que ayer.',
+    'Lo que hacemos con disciplina y buena intención termina dando fruto.',
+    'Que hoy no nos falte energía, claridad ni gratitud por estar acá.',
+    'El verdadero progreso también se nota en la calma con la que resolvemos las cosas.',
+    'Que este comienzo de día nos recuerde que siempre vale la pena seguir apostando.',
+    'Hay días para correr y días para respirar; ambos también forman parte del camino.'
+];
 
 const normalizeAccentColor = (value) => {
     const normalized = (value || '').toLowerCase();
     return LEGACY_PURPLE_ACCENTS.has(normalized) ? DEFAULT_ACCENT : (value || DEFAULT_ACCENT);
+};
+
+const getTodayLocalDateKey = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = `${now.getMonth() + 1}`.padStart(2, '0');
+    const day = `${now.getDate()}`.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const hashString = (value = '') => {
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+        hash = ((hash << 5) - hash) + value.charCodeAt(index);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+};
+
+const buildUserQuoteOrder = (email = '') => {
+    const seed = hashString(email.toLowerCase()) || 1;
+    return DAILY_QUOTES
+        .map((quote, index) => ({
+            id: `q-${index + 1}`,
+            quote,
+            sort: (seed * (index + 3) + ((index + 1) * 97)) % 10007
+        }))
+        .sort((left, right) => left.sort - right.sort);
+};
+
+const getDailyQuoteForUser = (user) => {
+    if (!user?.email) return null;
+
+    const emailKey = user.email.toLowerCase();
+    const todayKey = getTodayLocalDateKey();
+    const stored = JSON.parse(localStorage.getItem(DAILY_QUOTE_STORAGE_KEY) || '{}');
+    const current = stored[emailKey] || { lastShownDate: '', usedIds: [] };
+
+    if (current.lastShownDate === todayKey && current.quoteId) {
+        const existing = DAILY_QUOTES.findIndex((_, index) => `q-${index + 1}` === current.quoteId);
+        if (existing >= 0) {
+            return {
+                shouldShow: false,
+                quote: DAILY_QUOTES[existing]
+            };
+        }
+    }
+
+    const order = buildUserQuoteOrder(emailKey);
+    let usedIds = Array.isArray(current.usedIds) ? current.usedIds : [];
+    let next = order.find((item) => !usedIds.includes(item.id));
+
+    if (!next) {
+        usedIds = [];
+        next = order[0];
+    }
+
+    stored[emailKey] = {
+        lastShownDate: todayKey,
+        quoteId: next.id,
+        usedIds: [...usedIds, next.id]
+    };
+    localStorage.setItem(DAILY_QUOTE_STORAGE_KEY, JSON.stringify(stored));
+
+    return {
+        shouldShow: true,
+        quote: next.quote
+    };
 };
 
 // ===== Mobile Bottom Nav with "More" popup =====
@@ -179,6 +283,8 @@ function AppContent() {
     });
     const [soloHoy, setSoloHoy] = useState(false);
     const [editingMolde, setEditingMolde] = useState(null);
+    const [dailyQuote, setDailyQuote] = useState('');
+    const [showDailyQuote, setShowDailyQuote] = useState(false);
 
     const storage = getStorageUsage();
 
@@ -198,6 +304,23 @@ function AppContent() {
         if (state?.config?.idioma === lang) return;
         updateConfig({ idioma: lang });
     }, [lang, state?.config?.idioma, updateConfig]);
+
+    useEffect(() => {
+        if (!user?.email) return;
+
+        try {
+            const nextQuote = getDailyQuoteForUser(user);
+            if (nextQuote?.shouldShow) {
+                setDailyQuote(nextQuote.quote);
+                setShowDailyQuote(true);
+            } else {
+                setShowDailyQuote(false);
+            }
+        } catch (error) {
+            console.error('No se pudo preparar el mensaje diario:', error);
+            setShowDailyQuote(false);
+        }
+    }, [user?.email]);
 
     // Filter moldes
     const filteredMoldes = useMemo(() => {
@@ -492,6 +615,19 @@ function AppContent() {
                     tarea={resolvedEditItem}
                     onClose={() => setEditingMolde(null)}
                 />
+            )}
+
+            {showDailyQuote && (
+                <div className="daily-quote-backdrop" onClick={() => setShowDailyQuote(false)}>
+                    <div className="daily-quote-modal" onClick={(event) => event.stopPropagation()}>
+                        <div className="daily-quote-kicker">Mensaje para empezar el día</div>
+                        <h3 className="daily-quote-title">Buen día, {user.name}</h3>
+                        <p className="daily-quote-text">“{dailyQuote}”</p>
+                        <button className="btn btn-primary daily-quote-button" onClick={() => setShowDailyQuote(false)}>
+                            Gracias, a darlo todo
+                        </button>
+                    </div>
+                </div>
             )}
 
             {/* AI Assistant - floating chat */}
