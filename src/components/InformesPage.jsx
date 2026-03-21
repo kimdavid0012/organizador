@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, FileText, RefreshCw, TrendingUp } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
@@ -85,6 +85,13 @@ const dedupeSales = (sales = []) => {
 };
 
 const formatMoney = (value) => `$${Math.round(Number(value || 0)).toLocaleString('es-AR')}`;
+const getTodayLocalDate = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
 
 export default function InformesPage() {
     const { state, updateConfig } = useData();
@@ -98,11 +105,21 @@ export default function InformesPage() {
         return <div style={{ padding: 'var(--sp-4)' }}>Solo visible para administrador.</div>;
     }
 
+    const posReportsStartDate = state.config?.reportsPosStartDate || getTodayLocalDate();
+
+    useEffect(() => {
+        if (state.config?.reportsPosStartDate) return;
+        updateConfig({ reportsPosStartDate: getTodayLocalDate() });
+    }, [state.config?.reportsPosStartDate, updateConfig]);
+
     const allSales = useMemo(() => {
         const currentSales = state.config?.posVentas || [];
         const archivedSales = (state.config?.posCerradoZ || []).flatMap((close) => close.detalleVentas || []);
-        return dedupeSales([...currentSales, ...archivedSales]);
-    }, [state.config?.posVentas, state.config?.posCerradoZ]);
+        return dedupeSales([...currentSales, ...archivedSales]).filter((sale) => {
+            const saleDate = normalizeText(sale?.fecha).slice(0, 10);
+            return saleDate && saleDate >= posReportsStartDate;
+        });
+    }, [state.config?.posVentas, state.config?.posCerradoZ, posReportsStartDate]);
 
     const reportData = useMemo(() => {
         const products = state.config?.posProductos || [];
@@ -366,6 +383,9 @@ export default function InformesPage() {
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
                     Informe ejecutivo del local con IA: rentabilidad, ventas, gastos, stock, producción y recomendaciones de recorte.
                 </p>
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                    POS tomado para informes desde {posReportsStartDate.split('-').reverse().join('/')} para evitar contar ventas de prueba anteriores.
+                </div>
             </div>
 
             <div className="informes-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
