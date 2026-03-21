@@ -5,6 +5,19 @@ import { useAuth } from '../store/AuthContext';
 import { JANUARY_2026_BANK_PAYMENTS_IMPORT } from '../data/bankPaymentsJanuary2026';
 
 const METHODS = ['Banco', 'Mercado Pago'];
+const MONTH_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+const getMonthKey = (value) => (value || '').slice(0, 7);
+const getMonthLabel = (monthKey) => {
+    const [year, month] = monthKey.split('-');
+    const monthIndex = Number(month) - 1;
+    return `${MONTH_LABELS[monthIndex] || month} ${year}`;
+};
+
+const getDateLabel = (value) => {
+    const [year, month, day] = value.split('-');
+    return `${day}/${month}/${year}`;
+};
 
 export default function BankPaymentsPage() {
     const { state, updateConfig } = useData();
@@ -27,6 +40,57 @@ export default function BankPaymentsPage() {
     const canSeeTotals = user.role === 'admin';
     const januaryImportAlreadyLoaded = entries.some((entry) => entry.batchId === JANUARY_2026_BANK_PAYMENTS_IMPORT.batchId);
     const januaryImportedEntries = entries.filter((entry) => entry.batchId === JANUARY_2026_BANK_PAYMENTS_IMPORT.batchId);
+    const monthlyGroups = useMemo(() => {
+        const grouped = new Map();
+
+        entries.forEach((entry) => {
+            const monthKey = getMonthKey(entry.fecha);
+            if (!monthKey) return;
+
+            if (!grouped.has(monthKey)) {
+                grouped.set(monthKey, {
+                    monthKey,
+                    entries: [],
+                    byDay: new Map()
+                });
+            }
+
+            const monthGroup = grouped.get(monthKey);
+            monthGroup.entries.push(entry);
+
+            if (!monthGroup.byDay.has(entry.fecha)) {
+                monthGroup.byDay.set(entry.fecha, []);
+            }
+
+            monthGroup.byDay.get(entry.fecha).push(entry);
+        });
+
+        return Array.from(grouped.values())
+            .sort((left, right) => right.monthKey.localeCompare(left.monthKey))
+            .map((monthGroup) => {
+                const dayGroups = Array.from(monthGroup.byDay.entries())
+                    .sort((left, right) => right[0].localeCompare(left[0]))
+                    .map(([dayKey, dayEntries]) => {
+                        const sortedEntries = [...dayEntries].sort((left, right) => Number(right.monto || 0) - Number(left.monto || 0));
+
+                        return {
+                            dayKey,
+                            entries: sortedEntries,
+                            total: sortedEntries.reduce((acc, entry) => acc + Number(entry.monto || 0), 0),
+                            bancoTotal: sortedEntries.filter((entry) => entry.metodo === 'Banco').reduce((acc, entry) => acc + Number(entry.monto || 0), 0),
+                            mercadoPagoTotal: sortedEntries.filter((entry) => entry.metodo === 'Mercado Pago').reduce((acc, entry) => acc + Number(entry.monto || 0), 0)
+                        };
+                    });
+
+                return {
+                    monthKey: monthGroup.monthKey,
+                    label: getMonthLabel(monthGroup.monthKey),
+                    entryCount: monthGroup.entries.length,
+                    total: monthGroup.entries.reduce((acc, entry) => acc + Number(entry.monto || 0), 0),
+                    dayGroups
+                };
+            });
+    }, [entries]);
 
     const addEntry = () => {
         if (!monto || (metodo === 'Banco' && !cliente.trim())) return;
@@ -166,6 +230,91 @@ export default function BankPaymentsPage() {
                             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{entry.fecha}</div>
                             <div style={{ fontWeight: 'var(--fw-bold)' }}>${Number(entry.monto || 0).toLocaleString('es-AR')}</div>
                         </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 12 }}>
+                <div>
+                    <h3 style={{ margin: 0 }}>Historial por mes y por dia</h3>
+                    <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)' }}>
+                        Banco muestra cliente y Mercado Pago queda listado sin cliente cuando no corresponde.
+                    </p>
+                </div>
+
+                <div style={{ display: 'grid', gap: 10 }}>
+                    {monthlyGroups.map((monthGroup, monthIndex) => (
+                        <details
+                            key={monthGroup.monthKey}
+                            open={monthIndex === 0}
+                            style={{ borderRadius: 16, background: 'rgba(255,255,255,0.03)', overflow: 'hidden' }}
+                        >
+                            <summary style={{ listStyle: 'none', cursor: 'pointer', padding: 16, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div>
+                                    <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 18 }}>{monthGroup.label}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{monthGroup.entryCount} movimientos</div>
+                                </div>
+                                {canSeeTotals && (
+                                    <div style={{ fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>
+                                        ${monthGroup.total.toLocaleString('es-AR')}
+                                    </div>
+                                )}
+                            </summary>
+
+                            <div style={{ padding: '0 16px 16px', display: 'grid', gap: 10 }}>
+                                {monthGroup.dayGroups.map((dayGroup) => (
+                                    <details
+                                        key={dayGroup.dayKey}
+                                        open={dayGroup.dayKey === fecha}
+                                        style={{ borderRadius: 14, background: 'rgba(10, 12, 24, 0.55)', overflow: 'hidden' }}
+                                    >
+                                        <summary style={{ listStyle: 'none', cursor: 'pointer', padding: 14, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 'var(--fw-semibold)' }}>{getDateLabel(dayGroup.dayKey)}</div>
+                                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{dayGroup.entries.length} movimientos</div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                                {canSeeTotals && (
+                                                    <>
+                                                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Banco ${dayGroup.bancoTotal.toLocaleString('es-AR')}</span>
+                                                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>MP ${dayGroup.mercadoPagoTotal.toLocaleString('es-AR')}</span>
+                                                    </>
+                                                )}
+                                                <span style={{ fontWeight: 'var(--fw-bold)' }}>${dayGroup.total.toLocaleString('es-AR')}</span>
+                                            </div>
+                                        </summary>
+
+                                        <div style={{ padding: '0 14px 14px', display: 'grid', gap: 8 }}>
+                                            {dayGroup.entries.map((entry) => (
+                                                <div
+                                                    key={entry.id}
+                                                    style={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: 'minmax(0, 1.3fr) auto auto',
+                                                        gap: 12,
+                                                        padding: 12,
+                                                        borderRadius: 12,
+                                                        background: entry.metodo === 'Banco' ? 'rgba(59,130,246,0.09)' : 'rgba(16,185,129,0.09)',
+                                                        alignItems: 'center'
+                                                    }}
+                                                >
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontWeight: 'var(--fw-semibold)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            {entry.metodo === 'Banco' ? (entry.cliente || 'Sin cliente') : 'Mercado Pago'}
+                                                        </div>
+                                                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                                            {entry.metodo === 'Banco' ? 'Banco' : 'Sin cliente'}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{entry.metodo}</div>
+                                                    <div style={{ fontWeight: 'var(--fw-bold)' }}>${Number(entry.monto || 0).toLocaleString('es-AR')}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </details>
+                                ))}
+                            </div>
+                        </details>
                     ))}
                 </div>
             </div>
