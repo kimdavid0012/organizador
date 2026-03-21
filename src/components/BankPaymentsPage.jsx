@@ -4,10 +4,15 @@ import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
 import { JANUARY_2026_BANK_PAYMENTS_IMPORT } from '../data/bankPaymentsJanuary2026';
 import { FEBRUARY_2026_BANK_PAYMENTS_IMPORT } from '../data/bankPaymentsFebruary2026';
+import { MARCH_2026_BANK_PAYMENTS_IMPORT } from '../data/bankPaymentsMarch2026';
 
 const METHODS = ['Banco', 'Mercado Pago'];
 const MONTH_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-const IMPORT_BATCHES = [JANUARY_2026_BANK_PAYMENTS_IMPORT, FEBRUARY_2026_BANK_PAYMENTS_IMPORT];
+const IMPORT_BATCHES = [
+    JANUARY_2026_BANK_PAYMENTS_IMPORT,
+    FEBRUARY_2026_BANK_PAYMENTS_IMPORT,
+    MARCH_2026_BANK_PAYMENTS_IMPORT
+];
 
 const getMonthKey = (value) => (value || '').slice(0, 7);
 const getMonthLabel = (monthKey) => {
