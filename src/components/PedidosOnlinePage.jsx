@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
 import { generateId, formatDate } from '../utils/helpers';
@@ -28,10 +28,53 @@ export default function PedidosOnlinePage() {
     const [newItemCantidad, setNewItemCantidad] = useState(1);
     const [newItemStatus, setNewItemStatus] = useState('falta'); // 'falta' | 'reemplazo' | 'ok'
     const [newItemComment, setNewItemComment] = useState('');
+    const [imageErrors, setImageErrors] = useState({});
 
     const canCreateOrder = user.role === 'encargada' || user.role === 'admin';
     const canProcessOrder = user.role === 'pedidos' || user.role === 'marketing' || user.role === 'admin';
     const canApproveOrder = user.role === 'encargada' || user.role === 'admin';
+
+    const normalizeText = (value) => (value || '')
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+
+    const getImageFromSource = (source) => {
+        if (!source) return '';
+        if (typeof source === 'string') return source;
+
+        return source.url
+            || source.src
+            || source.data
+            || source.thumbnail
+            || source.secure_url
+            || '';
+    };
+
+    const getProductImage = (product) => {
+        if (!product) return '';
+
+        const galleryImage = Array.isArray(product.imagenes)
+            ? product.imagenes.map(getImageFromSource).find(Boolean)
+            : '';
+
+        return galleryImage
+            || getImageFromSource(product.imagen)
+            || getImageFromSource(product.image)
+            || getImageFromSource(product.thumbnail)
+            || getImageFromSource(product.foto)
+            || getImageFromSource(product.photo)
+            || '';
+    };
+
+    const productsById = useMemo(() => new Map(
+        posProductos
+            .filter((product) => product?.id)
+            .map((product) => [String(product.id), product])
+    ), [posProductos]);
 
     const handleCreatePedido = (e) => {
         e.preventDefault();
@@ -58,7 +101,7 @@ export default function PedidosOnlinePage() {
         if (!newItemDesc.trim() && !newItemProductId) return;
 
         const selectedProduct = posProductos.find((product) => product.id === newItemProductId);
-        const selectedImage = selectedProduct?.imagenes?.[0]?.url || selectedProduct?.imagenes?.[0]?.data || '';
+        const selectedImage = getProductImage(selectedProduct);
 
         addPedidoItem(pedidoId, {
             descripcion: newItemDesc,
@@ -90,13 +133,26 @@ export default function PedidosOnlinePage() {
     };
 
     const resolveItemImage = (item) => {
-        if (item.imagen) return item.imagen;
+        const directImage = getImageFromSource(item?.imagen)
+            || getImageFromSource(item?.image)
+            || getImageFromSource(item?.thumbnail)
+            || getImageFromSource(item?.foto);
+        if (directImage) return directImage;
 
-        const byProductId = posProductos.find((product) => product.id === item.productId);
-        const byName = posProductos.find((product) => (product.detalleCorto || '').trim() === (item.descripcion || item.detalle || '').trim());
+        const byProductId = productsById.get(String(item?.productId || ''));
+        const targetName = normalizeText(item?.descripcion || item?.detalle);
+        const byName = posProductos.find((product) => {
+            const names = [
+                product?.detalleCorto,
+                product?.nombre,
+                product?.descripcion,
+                product?.detalle
+            ].map(normalizeText).filter(Boolean);
+            return targetName && names.includes(targetName);
+        });
         const product = byProductId || byName;
 
-        return product?.imagenes?.[0]?.url || product?.imagenes?.[0]?.data || '';
+        return getProductImage(product);
     };
 
     return (
@@ -289,7 +345,11 @@ export default function PedidosOnlinePage() {
                                         <p className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>No hay anotaciones en este pedido.</p>
                                     ) : (
                                         <div className="pedido-items-list" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                            {pedido.items.map(item => (
+                                            {pedido.items.map(item => {
+                                                const imageKey = `${pedido.id}-${item.id}`;
+                                                const itemImage = imageErrors[imageKey] ? '' : resolveItemImage(item);
+
+                                                return (
                                                 <div
                                                     key={item.id}
                                                     style={{
@@ -304,9 +364,31 @@ export default function PedidosOnlinePage() {
                                                     }}
                                                 >
                                                     <div style={{ width: 56, height: 56, borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
-                                                        {resolveItemImage(item) ? (
-                                                            <img src={resolveItemImage(item)} alt={item.descripcion || item.detalle} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                        ) : null}
+                                                        {itemImage ? (
+                                                            <img
+                                                                src={itemImage}
+                                                                alt={item.descripcion || item.detalle}
+                                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                                onError={() => setImageErrors((prev) => ({ ...prev, [imageKey]: true }))}
+                                                            />
+                                                        ) : (
+                                                            <div
+                                                                style={{
+                                                                    width: '100%',
+                                                                    height: '100%',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    color: 'var(--text-muted)',
+                                                                    fontSize: '10px',
+                                                                    textAlign: 'center',
+                                                                    padding: 6,
+                                                                    lineHeight: 1.2
+                                                                }}
+                                                            >
+                                                                Sin foto
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <div style={{ fontWeight: 'var(--fw-medium)', fontSize: '13px' }}>
@@ -332,7 +414,7 @@ export default function PedidosOnlinePage() {
                                                         {item.estado}
                                                     </span>}
                                                 </div>
-                                            ))}
+                                            )})}
                                             {pedido.monto > 0 && (
                                                 <div style={{ textAlign: 'right', marginTop: 8, fontWeight: 'bold', fontSize: '14px', color: 'var(--accent)' }}>
                                                     Total: ${Number(pedido.monto).toLocaleString()}
