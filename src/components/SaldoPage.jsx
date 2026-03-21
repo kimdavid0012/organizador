@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Camera, PlusCircle, Receipt, Search, Trash2, Wallet } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
+import { useI18n } from '../store/I18nContext';
 import ImageUploader from './ImageUploader';
 import ImageGallery from './ImageGallery';
 import { generateId } from '../utils/helpers';
@@ -10,6 +11,123 @@ const MOVEMENT_TYPES = [
     { value: 'deuda', label: 'Deuda / Ticket' },
     { value: 'pago', label: 'Pago recibido' }
 ];
+
+const PAGE_TEXT = {
+    es: {
+        adminOnly: 'Solo visible para administrador.',
+        title: 'Saldo de Clientes',
+        subtitle: 'Registrá deuda por ticket o pagos parciales y seguí cada cuenta con historial, fotos y datos reales del cliente.',
+        totalBalance: 'Saldo total a favor',
+        totalDebt: 'Deuda cargada',
+        totalPaid: 'Pagos descontados',
+        debtClients: 'Clientes con deuda',
+        client: 'Cliente',
+        selectClient: 'Seleccionar cliente...',
+        type: 'Tipo',
+        ticket: 'Ticket',
+        detail: 'Detalle',
+        amount: 'Monto',
+        add: 'Agregar',
+        useDate: 'Usar fecha',
+        debtClientsList: 'Clientes con deuda',
+        searchDebtClients: 'Buscar entre los que deben...',
+        noDebtClients: 'No hay clientes con deuda para mostrar.',
+        selectClientDetail: 'Seleccioná un cliente para ver su saldo, compras y tickets.',
+        noCuit: 'Sin CUIT',
+        noAddress: 'Sin dirección cargada',
+        currentBalance: 'Saldo actual',
+        lastMovement: 'Último movimiento',
+        lastPurchase: 'Última compra',
+        purchaseCount: 'Veces que compró',
+        totalPurchased: 'Total comprado',
+        ticketsPhotos: 'Tickets y fotos adjuntas',
+        dashboardData: 'Datos del dashboard',
+        movementCount: 'Cantidad de movimientos de saldo',
+        photoCount: 'Tickets/fotos cargadas',
+        lastPurchaseAmount: 'Último total de compra',
+        noDate: 'Sin fecha',
+        noTicket: 'Sin ticket',
+        paymentRegistered: 'Pago registrado',
+        debtRegistered: 'Deuda cargada',
+        noMovements: 'Todavía no hay movimientos para este cliente.'
+    },
+    ru: {
+        adminOnly: 'Доступно только администратору.',
+        title: 'Баланс клиентов',
+        subtitle: 'Регистрируйте долги по чеку или частичные оплаты и отслеживайте каждый счет с историей, фото и реальными данными клиента.',
+        totalBalance: 'Общий баланс в вашу пользу',
+        totalDebt: 'Загруженный долг',
+        totalPaid: 'Списанные оплаты',
+        debtClients: 'Клиенты с долгом',
+        client: 'Клиент',
+        selectClient: 'Выберите клиента...',
+        type: 'Тип',
+        ticket: 'Чек',
+        detail: 'Детали',
+        amount: 'Сумма',
+        add: 'Добавить',
+        useDate: 'Использовать дату',
+        debtClientsList: 'Клиенты с долгом',
+        searchDebtClients: 'Искать среди должников...',
+        noDebtClients: 'Нет клиентов с долгом.',
+        selectClientDetail: 'Выберите клиента, чтобы увидеть баланс, покупки и чеки.',
+        noCuit: 'Без CUIT',
+        noAddress: 'Адрес не указан',
+        currentBalance: 'Текущий баланс',
+        lastMovement: 'Последнее движение',
+        lastPurchase: 'Последняя покупка',
+        purchaseCount: 'Количество покупок',
+        totalPurchased: 'Сумма покупок',
+        ticketsPhotos: 'Чеки и прикрепленные фото',
+        dashboardData: 'Данные панели',
+        movementCount: 'Количество движений по балансу',
+        photoCount: 'Загруженные чеки/фото',
+        lastPurchaseAmount: 'Сумма последней покупки',
+        noDate: 'Без даты',
+        noTicket: 'Без чека',
+        paymentRegistered: 'Платеж зарегистрирован',
+        debtRegistered: 'Долг зарегистрирован',
+        noMovements: 'Для этого клиента пока нет движений.'
+    },
+    ko: {
+        adminOnly: '관리자만 볼 수 있습니다.',
+        title: '고객 잔액',
+        subtitle: '티켓별 외상이나 부분 결제를 기록하고, 각 고객의 내역·사진·실제 구매 데이터를 함께 관리하세요.',
+        totalBalance: '총 미수금',
+        totalDebt: '등록된 외상',
+        totalPaid: '차감된 결제',
+        debtClients: '외상 고객 수',
+        client: '고객',
+        selectClient: '고객 선택...',
+        type: '유형',
+        ticket: '티켓',
+        detail: '상세',
+        amount: '금액',
+        add: '추가',
+        useDate: '날짜 사용',
+        debtClientsList: '외상 고객',
+        searchDebtClients: '외상 고객 검색...',
+        noDebtClients: '표시할 외상 고객이 없습니다.',
+        selectClientDetail: '고객을 선택하면 잔액, 구매, 티켓을 볼 수 있습니다.',
+        noCuit: 'CUIT 없음',
+        noAddress: '주소 정보 없음',
+        currentBalance: '현재 잔액',
+        lastMovement: '최근 변동',
+        lastPurchase: '최근 구매',
+        purchaseCount: '구매 횟수',
+        totalPurchased: '총 구매액',
+        ticketsPhotos: '티켓 및 첨부 사진',
+        dashboardData: '대시보드 데이터',
+        movementCount: '잔액 변동 수',
+        photoCount: '업로드된 티켓/사진 수',
+        lastPurchaseAmount: '최근 구매 금액',
+        noDate: '날짜 없음',
+        noTicket: '티켓 없음',
+        paymentRegistered: '결제 등록됨',
+        debtRegistered: '외상 등록됨',
+        noMovements: '이 고객에 대한 변동이 아직 없습니다.'
+    }
+};
 
 const normalizeText = (value) => (value || '').toString().trim();
 const normalizeComparable = (value) => normalizeText(value)
@@ -27,8 +145,8 @@ const getTodayLocalDate = () => {
     const day = String(now.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
-const getDateLabel = (value) => {
-    if (!value) return 'Sin fecha';
+const getDateLabel = (value, emptyLabel = 'Sin fecha') => {
+    if (!value) return emptyLabel;
     const safeValue = String(value).slice(0, 10);
     const [year, month, day] = safeValue.split('-');
     return year && month && day ? `${day}/${month}/${year}` : value;
@@ -37,6 +155,7 @@ const getDateLabel = (value) => {
 export default function SaldoPage() {
     const { state, updateConfig } = useData();
     const { user } = useAuth();
+    const { lang } = useI18n();
     const [selectedClientId, setSelectedClientId] = useState('');
     const [debtSearchTerm, setDebtSearchTerm] = useState('');
     const [movementType, setMovementType] = useState(MOVEMENT_TYPES[0].value);
@@ -45,9 +164,10 @@ export default function SaldoPage() {
     const [ticket, setTicket] = useState('');
     const [detalle, setDetalle] = useState('');
     const [monto, setMonto] = useState('');
+    const pageText = PAGE_TEXT[lang] || PAGE_TEXT.es;
 
     if (user.role !== 'admin') {
-        return <div style={{ padding: 'var(--sp-4)' }}>Solo visible para administrador.</div>;
+        return <div style={{ padding: 'var(--sp-4)' }}>{pageText.adminOnly}</div>;
     }
 
     const clientes = state.config?.clientes || [];
@@ -289,28 +409,28 @@ export default function SaldoPage() {
         <div className="saldo-page" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 16 }}>
             <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <Wallet size={22} /> Saldo de Clientes
+                    <Wallet size={22} /> {pageText.title}
                 </h2>
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                    Registrá deuda por ticket o pagos parciales y seguí cada cuenta con historial, fotos y datos reales del cliente.
+                    {pageText.subtitle}
                 </p>
             </div>
 
             <div className="saldo-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Saldo total a favor</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.totalBalance}</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>{formatMoney(totalSaldo)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Deuda cargada</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.totalDebt}</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(totalDebt)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Pagos descontados</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.totalPaid}</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: '#93c5fd' }}>{formatMoney(totalPaid)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Clientes con deuda</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.debtClients}</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{clientsWithDebt}</div>
                 </div>
             </div>
@@ -318,9 +438,9 @@ export default function SaldoPage() {
             <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1.4fr) repeat(4, minmax(140px, 1fr)) auto', gap: 12, alignItems: 'end' }}>
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Cliente</label>
+                        <label className="form-label">{pageText.client}</label>
                         <select className="form-select" value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)}>
-                            <option value="">Seleccionar cliente...</option>
+                            <option value="">{pageText.selectClient}</option>
                             {clientes
                                 .slice()
                                 .sort((left, right) => (left.nombre || '').localeCompare(right.nombre || ''))
@@ -332,32 +452,32 @@ export default function SaldoPage() {
                         </select>
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Tipo</label>
+                        <label className="form-label">{pageText.type}</label>
                         <select className="form-select" value={movementType} onChange={(event) => setMovementType(event.target.value)}>
                             {MOVEMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                         </select>
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Ticket</label>
+                        <label className="form-label">{pageText.ticket}</label>
                         <input className="form-input" value={ticket} onChange={(event) => setTicket(event.target.value)} placeholder="Ej: T-2048" />
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Detalle</label>
+                        <label className="form-label">{pageText.detail}</label>
                         <input className="form-input" value={detalle} onChange={(event) => setDetalle(event.target.value)} placeholder="Observación opcional" />
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Monto</label>
+                        <label className="form-label">{pageText.amount}</label>
                         <input type="number" className="form-input" value={monto} onChange={(event) => setMonto(event.target.value)} />
                     </div>
                     <button className="btn btn-primary" onClick={addMovement} disabled={!selectedClientId || !monto}>
-                        <PlusCircle size={16} /> Agregar
+                        <PlusCircle size={16} /> {pageText.add}
                     </button>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                         <input type="checkbox" checked={useDate} onChange={(event) => setUseDate(event.target.checked)} />
-                        Usar fecha
+                        {pageText.useDate}
                     </label>
                     <input
                         type="date"
@@ -373,14 +493,14 @@ export default function SaldoPage() {
             <div className="saldo-layout" style={{ display: 'grid', gridTemplateColumns: '360px minmax(0, 1fr)', gap: 16 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 12, alignContent: 'start' }}>
                     <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Clientes con deuda</label>
+                        <label className="form-label">{pageText.debtClientsList}</label>
                         <div style={{ position: 'relative' }}>
                             <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                             <input
                                 className="form-input"
                                 value={debtSearchTerm}
                                 onChange={(event) => setDebtSearchTerm(event.target.value)}
-                                placeholder="Buscar entre los que deben..."
+                                placeholder={pageText.searchDebtClients}
                                 style={{ paddingLeft: 38 }}
                             />
                         </div>
@@ -389,7 +509,7 @@ export default function SaldoPage() {
                     <div style={{ display: 'grid', gap: 10, maxHeight: '65vh', overflowY: 'auto' }}>
                         {debtClients.length === 0 ? (
                             <div style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.03)', color: 'var(--text-muted)', fontSize: 13 }}>
-                                No hay clientes con deuda para mostrar.
+                                {pageText.noDebtClients}
                             </div>
                         ) : debtClients.map((cliente) => (
                             <button
@@ -424,23 +544,23 @@ export default function SaldoPage() {
 
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 14 }}>
                     {!selectedGroup ? (
-                        <div style={{ color: 'var(--text-muted)' }}>Seleccioná un cliente para ver su saldo, compras y tickets.</div>
+                        <div style={{ color: 'var(--text-muted)' }}>{pageText.selectClientDetail}</div>
                     ) : (
                         <>
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', flexWrap: 'wrap' }}>
                                 <div>
                                     <h3 style={{ margin: 0 }}>{selectedGroup.clienteNombre}</h3>
                                     <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
-                                        {selectedGroup.cuit || 'Sin CUIT'}
+                                        {selectedGroup.cuit || pageText.noCuit}
                                         {selectedGroup.telefono ? ` · ${selectedGroup.telefono}` : ''}
                                         {selectedGroup.email ? ` · ${selectedGroup.email}` : ''}
                                     </div>
                                     <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                                        {[selectedGroup.provincia, selectedGroup.ciudad, selectedGroup.direccion].filter(Boolean).join(' · ') || 'Sin dirección cargada'}
+                                        {[selectedGroup.provincia, selectedGroup.ciudad, selectedGroup.direccion].filter(Boolean).join(' · ') || pageText.noAddress}
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Saldo actual</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{pageText.currentBalance}</div>
                                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: selectedGroup.saldo > 0 ? 'var(--success)' : 'var(--text-primary)' }}>
                                         {formatMoney(selectedGroup.saldo)}
                                     </div>
@@ -449,29 +569,29 @@ export default function SaldoPage() {
 
                             <div className="saldo-detail-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
                                 <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.03)' }}>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Total deuda</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.totalDebt}</div>
                                     <div style={{ fontWeight: 'var(--fw-bold)' }}>{formatMoney(selectedGroup.totalDeuda)}</div>
                                 </div>
                                 <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.03)' }}>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Total pagado</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.totalPaid}</div>
                                     <div style={{ fontWeight: 'var(--fw-bold)', color: '#93c5fd' }}>{formatMoney(selectedGroup.totalPagado)}</div>
                                 </div>
                                 <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.03)' }}>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Último movimiento</div>
-                                    <div style={{ fontWeight: 'var(--fw-bold)' }}>{getDateLabel(selectedGroup.ultimaFecha)}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.lastMovement}</div>
+                                    <div style={{ fontWeight: 'var(--fw-bold)' }}>{getDateLabel(selectedGroup.ultimaFecha, pageText.noDate)}</div>
                                 </div>
                                 <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.03)' }}>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Última compra</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.lastPurchase}</div>
                                     <div style={{ fontWeight: 'var(--fw-bold)' }}>
-                                        {salesSummary.lastSale ? getDateLabel(String(salesSummary.lastSale.fecha).slice(0, 10)) : '-'}
+                                        {salesSummary.lastSale ? getDateLabel(String(salesSummary.lastSale.fecha).slice(0, 10), pageText.noDate) : '-'}
                                     </div>
                                 </div>
                                 <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.03)' }}>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Veces que compró</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.purchaseCount}</div>
                                     <div style={{ fontWeight: 'var(--fw-bold)' }}>{salesSummary.purchaseCount}</div>
                                 </div>
                                 <div style={{ padding: 12, borderRadius: 14, background: 'rgba(255,255,255,0.03)' }}>
-                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Total comprado</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.totalPurchased}</div>
                                     <div style={{ fontWeight: 'var(--fw-bold)' }}>{formatMoney(salesSummary.totalPurchased)}</div>
                                 </div>
                             </div>
@@ -479,7 +599,7 @@ export default function SaldoPage() {
                             <div className="saldo-profile-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(320px, 0.9fr)', gap: 16 }}>
                                 <div className="glass-panel" style={{ padding: 'var(--sp-4)', background: 'rgba(255,255,255,0.02)' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 'var(--fw-semibold)' }}>
-                                        <Camera size={16} /> Tickets y fotos adjuntas
+                                        <Camera size={16} /> {pageText.ticketsPhotos}
                                     </div>
                                     <ImageGallery imagenes={selectedClientPhotos} onRemove={removeTicketPhoto} />
                                     <ImageUploader onUpload={addTicketPhoto} />
@@ -487,19 +607,19 @@ export default function SaldoPage() {
 
                                 <div className="glass-panel" style={{ padding: 'var(--sp-4)', background: 'rgba(255,255,255,0.02)' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 'var(--fw-semibold)' }}>
-                                        <Receipt size={16} /> Datos del dashboard
+                                        <Receipt size={16} /> {pageText.dashboardData}
                                     </div>
                                     <div style={{ display: 'grid', gap: 10 }}>
                                         <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
-                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Cantidad de movimientos de saldo</div>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.movementCount}</div>
                                             <strong>{selectedGroup.movimientos.length}</strong>
                                         </div>
                                         <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
-                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Tickets/fotos cargadas</div>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.photoCount}</div>
                                             <strong>{selectedClientPhotos.length}</strong>
                                         </div>
                                         <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
-                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Último total de compra</div>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.lastPurchaseAmount}</div>
                                             <strong>{salesSummary.lastSale ? formatMoney(salesSummary.lastSale.totalFinal || salesSummary.lastSale.total) : '-'}</strong>
                                         </div>
                                     </div>
@@ -508,7 +628,7 @@ export default function SaldoPage() {
 
                             <div style={{ display: 'grid', gap: 10 }}>
                                 {selectedGroup.movimientos.length === 0 ? (
-                                    <div style={{ color: 'var(--text-muted)' }}>Todavía no hay movimientos para este cliente.</div>
+                                    <div style={{ color: 'var(--text-muted)' }}>{pageText.noMovements}</div>
                                 ) : selectedGroup.movimientos.map((movement) => (
                                     <div key={movement.id} style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.03)', display: 'grid', gap: 10 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', flexWrap: 'wrap' }}>
@@ -526,10 +646,10 @@ export default function SaldoPage() {
                                                 </div>
                                                 <div>
                                                     <div style={{ fontWeight: 'var(--fw-semibold)' }}>
-                                                        {movement.tipo === 'pago' ? 'Pago registrado' : 'Deuda cargada'}
+                                                        {movement.tipo === 'pago' ? pageText.paymentRegistered : pageText.debtRegistered}
                                                     </div>
                                                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                                        {getDateLabel(movement.fecha)} {movement.ticket ? `· Ticket ${movement.ticket}` : '· Sin ticket'}
+                                                        {getDateLabel(movement.fecha, pageText.noDate)} {movement.ticket ? `· ${pageText.ticket} ${movement.ticket}` : `· ${pageText.noTicket}`}
                                                     </div>
                                                 </div>
                                             </div>

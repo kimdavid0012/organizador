@@ -2,6 +2,112 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, FileText, RefreshCw, TrendingUp } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
+import { useI18n } from '../store/I18nContext';
+
+const REPORT_LANGUAGE_INSTRUCTIONS = {
+    es: 'Respondé siempre en español rioplatense profesional.',
+    ru: 'Respond in professional Russian.',
+    ko: '한국어로 전문적이고 명확하게 답변하세요.'
+};
+
+const PAGE_TEXT = {
+    es: {
+        adminOnly: 'Solo visible para administrador.',
+        pageTitle: 'Informes',
+        pageSubtitle: 'Informe ejecutivo del local con IA: rentabilidad, ventas, gastos, stock, producción y recomendaciones de recorte.',
+        pageNote: 'La base financiera de informes toma Mesan directo. POS solo se usa como apoyo desde {date} para no arrastrar ventas de prueba anteriores.',
+        statMesanTotal: 'Venta Mesan acumulada',
+        statMesan30d: 'Venta Mesan últimos 30 días',
+        statMesanExpense: 'Gasto Mesan acumulado',
+        statTotalIncome: 'Ingresos Banco + MP + Mesan',
+        statTextileDebt: 'Deuda total textileras (USD)',
+        restockTitle: 'Conviene volver a cortar',
+        restockEmpty: 'No hay artículos marcados todavía con urgencia clara de recorte.',
+        restockLine: '{code} · Vendió {units} un. en 30 días · Stock actual {stock}',
+        noCode: 'Sin código',
+        topExpenses: 'Top gastos',
+        quickAlerts: 'Alertas rápidas',
+        lowStock: 'Productos con stock bajo',
+        workshopPending: 'Artículos pendientes en taller',
+        recurringClients: 'Clientes con recompra',
+        activeProducts: 'Productos activos',
+        aiTitle: 'Informe ejecutivo IA',
+        aiSubtitle: 'Evalúa rentabilidad, ventas, caja, inventario, producción y oportunidades de recorte.',
+        generatedAt: 'Última generación: {date}',
+        generate: 'Generar informe',
+        generating: 'Generando...',
+        needKey: 'Necesitás cargar la OpenAI API Key en Configuración para usar esta sección.',
+        emptyReport: 'Todavía no hay informe generado. Cuando lo generes, la IA va a analizar si el local es rentable, qué corregir y si conviene volver a cortar artículos.',
+        overstockTitle: 'Stock alto sin salida reciente',
+        overstockLine: '{code} · Stock {stock} · Vendido últimos 30 días: {units}',
+        alertNeedKey: 'Necesitás cargar la OpenAI API Key en Configuración para generar Informes.',
+        alertGenerateError: 'No pude generar el informe: {message}'
+    },
+    ru: {
+        adminOnly: 'Доступно только администратору.',
+        pageTitle: 'Отчеты',
+        pageSubtitle: 'Исполнительный отчет магазина с ИИ: рентабельность, продажи, расходы, склад, производство и рекомендации по перекрою.',
+        pageNote: 'Финансовая база отчетов берется напрямую из Mesan. POS используется только как вспомогательный источник с {date}, чтобы не тянуть старые тестовые продажи.',
+        statMesanTotal: 'Выручка Mesan накопительно',
+        statMesan30d: 'Выручка Mesan за 30 дней',
+        statMesanExpense: 'Расход Mesan накопительно',
+        statTotalIncome: 'Доходы Банк + MP + Mesan',
+        statTextileDebt: 'Общий долг текстильщикам (USD)',
+        restockTitle: 'Стоит кроить снова',
+        restockEmpty: 'Пока нет товаров с явной срочностью на повторный крой.',
+        restockLine: '{code} · Продано {units} шт. за 30 дней · Остаток {stock}',
+        noCode: 'Без кода',
+        topExpenses: 'Топ расходов',
+        quickAlerts: 'Быстрые предупреждения',
+        lowStock: 'Товаров с низким остатком',
+        workshopPending: 'Артикулов в ожидании у цеха',
+        recurringClients: 'Клиенты с повторными покупками',
+        activeProducts: 'Активные товары',
+        aiTitle: 'Исполнительный отчет ИИ',
+        aiSubtitle: 'Оценивает рентабельность, продажи, кассу, склад, производство и возможности для перекроя.',
+        generatedAt: 'Последняя генерация: {date}',
+        generate: 'Сформировать отчет',
+        generating: 'Формирование...',
+        needKey: 'Нужно указать OpenAI API Key в настройках, чтобы использовать этот раздел.',
+        emptyReport: 'Отчет еще не сформирован. После генерации ИИ оценит рентабельность магазина, что нужно исправить и какие артикулы стоит кроить снова.',
+        overstockTitle: 'Высокий остаток без недавних продаж',
+        overstockLine: '{code} · Остаток {stock} · Продано за 30 дней: {units}',
+        alertNeedKey: 'Нужно указать OpenAI API Key в настройках, чтобы сформировать отчет.',
+        alertGenerateError: 'Не удалось сформировать отчет: {message}'
+    },
+    ko: {
+        adminOnly: '관리자만 볼 수 있습니다.',
+        pageTitle: '보고서',
+        pageSubtitle: 'AI 기반 매장 보고서: 수익성, 판매, 지출, 재고, 생산, 재단 추천.',
+        pageNote: '보고서의 재무 기준은 Mesan을 직접 사용합니다. POS는 이전 테스트 판매를 끌고 오지 않도록 {date}부터 보조 데이터로만 사용됩니다.',
+        statMesanTotal: 'Mesan 누적 매출',
+        statMesan30d: '최근 30일 Mesan 매출',
+        statMesanExpense: 'Mesan 누적 지출',
+        statTotalIncome: '은행 + MP + Mesan 총수입',
+        statTextileDebt: '원단 업체 총부채 (USD)',
+        restockTitle: '재단 재진행 추천',
+        restockEmpty: '아직 즉시 다시 재단할 필요가 뚜렷한 상품이 없습니다.',
+        restockLine: '{code} · 최근 30일 {units}개 판매 · 현재 재고 {stock}',
+        noCode: '코드 없음',
+        topExpenses: '주요 지출',
+        quickAlerts: '빠른 경고',
+        lowStock: '재고 부족 상품',
+        workshopPending: '작업실 대기 품목',
+        recurringClients: '재구매 고객',
+        activeProducts: '활성 상품',
+        aiTitle: 'AI 경영 보고서',
+        aiSubtitle: '수익성, 매출, 현금흐름, 재고, 생산, 재단 기회를 평가합니다.',
+        generatedAt: '마지막 생성: {date}',
+        generate: '보고서 생성',
+        generating: '생성 중...',
+        needKey: '이 섹션을 사용하려면 설정에 OpenAI API Key를 입력해야 합니다.',
+        emptyReport: '아직 생성된 보고서가 없습니다. 생성하면 AI가 매장의 수익성, 수정 포인트, 다시 재단할 품목을 분석합니다.',
+        overstockTitle: '최근 판매 없는 과다 재고',
+        overstockLine: '{code} · 재고 {stock} · 최근 30일 판매 {units}',
+        alertNeedKey: '보고서를 생성하려면 설정에 OpenAI API Key를 입력해야 합니다.',
+        alertGenerateError: '보고서를 생성하지 못했습니다: {message}'
+    }
+};
 
 const REPORT_PROMPT = `Sos un consultor senior de operaciones, finanzas comerciales e inventario para un local de indumentaria en Argentina.
 
@@ -59,7 +165,7 @@ ESTRUCTURA OBLIGATORIA:
 - Cada acción debe decir qué hacer y por qué.
 
 REGLAS:
-- Respondé siempre en español rioplatense profesional.
+- {{language_rule}}
 - No inventes datos ausentes.
 - Si algo no alcanza para concluir, decilo.
 - El ingreso total del local se calcula con Mesan (efectivo/POS local) + Banco + Mercado Pago.
@@ -99,13 +205,15 @@ const getTodayLocalDate = () => {
 export default function InformesPage() {
     const { state, updateConfig } = useData();
     const { user } = useAuth();
+    const { lang } = useI18n();
     const [loading, setLoading] = useState(false);
     const reportsCache = state.config?.reportsCache || {};
     const [reportText, setReportText] = useState(reportsCache.businessReport || '');
     const [generatedAt, setGeneratedAt] = useState(reportsCache.businessReportGeneratedAt || '');
+    const pageText = PAGE_TEXT[lang] || PAGE_TEXT.es;
 
     if (user.role !== 'admin') {
-        return <div style={{ padding: 'var(--sp-4)' }}>Solo visible para administrador.</div>;
+        return <div style={{ padding: 'var(--sp-4)' }}>{pageText.adminOnly}</div>;
     }
 
     const posReportsStartDate = state.config?.reportsPosStartDate || getTodayLocalDate();
@@ -372,13 +480,15 @@ export default function InformesPage() {
     const generateBusinessReport = async () => {
         const openaiKey = state.config?.marketing?.openaiKey;
         if (!openaiKey) {
-            alert('Necesitás cargar la OpenAI API Key en Configuración para generar Informes.');
+            alert(pageText.alertNeedKey);
             return;
         }
 
         setLoading(true);
         try {
-            const prompt = REPORT_PROMPT.replace('{{business_data}}', JSON.stringify(reportData, null, 2));
+            const prompt = REPORT_PROMPT
+                .replace('{{business_data}}', JSON.stringify(reportData, null, 2))
+                .replace('{{language_rule}}', REPORT_LANGUAGE_INSTRUCTIONS[lang] || REPORT_LANGUAGE_INSTRUCTIONS.es);
 
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
@@ -422,7 +532,7 @@ export default function InformesPage() {
             });
         } catch (error) {
             console.error('Error generating business report:', error);
-            alert(`No pude generar el informe: ${error.message}`);
+            alert(pageText.alertGenerateError.replace('{message}', error.message));
         } finally {
             setLoading(false);
         }
@@ -432,35 +542,35 @@ export default function InformesPage() {
         <div className="informes-page" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 16 }}>
             <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <FileText size={22} /> Informes
+                    <FileText size={22} /> {pageText.pageTitle}
                 </h2>
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                    Informe ejecutivo del local con IA: rentabilidad, ventas, gastos, stock, producción y recomendaciones de recorte.
+                    {pageText.pageSubtitle}
                 </p>
                 <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-                    La base financiera de informes toma Mesan directo. POS solo se usa como apoyo desde {posReportsStartDate.split('-').reverse().join('/')} para no arrastrar ventas de prueba anteriores.
+                    {pageText.pageNote.replace('{date}', posReportsStartDate.split('-').reverse().join('/'))}
                 </div>
             </div>
 
             <div className="informes-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Venta Mesan acumulada</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.statMesanTotal}</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(reportData.profitabilitySnapshot.mesanCashIncomeTotalARS)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Venta Mesan últimos 30 días</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.statMesan30d}</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(reportData.profitabilitySnapshot.mesanCashIncomeLast30DaysARS)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Gasto Mesan acumulado</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.statMesanExpense}</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: '#fca5a5' }}>{formatMoney(reportData.profitabilitySnapshot.mesanExpensesARS)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Ingresos Banco + MP + Mesan</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.statTotalIncome}</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>{formatMoney(reportData.profitabilitySnapshot.totalOperationalIncomeARS)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Deuda total textileras (USD)</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.statTextileDebt}</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: '#fbbf24' }}>
                         US$ {Math.round(reportData.profitabilitySnapshot.totalTextileDebtUSD).toLocaleString('es-AR')}
                     </div>
@@ -470,16 +580,19 @@ export default function InformesPage() {
             <div className="informes-secondary-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 16 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <TrendingUp size={18} /> Conviene volver a cortar
+                        <TrendingUp size={18} /> {pageText.restockTitle}
                     </h3>
                     <div style={{ display: 'grid', gap: 8 }}>
                         {reportData.inventory.restockCandidates.length === 0 ? (
-                            <div style={{ color: 'var(--text-muted)' }}>No hay artículos marcados todavía con urgencia clara de recorte.</div>
+                            <div style={{ color: 'var(--text-muted)' }}>{pageText.restockEmpty}</div>
                         ) : reportData.inventory.restockCandidates.map((item) => (
                             <div key={`${item.codigoInterno}-${item.detalleCorto}`} style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
                                 <div style={{ fontWeight: 'var(--fw-semibold)' }}>{item.detalleCorto}</div>
                                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                    {item.codigoInterno || 'Sin código'} · Vendió {item.unidades30d} un. en 30 días · Stock actual {item.stockActual}
+                                    {pageText.restockLine
+                                        .replace('{code}', item.codigoInterno || pageText.noCode)
+                                        .replace('{units}', item.unidades30d)
+                                        .replace('{stock}', item.stockActual)}
                                 </div>
                             </div>
                         ))}
@@ -487,7 +600,7 @@ export default function InformesPage() {
                 </div>
 
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <h3 style={{ marginBottom: 12 }}>Top gastos</h3>
+                    <h3 style={{ marginBottom: 12 }}>{pageText.topExpenses}</h3>
                     <div style={{ display: 'grid', gap: 8 }}>
                         {reportData.topExpenseCategories.map((item) => (
                             <div key={item.categoria} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
@@ -499,22 +612,22 @@ export default function InformesPage() {
                 </div>
 
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <h3 style={{ marginBottom: 12 }}>Alertas rápidas</h3>
+                    <h3 style={{ marginBottom: 12 }}>{pageText.quickAlerts}</h3>
                     <div style={{ display: 'grid', gap: 10 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
-                            <span>Productos con stock bajo</span>
+                            <span>{pageText.lowStock}</span>
                             <strong>{reportData.inventory.lowStockCount}</strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
-                            <span>Artículos pendientes en taller</span>
+                            <span>{pageText.workshopPending}</span>
                             <strong>{reportData.operations.pendingWorkshopArticles}</strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
-                            <span>Clientes con recompra</span>
+                            <span>{pageText.recurringClients}</span>
                             <strong>{reportData.clients.recurringClients}</strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
-                            <span>Productos activos</span>
+                            <span>{pageText.activeProducts}</span>
                             <strong>{reportData.inventory.activeProducts}</strong>
                         </div>
                     </div>
@@ -525,32 +638,32 @@ export default function InformesPage() {
                 <div className="informes-report-header" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                     <div>
                         <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BarChart3 size={18} /> Informe ejecutivo IA
+                            <BarChart3 size={18} /> {pageText.aiTitle}
                         </h3>
                         <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)' }}>
-                            Evalúa rentabilidad, ventas, caja, inventario, producción y oportunidades de recorte.
+                            {pageText.aiSubtitle}
                         </p>
                         {generatedAt && (
                             <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                                Última generación: {new Date(generatedAt).toLocaleString('es-AR')}
+                                {pageText.generatedAt.replace('{date}', new Date(generatedAt).toLocaleString('es-AR'))}
                             </div>
                         )}
                     </div>
                     <button className="btn btn-primary informes-report-button" onClick={generateBusinessReport} disabled={loading}>
                         {loading ? <RefreshCw size={16} className="spin" /> : <FileText size={16} />}
-                        {loading ? 'Generando...' : 'Generar informe'}
+                        {loading ? pageText.generating : pageText.generate}
                     </button>
                 </div>
 
                 {!state.config?.marketing?.openaiKey && (
                     <div style={{ padding: 14, borderRadius: 12, background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.2)', color: 'var(--text-secondary)', fontSize: 13 }}>
-                        Necesitás cargar la OpenAI API Key en Configuración para usar esta sección.
+                        {pageText.needKey}
                     </div>
                 )}
 
                 {!reportText ? (
                     <div style={{ padding: 16, borderRadius: 12, border: '1px dashed rgba(255,255,255,0.12)', color: 'var(--text-muted)', fontSize: 13 }}>
-                        Todavía no hay informe generado. Cuando lo generes, la IA va a analizar si el local es rentable, qué corregir y si conviene volver a cortar artículos.
+                        {pageText.emptyReport}
                     </div>
                 ) : (
                     <pre className="informes-report-output" style={{
@@ -573,14 +686,17 @@ export default function InformesPage() {
             {reportData.inventory.overstockCandidates.length > 0 && (
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <AlertTriangle size={18} /> Stock alto sin salida reciente
+                        <AlertTriangle size={18} /> {pageText.overstockTitle}
                     </h3>
                     <div style={{ display: 'grid', gap: 8 }}>
                         {reportData.inventory.overstockCandidates.map((item) => (
                             <div key={`${item.codigoInterno}-${item.detalleCorto}`} style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
                                 <div style={{ fontWeight: 'var(--fw-semibold)' }}>{item.detalleCorto}</div>
                                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                    {item.codigoInterno || 'Sin código'} · Stock {item.stockActual} · Vendido últimos 30 días: {item.unidades30d}
+                                    {pageText.overstockLine
+                                        .replace('{code}', item.codigoInterno || pageText.noCode)
+                                        .replace('{stock}', item.stockActual)
+                                        .replace('{units}', item.unidades30d)}
                                 </div>
                             </div>
                         ))}

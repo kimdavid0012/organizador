@@ -11,6 +11,8 @@ const translations = {
         navBiblioteca: 'Moldes',
         navTelas: 'Telas',
         navConfiguracion: 'Configuración',
+        navInformes: 'Informes',
+        navSaldo: 'Saldo',
 
         // Header
         searchPlaceholder: 'Buscar molde por nombre, código, categoría...',
@@ -220,6 +222,8 @@ const translations = {
         navBiblioteca: 'Лекала',
         navTelas: 'Ткани',
         navConfiguracion: 'Настройки',
+        navInformes: 'Отчеты',
+        navSaldo: 'Баланс',
         searchPlaceholder: 'Поиск лекала по названию, коду, категории...',
         filterPrioridad: 'Приоритет',
         filterEstado: 'Статус',
@@ -403,6 +407,8 @@ const translations = {
         navBiblioteca: '패턴',
         navTelas: '원단',
         navConfiguracion: '설정',
+        navInformes: '보고서',
+        navSaldo: '잔액',
         searchPlaceholder: '이름, 코드, 카테고리로 패턴 검색...',
         filterPrioridad: '우선순위',
         filterEstado: '상태',

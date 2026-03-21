@@ -281,8 +281,8 @@ function AppContent() {
         { id: 'mesan', icon: BarChart3, label: 'Mesan' },
         { id: 'banking', icon: Landmark, label: 'Banco y MP' },
         { id: 'settings', icon: SettingsIcon, label: t('navConfiguracion') },
-        { id: 'informes', icon: FileText, label: 'Informes' },
-        { id: 'saldo', icon: Wallet, label: 'Saldo' },
+        { id: 'informes', icon: FileText, label: t('navInformes') },
+        { id: 'saldo', icon: Wallet, label: t('navSaldo') },
     ];
 
     if (user.role !== 'admin') {
