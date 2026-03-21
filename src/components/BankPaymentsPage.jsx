@@ -3,9 +3,11 @@ import { Download, Landmark, PlusCircle } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
 import { JANUARY_2026_BANK_PAYMENTS_IMPORT } from '../data/bankPaymentsJanuary2026';
+import { FEBRUARY_2026_BANK_PAYMENTS_IMPORT } from '../data/bankPaymentsFebruary2026';
 
 const METHODS = ['Banco', 'Mercado Pago'];
 const MONTH_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const IMPORT_BATCHES = [JANUARY_2026_BANK_PAYMENTS_IMPORT, FEBRUARY_2026_BANK_PAYMENTS_IMPORT];
 
 const getMonthKey = (value) => (value || '').slice(0, 7);
 const getMonthLabel = (monthKey) => {
@@ -38,8 +40,13 @@ export default function BankPaymentsPage() {
     const totalDigital = dailyEntries.reduce((acc, entry) => acc + Number(entry.monto || 0), 0);
     const totalCombined = totalDigital + cashToday;
     const canSeeTotals = user.role === 'admin';
-    const januaryImportAlreadyLoaded = entries.some((entry) => entry.batchId === JANUARY_2026_BANK_PAYMENTS_IMPORT.batchId);
-    const januaryImportedEntries = entries.filter((entry) => entry.batchId === JANUARY_2026_BANK_PAYMENTS_IMPORT.batchId);
+    const importStatuses = useMemo(() => {
+        return IMPORT_BATCHES.map((batch) => ({
+            ...batch,
+            alreadyLoaded: entries.some((entry) => entry.batchId === batch.batchId),
+            importedCount: entries.filter((entry) => entry.batchId === batch.batchId).length
+        }));
+    }, [entries]);
     const monthlyGroups = useMemo(() => {
         const grouped = new Map();
 
@@ -111,14 +118,14 @@ export default function BankPaymentsPage() {
         setMonto('');
     };
 
-    const importJanuaryBatch = () => {
-        if (januaryImportAlreadyLoaded) return;
+    const importBatch = (batch) => {
+        if (!batch || entries.some((entry) => entry.batchId === batch.batchId)) return;
 
         const existingKeys = new Set(
             entries.map((entry) => `${entry.fecha}|${entry.metodo}|${entry.cliente || ''}|${Number(entry.monto || 0)}`)
         );
 
-        const freshEntries = JANUARY_2026_BANK_PAYMENTS_IMPORT.entries.filter((entry) => {
+        const freshEntries = batch.entries.filter((entry) => {
             const key = `${entry.fecha}|${entry.metodo}|${entry.cliente || ''}|${Number(entry.monto || 0)}`;
             return !existingKeys.has(key);
         });
@@ -143,34 +150,44 @@ export default function BankPaymentsPage() {
 
             {canSeeTotals && (
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <div>
-                            <h3 style={{ margin: 0 }}>Importar lote Enero 2026</h3>
-                            <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)' }}>
-                                Libro1.xlsx listo para cargar en Banco y Mercado Pago sin duplicar movimientos.
-                            </p>
-                        </div>
-                        <button className="btn btn-secondary" onClick={importJanuaryBatch} disabled={januaryImportAlreadyLoaded}>
-                            <Download size={16} /> {januaryImportAlreadyLoaded ? 'Enero 2026 cargado' : 'Importar Enero 2026'}
-                        </button>
+                    <div>
+                        <h3 style={{ margin: 0 }}>Importar lotes mensuales</h3>
+                        <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)' }}>
+                            Cada archivo se carga por separado, sin duplicar movimientos ya guardados.
+                        </p>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                        <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Banco enero</div>
-                            <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 22 }}>${JANUARY_2026_BANK_PAYMENTS_IMPORT.totals.banco.toLocaleString('es-AR')}</div>
-                        </div>
-                        <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Mercado Pago enero</div>
-                            <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 22 }}>${JANUARY_2026_BANK_PAYMENTS_IMPORT.totals.mercadoPago.toLocaleString('es-AR')}</div>
-                        </div>
-                        <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Total lote enero</div>
-                            <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 22, color: 'var(--success)' }}>${JANUARY_2026_BANK_PAYMENTS_IMPORT.totals.combined.toLocaleString('es-AR')}</div>
-                        </div>
-                        <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Movimientos importados</div>
-                            <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 22 }}>{januaryImportedEntries.length || JANUARY_2026_BANK_PAYMENTS_IMPORT.totals.count}</div>
-                        </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+                        {importStatuses.map((batch) => (
+                            <div key={batch.batchId} style={{ padding: 14, borderRadius: 16, background: 'rgba(255,255,255,0.03)', display: 'grid', gap: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 18 }}>{batch.sourceName.replace('.xlsx - ', ' · ')}</div>
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{batch.totals.count} movimientos</div>
+                                    </div>
+                                    <button className="btn btn-secondary" onClick={() => importBatch(batch)} disabled={batch.alreadyLoaded}>
+                                        <Download size={16} /> {batch.alreadyLoaded ? 'Cargado' : 'Importar'}
+                                    </button>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                                    <div style={{ padding: 10, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Banco</div>
+                                        <div style={{ fontWeight: 'var(--fw-bold)' }}>${batch.totals.banco.toLocaleString('es-AR')}</div>
+                                    </div>
+                                    <div style={{ padding: 10, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Mercado Pago</div>
+                                        <div style={{ fontWeight: 'var(--fw-bold)' }}>${batch.totals.mercadoPago.toLocaleString('es-AR')}</div>
+                                    </div>
+                                    <div style={{ padding: 10, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Total lote</div>
+                                        <div style={{ fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>${batch.totals.combined.toLocaleString('es-AR')}</div>
+                                    </div>
+                                    <div style={{ padding: 10, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Importados</div>
+                                        <div style={{ fontWeight: 'var(--fw-bold)' }}>{batch.importedCount || batch.totals.count}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
