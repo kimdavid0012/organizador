@@ -160,7 +160,7 @@ class ErrorBoundary extends React.Component {
 }
 
 function AppContent() {
-    const { state, addMolde, addTarea, syncStatus } = useData();
+    const { state, addMolde, addTarea, syncStatus, updateConfig } = useData();
     const { moldes, telas, config } = state;
     const { t, lang, changeLang, LANGUAGE_LABELS } = useI18n();
     const { user, users, originalAdmin, logout, switchUser, getAllowedSections } = useAuth(); // Auth integration
@@ -191,6 +191,11 @@ function AppContent() {
         root.style.setProperty('--bg-card', theme.surfaceColor || 'rgba(25, 25, 40, 0.55)');
         root.style.setProperty('--text-primary', theme.textColor || '#f0f0fa');
     }, [state?.config?.uiTheme]);
+
+    useEffect(() => {
+        if (state?.config?.idioma === lang) return;
+        updateConfig({ idioma: lang });
+    }, [lang, state?.config?.idioma, updateConfig]);
 
     // Filter moldes
     const filteredMoldes = useMemo(() => {
