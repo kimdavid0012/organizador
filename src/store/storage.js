@@ -2,7 +2,9 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
 const STORAGE_KEY = 'organizador_moldes_data';
+const BACKUP_INDEX_KEY = 'organizador_moldes_data_backups';
 const FIRESTORE_DOC = 'app-data/main';
+const MAX_LOCAL_BACKUPS = 12;
 
 const DEFAULT_COLUMNAS = [
     { id: 'por-hacer', nombre: 'Por hacer', orden: 0, color: '#6366f1' },
@@ -241,9 +243,53 @@ export const loadDataFromLocal = () => {
     }
 };
 
+export const loadLatestBackupFromLocal = () => {
+    try {
+        const rawIndex = localStorage.getItem(BACKUP_INDEX_KEY);
+        if (!rawIndex) return null;
+        const backupKeys = JSON.parse(rawIndex);
+        if (!Array.isArray(backupKeys) || backupKeys.length === 0) return null;
+
+        for (let i = backupKeys.length - 1; i >= 0; i -= 1) {
+            const backupRaw = localStorage.getItem(backupKeys[i]);
+            if (!backupRaw) continue;
+            return normalizeData(JSON.parse(backupRaw));
+        }
+        return null;
+    } catch (err) {
+        console.error('Error cargando backup local historico:', err);
+        return null;
+    }
+};
+
+const saveBackupSnapshotToLocal = (data) => {
+    try {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupKey = `${STORAGE_KEY}_backup_${stamp}`;
+        const rawIndex = localStorage.getItem(BACKUP_INDEX_KEY);
+        const parsedIndex = JSON.parse(rawIndex || '[]');
+        const backupKeys = Array.isArray(parsedIndex) ? parsedIndex : [];
+
+        localStorage.setItem(backupKey, JSON.stringify(data));
+        const nextKeys = [...backupKeys, backupKey].slice(-MAX_LOCAL_BACKUPS);
+
+        while (backupKeys.length >= MAX_LOCAL_BACKUPS) {
+            const oldKey = backupKeys.shift();
+            if (oldKey && !nextKeys.includes(oldKey)) {
+                localStorage.removeItem(oldKey);
+            }
+        }
+
+        localStorage.setItem(BACKUP_INDEX_KEY, JSON.stringify(nextKeys));
+    } catch (err) {
+        console.error('Error guardando snapshot local:', err);
+    }
+};
+
 export const saveDataToLocal = (data) => {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        saveBackupSnapshotToLocal(data);
     } catch (err) {
         console.error('Error guardando datos locales:', err);
         if (err.name === 'QuotaExceededError') {
@@ -288,6 +334,16 @@ export const saveData = (data) => {
 
 export const clearData = () => {
     localStorage.removeItem(STORAGE_KEY);
+    try {
+        const rawIndex = localStorage.getItem(BACKUP_INDEX_KEY);
+        const backupKeys = JSON.parse(rawIndex || '[]');
+        if (Array.isArray(backupKeys)) {
+            backupKeys.forEach((key) => localStorage.removeItem(key));
+        }
+        localStorage.removeItem(BACKUP_INDEX_KEY);
+    } catch {
+        localStorage.removeItem(BACKUP_INDEX_KEY);
+    }
 };
 
 export const getStorageUsage = () => {

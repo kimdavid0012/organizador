@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db, firestoreOfflineReady } from './firebase';
-import { DEFAULT_DATA, loadDataFromLocal, saveDataToLocal, normalizeData, downloadBackupJSON } from './storage';
+import { DEFAULT_DATA, loadDataFromLocal, loadLatestBackupFromLocal, saveDataToLocal, normalizeData, downloadBackupJSON } from './storage';
 import { generateId } from '../utils/helpers';
 import { wooService } from '../utils/wooService';
 import { metaService } from '../utils/metaService';
@@ -11,6 +11,31 @@ const DataContext = createContext(null);
 const normalizeProductCode = (value) => (value || '').toString().trim().toUpperCase();
 
 const normalizeText = (value) => (value || '').toString().trim();
+
+const countEntries = (value) => Array.isArray(value) ? value.length : 0;
+
+const getCriticalCounts = (data) => ({
+    moldes: countEntries(data?.moldes),
+    telas: countEntries(data?.telas),
+    tareas: countEntries(data?.tareas),
+    cortes: countEntries(data?.config?.cortes),
+    talleres: countEntries(data?.config?.talleres),
+    cortadores: countEntries(data?.config?.cortadores),
+    pedidosOnline: countEntries(data?.config?.pedidosOnline),
+    mercaderiaConteos: countEntries(data?.config?.mercaderiaConteos),
+    posProductos: countEntries(data?.config?.posProductos),
+    posVentas: countEntries(data?.config?.posVentas),
+    bankPayments: countEntries(data?.config?.bankPayments),
+    fabricPayments: countEntries(data?.config?.fabricPayments),
+    clientes: countEntries(data?.config?.clientes)
+});
+
+const hasRicherLocalData = (localData, remoteData) => {
+    const localCounts = getCriticalCounts(localData);
+    const remoteCounts = getCriticalCounts(remoteData);
+
+    return Object.keys(localCounts).some((key) => localCounts[key] > remoteCounts[key]);
+};
 
 const sanitizeStockBreakdown = (entries = []) =>
     entries
@@ -976,12 +1001,7 @@ export function DataProvider({ children }) {
                     const fullData = await loadDataFromFirestore();
 
                     // Protección: no sobreescribir si tenemos más datos localmente
-                    const localCortes = stateRef.current?.config?.cortes?.length || 0;
-                    const remoteCortes = fullData?.config?.cortes?.length || 0;
-                    const localMoldes = stateRef.current?.moldes?.length || 0;
-                    const remoteMoldes = fullData?.moldes?.length || 0;
-
-                    if (initialized.current && (localCortes > remoteCortes || localMoldes > remoteMoldes)) {
+                    if (initialized.current && hasRicherLocalData(stateRef.current, fullData)) {
                         console.warn(`⚠️ Firestore tiene menos datos que local. Ignorando.`);
                         return;
                     }
@@ -999,7 +1019,7 @@ export function DataProvider({ children }) {
                     const data = await loadDataFromFirestore();
                     dispatch({ type: ACTION_TYPES.SET_DATA, payload: data });
                 } catch (e) {
-                    const localData = loadDataFromLocal();
+                    const localData = loadDataFromLocal() || loadLatestBackupFromLocal();
                     if (localData) dispatch({ type: ACTION_TYPES.SET_DATA, payload: localData });
                 }
                 initialized.current = true;
@@ -1007,7 +1027,7 @@ export function DataProvider({ children }) {
         }, (error) => {
             console.error('Firestore listener error:', error);
             updateSyncStatus({ lastError: error.message || 'Error de conexion con Firestore' });
-            const localData = loadDataFromLocal();
+            const localData = loadDataFromLocal() || loadLatestBackupFromLocal();
             if (localData) dispatch({ type: ACTION_TYPES.SET_DATA, payload: localData });
             initialized.current = true;
         });
