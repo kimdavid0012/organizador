@@ -725,6 +725,14 @@ function dataReducer(state, action) {
                     )
                 }
             };
+        case ACTION_TYPES.DELETE_POS_PRODUCT:
+            return {
+                ...state,
+                config: {
+                    ...state.config,
+                    posProductos: (state.config.posProductos || []).filter((product) => product.id !== action.payload)
+                }
+            };
         case ACTION_TYPES.IMPORT_POS_PRODUCTS:
             return {
                 ...state,
