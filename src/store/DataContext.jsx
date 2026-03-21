@@ -5,6 +5,7 @@ import { DEFAULT_DATA, loadDataFromLocal, loadLatestBackupFromLocal, saveDataToL
 import { generateId } from '../utils/helpers';
 import { wooService } from '../utils/wooService';
 import { metaService } from '../utils/metaService';
+import { ARTICLE_CODE_PAIRS } from '../data/articleCodePairs';
 
 const DataContext = createContext(null);
 
@@ -16,6 +17,26 @@ const normalizeComparable = (value) => normalizeText(value)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^A-Z0-9]/g, '');
+const normalizeArticleCodeKey = (value) => normalizeComparable(value).replace(/^ART(?=\d)/, '');
+
+const ARTICLE_CODE_ALIAS_MAP = ARTICLE_CODE_PAIRS.reduce((map, pair) => {
+    const factoryKey = normalizeArticleCodeKey(pair.factory);
+    const localKey = normalizeArticleCodeKey(pair.local);
+    if (!factoryKey || !localKey) return map;
+
+    if (!map.has(factoryKey)) map.set(factoryKey, new Set());
+    if (!map.has(localKey)) map.set(localKey, new Set());
+
+    map.get(factoryKey).add(localKey);
+    map.get(localKey).add(factoryKey);
+    return map;
+}, new Map());
+
+const LOCAL_ARTICLE_KEYS = new Set(
+    ARTICLE_CODE_PAIRS
+        .map((pair) => normalizeArticleCodeKey(pair.local))
+        .filter(Boolean)
+);
 
 const countEntries = (value) => Array.isArray(value) ? value.length : 0;
 
@@ -85,6 +106,159 @@ const upsertPosProducts = (existingProducts = [], incomingProducts = []) => {
     });
 
     return merged;
+};
+
+const buildProductCodeKeys = (value) => {
+    const normalized = normalizeComparable(value);
+    const articleKey = normalizeArticleCodeKey(value);
+    const keys = new Set([normalized, articleKey].filter(Boolean));
+
+    Array.from(keys).forEach((key) => {
+        const aliases = ARTICLE_CODE_ALIAS_MAP.get(key);
+        if (!aliases) return;
+        aliases.forEach((alias) => keys.add(alias));
+    });
+
+    return keys;
+};
+
+const countMeaningfulProductFields = (product) => (
+    [
+        product?.codigoInterno,
+        product?.codigoBarras,
+        product?.detalleCorto,
+        product?.detalleLargo,
+        product?.proveedor,
+        product?.wooId,
+        product?.precioCosto,
+        product?.precioVentaL1,
+        product?.precioVentaL2,
+        product?.precioVentaL3,
+        product?.precioVentaL4,
+        product?.precioVentaL5,
+        product?.precioVentaWeb,
+        Array.isArray(product?.imagenes) ? product.imagenes.length : 0,
+        Array.isArray(product?.stockPorColor) ? product.stockPorColor.length : 0
+    ]
+        .filter((value) => {
+            if (Array.isArray(value)) return value.length > 0;
+            if (typeof value === 'number') return value > 0;
+            return Boolean(normalizeText(value));
+        })
+        .length
+);
+
+const scorePosProductRecord = (product) => {
+    const stock = Number(product?.stock || 0);
+    const codeKeys = buildProductCodeKeys(product?.codigoInterno);
+    let score = 0;
+
+    if (stock !== 999) score += 500;
+    if (stock > 0 && stock !== 999) score += 40;
+    if (Array.isArray(product?.stockPorColor) && product.stockPorColor.length > 0) score += 90;
+    if (product?.wooId) score += 40;
+    if (product?.codigoBarras) score += 15;
+    if (product?.activo) score += 20;
+    if (codeKeys.size > 0 && Array.from(codeKeys).some((key) => LOCAL_ARTICLE_KEYS.has(key))) score += 35;
+    if (
+        Number(product?.precioVentaL1 || 0)
+        || Number(product?.precioVentaL2 || 0)
+        || Number(product?.precioVentaL3 || 0)
+        || Number(product?.precioVentaWeb || 0)
+    ) score += 20;
+
+    score += countMeaningfulProductFields(product);
+    return score;
+};
+
+const mergePosProductGroup = (products = []) => {
+    if (products.length <= 1) return products[0];
+
+    const sorted = [...products].sort((left, right) => scorePosProductRecord(right) - scorePosProductRecord(left));
+    const merged = { ...sorted[0] };
+    const realStockProducts = sorted.filter((item) => Number(item?.stock || 0) !== 999);
+
+    sorted.slice(1).forEach((product) => {
+        if (!merged.codigoInterno && product.codigoInterno) merged.codigoInterno = product.codigoInterno;
+        if (!merged.codigoBarras && product.codigoBarras) merged.codigoBarras = product.codigoBarras;
+        if (!merged.detalleCorto && product.detalleCorto) merged.detalleCorto = product.detalleCorto;
+        if (!merged.detalleLargo && product.detalleLargo) merged.detalleLargo = product.detalleLargo;
+        if (!merged.proveedor && product.proveedor) merged.proveedor = product.proveedor;
+        if (!merged.wooId && product.wooId) merged.wooId = product.wooId;
+        if (!merged.imagen && product.imagen) merged.imagen = product.imagen;
+        if (!merged.image && product.image) merged.image = product.image;
+        if (!merged.thumbnail && product.thumbnail) merged.thumbnail = product.thumbnail;
+
+        if ((!merged.precioCosto || merged.precioCosto === 0) && Number(product.precioCosto || 0) > 0) merged.precioCosto = product.precioCosto;
+        if ((!merged.precioVentaL1 || merged.precioVentaL1 === 0) && Number(product.precioVentaL1 || 0) > 0) merged.precioVentaL1 = product.precioVentaL1;
+        if ((!merged.precioVentaL2 || merged.precioVentaL2 === 0) && Number(product.precioVentaL2 || 0) > 0) merged.precioVentaL2 = product.precioVentaL2;
+        if ((!merged.precioVentaL3 || merged.precioVentaL3 === 0) && Number(product.precioVentaL3 || 0) > 0) merged.precioVentaL3 = product.precioVentaL3;
+        if ((!merged.precioVentaL4 || merged.precioVentaL4 === 0) && Number(product.precioVentaL4 || 0) > 0) merged.precioVentaL4 = product.precioVentaL4;
+        if ((!merged.precioVentaL5 || merged.precioVentaL5 === 0) && Number(product.precioVentaL5 || 0) > 0) merged.precioVentaL5 = product.precioVentaL5;
+        if ((!merged.precioVentaWeb || merged.precioVentaWeb === 0) && Number(product.precioVentaWeb || 0) > 0) merged.precioVentaWeb = product.precioVentaWeb;
+    });
+
+    const mergedImages = sorted.flatMap((product) => Array.isArray(product?.imagenes) ? product.imagenes : []);
+    if (mergedImages.length) {
+        const seen = new Set();
+        merged.imagenes = mergedImages.filter((image) => {
+            const key = normalizeComparable(image?.url || image?.src || image?.data || image?.id || '');
+            if (!key || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    const mergedStockBreakdown = sorted.flatMap((product) => Array.isArray(product?.stockPorColor) ? product.stockPorColor : []);
+    if (mergedStockBreakdown.length) {
+        merged.stockPorColor = sanitizeStockBreakdown(mergedStockBreakdown);
+    }
+
+    if (realStockProducts.length > 0) {
+        merged.stock = Math.max(...realStockProducts.map((product) => Number(product?.stock || 0)));
+    }
+
+    return merged;
+};
+
+const dedupePosProducts = (products = []) => {
+    if (!Array.isArray(products) || products.length <= 1) return Array.isArray(products) ? products : [];
+
+    const groups = [];
+
+    products.forEach((product) => {
+        const codeKeys = buildProductCodeKeys(product?.codigoInterno);
+        const detailKey = normalizeComparable(product?.detalleCorto);
+        const stock = Number(product?.stock || 0);
+
+        const match = groups.find((group) => {
+            const hasCodeOverlap = Array.from(codeKeys).some((key) => group.codeKeys.has(key));
+            if (hasCodeOverlap) return true;
+
+            const sameDetailWithGhost = detailKey
+                && group.detailKeys.has(detailKey)
+                && (stock === 999 || group.hasGhostStock);
+
+            return sameDetailWithGhost;
+        });
+
+        if (match) {
+            match.products.push(product);
+            codeKeys.forEach((key) => match.codeKeys.add(key));
+            if (detailKey) match.detailKeys.add(detailKey);
+            if (stock === 999) match.hasGhostStock = true;
+            return;
+        }
+
+        groups.push({
+            products: [product],
+            codeKeys,
+            detailKeys: new Set(detailKey ? [detailKey] : []),
+            hasGhostStock: stock === 999
+        });
+    });
+
+    return groups.map((group) => mergePosProductGroup(group.products));
 };
 
 const buildComparableKeys = (...values) => {
@@ -178,7 +352,7 @@ const reconcilePosProductStocks = (products = [], moldes = [], config = {}) => {
 
 const withReconciledPosProducts = (config = {}, moldes = []) => ({
     ...config,
-    posProductos: reconcilePosProductStocks(config.posProductos || [], moldes, config)
+    posProductos: reconcilePosProductStocks(dedupePosProducts(config.posProductos || []), moldes, config)
 });
 
 const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = []) => {
@@ -826,10 +1000,10 @@ function dataReducer(state, action) {
         case ACTION_TYPES.DELETE_POS_PRODUCT:
             return {
                 ...state,
-                config: {
+                config: withReconciledPosProducts({
                     ...state.config,
                     posProductos: (state.config.posProductos || []).filter((product) => product.id !== action.payload)
-                }
+                }, state.moldes)
             };
         case ACTION_TYPES.IMPORT_POS_PRODUCTS:
             return {
@@ -973,8 +1147,13 @@ function dataReducer(state, action) {
                 tareas: (state.tareas || []).filter(t => t.id !== action.payload)
             };
 
-        case ACTION_TYPES.SET_DATA:
-            return normalizeData(action.payload);
+        case ACTION_TYPES.SET_DATA: {
+            const normalized = normalizeData(action.payload);
+            return {
+                ...normalized,
+                config: withReconciledPosProducts(normalized.config, normalized.moldes)
+            };
+        }
 
         case ACTION_TYPES.SAVE_RESERVATION: {
             const reservas = state.config.posReservas || [];
