@@ -235,6 +235,7 @@ export default function InformesPage() {
             return (item.moneda || 'ARS') === 'ARS' && amount > 0 ? acc + amount : acc;
         }, 0);
         const mesanSalesARS = mesanSales.reduce((acc, item) => acc + toNumber(item.monto || item.efectivo || 0), 0);
+        const totalIncomeWithMesan = digitalIncome + mesanIncomeARS + mesanSalesARS;
 
         const topExpenseCategories = Object.entries(
             mesanMovements.reduce((acc, item) => {
@@ -264,6 +265,7 @@ export default function InformesPage() {
                 totalTickets,
                 ticketsLast30Days: tickets30d,
                 digitalIncome,
+                totalIncomeWithMesan,
                 bancoIncome,
                 mercadoPagoIncome,
                 mesanExpensesARS,
@@ -380,8 +382,8 @@ export default function InformesPage() {
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: '#fca5a5' }}>{formatMoney(reportData.profitabilitySnapshot.mesanExpensesARS)}</div>
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Ingresos Banco + MP</div>
-                    <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>{formatMoney(reportData.profitabilitySnapshot.digitalIncome)}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Ingresos Banco + MP + Mesan</div>
+                    <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>{formatMoney(reportData.profitabilitySnapshot.totalIncomeWithMesan)}</div>
                 </div>
             </div>
 
