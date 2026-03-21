@@ -23,7 +23,7 @@ const KNOWN_USER_SECTIONS = {
 };
 
 // All available sections in the app
-const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'paginaweb', 'conteomercaderia', 'fotos', 'mesan', 'banking', 'settings', 'informes'];
+const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'paginaweb', 'conteomercaderia', 'fotos', 'mesan', 'banking', 'settings', 'informes', 'saldo'];
 
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
@@ -56,7 +56,8 @@ const SECTION_LABELS = {
     mesan: 'Mesan',
     banking: 'Banco y MP',
     settings: 'Configuración',
-    informes: 'Informes'
+    informes: 'Informes',
+    saldo: 'Saldo'
 };
 
 export { ALL_SECTIONS, SECTION_LABELS };

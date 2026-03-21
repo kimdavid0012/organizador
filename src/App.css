@@ -747,6 +747,18 @@
         word-break: break-word;
     }
 
+    .saldo-page {
+        gap: 12px !important;
+        padding: var(--sp-2) !important;
+    }
+
+    .saldo-layout,
+    .saldo-stats-grid,
+    .saldo-detail-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
     /* ---- Buttons ---- */
     .btn {
         padding: 8px 12px;
@@ -845,8 +857,17 @@
         padding: 8px !important;
     }
 
+    .saldo-page {
+        padding: 8px !important;
+    }
+
     .informes-stats-grid .glass-panel,
     .informes-secondary-grid .glass-panel {
+        padding: 12px !important;
+    }
+
+    .saldo-stats-grid .glass-panel,
+    .saldo-detail-grid > div {
         padding: 12px !important;
     }
 

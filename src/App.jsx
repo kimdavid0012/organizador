@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText
+    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet
 } from 'lucide-react';
 import { DataProvider, useData } from './store/DataContext';
 import { I18nProvider, useI18n } from './store/I18nContext';
@@ -24,6 +24,7 @@ import FotosPage from './components/FotosPage.jsx';
 import MesanPage from './components/MesanPage.jsx';
 import BankPaymentsPage from './components/BankPaymentsPage.jsx';
 import InformesPage from './components/InformesPage.jsx';
+import SaldoPage from './components/SaldoPage.jsx';
 import MoldModal from './components/MoldModal';
 import TaskModal from './components/TaskModal';
 import Login from './components/Login';
@@ -281,6 +282,7 @@ function AppContent() {
         { id: 'banking', icon: Landmark, label: 'Banco y MP' },
         { id: 'settings', icon: SettingsIcon, label: t('navConfiguracion') },
         { id: 'informes', icon: FileText, label: 'Informes' },
+        { id: 'saldo', icon: Wallet, label: 'Saldo' },
     ];
 
     if (user.role !== 'admin') {
@@ -471,6 +473,7 @@ function AppContent() {
                     {view === 'articulos' && <PosProductos />}
                     {view === 'clientes' && <ClientesPage />}
                     {view === 'informes' && <InformesPage />}
+                    {view === 'saldo' && <SaldoPage />}
                 </div>
             </div>
 
