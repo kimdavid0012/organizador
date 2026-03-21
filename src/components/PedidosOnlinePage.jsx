@@ -66,6 +66,7 @@ export default function PedidosOnlinePage() {
             : '';
 
         return galleryImage
+            || getImageFromSource(product.imagenBibliotecaThumb)
             || getImageFromSource(product.imagen)
             || getImageFromSource(product.image)
             || getImageFromSource(product.thumbnail)

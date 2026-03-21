@@ -259,7 +259,28 @@ export default function PosProductos() {
                             <tr key={p.id} className="pos-table-row">
                                 <td style={{ fontWeight: 'bold' }}>{p.codigoInterno}</td>
                                 <td>{p.codigoBarras || '-'}</td>
-                                <td>{p.detalleCorto}</td>
+                                <td>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <div style={{
+                                            width: 40,
+                                            height: 40,
+                                            borderRadius: 10,
+                                            overflow: 'hidden',
+                                            background: 'rgba(255,255,255,0.05)',
+                                            flexShrink: 0,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}>
+                                            {p.imagenBibliotecaThumb ? (
+                                                <img src={p.imagenBibliotecaThumb} alt={p.detalleCorto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            ) : (
+                                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Sin foto</span>
+                                            )}
+                                        </div>
+                                        <span>{p.detalleCorto}</span>
+                                    </div>
+                                </td>
                                 <td>
                                     <span style={{ color: p.stock <= p.alertaStockMinimo ? 'var(--danger)' : 'inherit', fontWeight: p.stock <= p.alertaStockMinimo ? 'bold' : 'normal' }}>
                                         {p.stock}
@@ -299,9 +320,28 @@ export default function PosProductos() {
                 {filteredProducts.map(p => (
                     <article key={`card-${p.id}`} className="pos-product-card">
                         <div className="pos-product-card-top">
-                            <div>
-                                <div className="pos-product-card-code">{p.codigoInterno || 'Sin codigo'}</div>
-                                <h3>{p.detalleCorto}</h3>
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                <div style={{
+                                    width: 64,
+                                    height: 64,
+                                    borderRadius: 14,
+                                    overflow: 'hidden',
+                                    background: 'rgba(255,255,255,0.05)',
+                                    flexShrink: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    {p.imagenBibliotecaThumb ? (
+                                        <img src={p.imagenBibliotecaThumb} alt={p.detalleCorto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sin foto</span>
+                                    )}
+                                </div>
+                                <div>
+                                    <div className="pos-product-card-code">{p.codigoInterno || 'Sin codigo'}</div>
+                                    <h3>{p.detalleCorto}</h3>
+                                </div>
                             </div>
                             <span className={`status-badge ${p.activo ? 'status-active' : 'status-inactive'}`}>
                                 {p.activo ? 'Activo' : 'Inactivo'}
@@ -364,6 +404,30 @@ export default function PosProductos() {
                             <button className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>✕</button>
                         </div>
                         <div className="pos-modal-body">
+                            <div className="form-group full-width">
+                                <label>Foto principal</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <div style={{
+                                        width: 88,
+                                        height: 88,
+                                        borderRadius: 14,
+                                        overflow: 'hidden',
+                                        background: 'rgba(255,255,255,0.05)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        {formData.imagenBibliotecaThumb ? (
+                                            <img src={formData.imagenBibliotecaThumb} alt={formData.detalleCorto || 'Producto'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        ) : (
+                                            <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: 8 }}>Sin foto</span>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                        Las fotos del artículo se administran desde la sección <strong>Fotos</strong>.
+                                    </div>
+                                </div>
+                            </div>
                             <div className="form-group">
                                 <label>Código Interno</label>
                                 <input className="form-input" name="codigoInterno" value={formData.codigoInterno} onChange={handleChange} />
