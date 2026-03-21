@@ -11,7 +11,31 @@ const DEFAULT_GREETING = {
     ko: '안녕하세요, CELA IA입니다. 시스템에서 무엇을 해야 하는지 안내하고, 필요하면 앱 안에서 작업도 실행할 수 있어요.'
 };
 
-const buildSystemPrompt = ({ lang, user, state }) => `Sos "CELA IA", la asistente interna del sistema CELAVIE.
+const ADMIN_ASSISTANT_ACTIONS = new Set(['addMolde', 'addCliente', 'addTarea', 'addTela', 'addPosProduct', 'addCorte', 'addExpense', 'updateConfig']);
+const NADIA_ASSISTANT_ACTIONS = new Set(['addCliente', 'addTarea']);
+const NADIA_EMAIL = 'nadia@celavie.com';
+
+const getNormalizedEmail = (user) => (user?.email || '').toLowerCase().trim();
+
+const canAccessAssistant = (user, originalAdmin) => {
+    const email = getNormalizedEmail(user);
+    return user?.role === 'admin' || Boolean(originalAdmin) || email === NADIA_EMAIL;
+};
+
+const getAllowedAssistantActions = (user, state) => {
+    const email = getNormalizedEmail(user);
+    if (user?.role === 'admin') return new Set(ADMIN_ASSISTANT_ACTIONS);
+    if (email === NADIA_EMAIL || user?.name === 'Nadia') {
+        const actions = new Set(NADIA_ASSISTANT_ACTIONS);
+        if (state?.config?.posPermissions?.encargadaCanAddExpenses) {
+            actions.add('addExpense');
+        }
+        return actions;
+    }
+    return new Set();
+};
+
+const buildSystemPrompt = ({ lang, user, state, allowedActionList, isNadiaProfile }) => `Sos "CELA IA", la asistente interna del sistema CELAVIE.
 
 IDIOMA:
 - Respondé siempre en el idioma del usuario.
@@ -57,6 +81,12 @@ REGLAS OPERATIVAS IMPORTANTES:
 - Mesan y Banco/MP son módulos distintos: no mezclar gastos de Mesan con ingresos bancarios salvo que el usuario lo pida explícitamente.
 - No inventes datos existentes si no están en el contexto.
 
+PERMISOS DEL USUARIO ACTUAL:
+- Usuario actual: ${user?.name || 'Sin nombre'} (${user?.role || 'sin rol'}).
+- Acciones que podés ejecutar en este perfil: ${allowedActionList || 'ninguna'}.
+${isNadiaProfile ? '- Este perfil es Nadia. Podés guiarla dentro de POS, pedidos, clientes, talleres, empleados, página web y conteo de mercadería, pero no debés modificar configuración sensible, finanzas de admin, telas, banco/MP, mesan ni acciones de administración general.' : ''}
+- Si el usuario pide algo fuera de sus permisos, explicá qué tendría que hacer un admin o a qué sección pedir acceso, pero no ejecutes la acción.
+
 ACCIONES DISPONIBLES:
 1. Crear molde/artículo:
 <action>{"type":"addMolde","data":{"nombre":"Remera Básica","codigo":"6002","categoria":"Remera","consumoTela":4.9,"porcentajeTela":23}}</action>
@@ -101,7 +131,7 @@ CONTEXTO ACTUAL:
 
 export default function AIAssistant() {
     const { state, addMolde, addTela, addCliente, addTarea, addPosProduct, updateConfig, addPosExpense } = useData();
-    const { user } = useAuth();
+    const { user, originalAdmin } = useAuth();
     const { lang } = useI18n();
     const [isOpen, setIsOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -114,7 +144,17 @@ export default function AIAssistant() {
     const recognitionRef = useRef(null);
     const [isListening, setIsListening] = useState(false);
 
-    const systemPrompt = useMemo(() => buildSystemPrompt({ lang, user, state }), [lang, user, state]);
+    const normalizedEmail = getNormalizedEmail(user);
+    const assistantVisible = canAccessAssistant(user, originalAdmin);
+    const allowedAssistantActions = useMemo(() => getAllowedAssistantActions(user, state), [user, state]);
+    const allowedActionList = allowedAssistantActions.size ? Array.from(allowedAssistantActions).join(', ') : 'ninguna';
+    const systemPrompt = useMemo(() => buildSystemPrompt({
+        lang,
+        user,
+        state,
+        allowedActionList,
+        isNadiaProfile: normalizedEmail === NADIA_EMAIL || user?.name === 'Nadia'
+    }), [lang, user, state, allowedActionList, normalizedEmail]);
 
     // Detect UI language for speech recognition
     const getLangCode = () => {
@@ -241,6 +281,9 @@ export default function AIAssistant() {
     const executeAction = (actionStr) => {
         try {
             const action = JSON.parse(actionStr);
+            if (!allowedAssistantActions.has(action.type)) {
+                return '⚠️ En este perfil no puedo ejecutar esa acción. Puedo guiarte, pero esa operación queda reservada según los permisos del usuario.';
+            }
             switch (action.type) {
                 case 'addMolde':
                     addMolde({ id: generateId(), estado: 'por-hacer', imagenes: [], checklist: [], ...action.data, createdAt: new Date().toISOString() });
@@ -423,6 +466,10 @@ export default function AIAssistant() {
         setInput('');
         await sendMessage(text);
     };
+
+    if (!assistantVisible) {
+        return null;
+    }
 
     if (!isOpen) {
         return (
