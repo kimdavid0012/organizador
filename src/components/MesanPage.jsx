@@ -15,6 +15,11 @@ const CHANNEL_LABELS = {
 };
 
 const normalizeText = (value) => (value || '').toString().replace(/\u00a0/g, ' ').trim();
+const padDateValue = (value) => value.toString().padStart(2, '0');
+const toDateInputValue = (date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${padDateValue(date.getMonth() + 1)}-${padDateValue(date.getDate())}`;
+};
 const getMonthKey = (value) => (value || '').slice(0, 7);
 const getMonthLabel = (monthKey) => {
     const [year, month] = monthKey.split('-');
@@ -33,13 +38,20 @@ const parseExcelNumber = (value) => {
 };
 const formatExcelDate = (value) => {
     if (!value) return '';
-    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return toDateInputValue(value);
     if (typeof value === 'number') {
         const parsed = XLSX.SSF.parse_date_code(value);
-        if (parsed) return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)).toISOString().slice(0, 10);
+        if (parsed) return `${parsed.y}-${padDateValue(parsed.m)}-${padDateValue(parsed.d)}`;
+    }
+    const normalized = normalizeText(value);
+    const slashMatch = normalized.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+    if (slashMatch) {
+        const [, day, month, year] = slashMatch;
+        const fullYear = year.length === 2 ? `20${year}` : year;
+        return `${fullYear}-${padDateValue(month)}-${padDateValue(day)}`;
     }
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+    return Number.isNaN(date.getTime()) ? '' : toDateInputValue(date);
 };
 const inferLegacySign = (item) => {
     if (item?.tipo === 'ingreso' || item?.tipo === 'saldo') return 1;
@@ -61,7 +73,7 @@ const getMovementType = (signedAmount, concepto, categoria) => {
 export default function MesanPage() {
     const { state, updateConfig } = useData();
     const { user } = useAuth();
-    const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+    const [fecha, setFecha] = useState(() => toDateInputValue(new Date()));
     const [concepto, setConcepto] = useState('');
     const [categoria, setCategoria] = useState(CATEGORIES[0]);
     const [monto, setMonto] = useState('');
