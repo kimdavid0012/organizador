@@ -356,7 +356,7 @@ export default function InformesPage() {
     };
 
     return (
-        <div style={{ padding: 'var(--sp-4)', display: 'grid', gap: 16 }}>
+        <div className="informes-page" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 16 }}>
             <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <FileText size={22} /> Informes
@@ -366,7 +366,7 @@ export default function InformesPage() {
                 </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            <div className="informes-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Facturación POS total</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(reportData.profitabilitySnapshot.totalPosRevenue)}</div>
@@ -385,7 +385,7 @@ export default function InformesPage() {
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 16 }}>
+            <div className="informes-secondary-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 16 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                         <TrendingUp size={18} /> Conviene volver a cortar
@@ -440,7 +440,7 @@ export default function InformesPage() {
             </div>
 
             <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="informes-report-header" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                     <div>
                         <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                             <BarChart3 size={18} /> Informe ejecutivo IA
@@ -454,7 +454,7 @@ export default function InformesPage() {
                             </div>
                         )}
                     </div>
-                    <button className="btn btn-primary" onClick={generateBusinessReport} disabled={loading}>
+                    <button className="btn btn-primary informes-report-button" onClick={generateBusinessReport} disabled={loading}>
                         {loading ? <RefreshCw size={16} className="spin" /> : <FileText size={16} />}
                         {loading ? 'Generando...' : 'Generar informe'}
                     </button>
@@ -471,7 +471,7 @@ export default function InformesPage() {
                         Todavía no hay informe generado. Cuando lo generes, la IA va a analizar si el local es rentable, qué corregir y si conviene volver a cortar artículos.
                     </div>
                 ) : (
-                    <pre style={{
+                    <pre className="informes-report-output" style={{
                         whiteSpace: 'pre-wrap',
                         margin: 0,
                         padding: 18,
