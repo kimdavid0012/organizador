@@ -37,6 +37,14 @@ const normalizeWooPhone = (phone) => {
     return phone.toString().replace(/\s+/g, ' ').replace(/[^\d+\-() ]/g, '').trim();
 };
 
+const normalizeClientMatch = (value) => (
+    (value || '')
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, ' ')
+);
+
 const normalizeWooProvince = (billing = {}, shipping = {}) => {
     const rawState = (billing.state || shipping.state || '').trim();
     const stateCode = rawState.toUpperCase();
@@ -74,6 +82,47 @@ export default function ClientesPage() {
             ].some((value) => normalizeSearchValue(value).includes(query))
         ));
     }, [clientes, searchTerm]);
+
+    const ventasClienteSeleccionado = useMemo(() => {
+        if (!viewingHistory) return [];
+
+        const clienteNombre = normalizeClientMatch(viewingHistory.nombre);
+        const clienteTelefono = normalizeWooPhone(viewingHistory.telefono);
+        const clienteWooId = String(viewingHistory.wooId || '').trim();
+
+        return (posVentas || [])
+            .filter((venta) => {
+                const ventaClienteId = String(venta.clienteId || '').trim();
+                const ventaClienteNombre = normalizeClientMatch(
+                    venta.clienteNombre ||
+                    venta.nombreCliente ||
+                    venta.cliente?.nombre ||
+                    venta.cliente
+                );
+                const ventaClienteTelefono = normalizeWooPhone(
+                    venta.clienteTelefono ||
+                    venta.telefonoCliente ||
+                    venta.cliente?.telefono ||
+                    ''
+                );
+                const ventaWooId = String(
+                    venta.wooCustomerId ||
+                    venta.clienteWooId ||
+                    venta.cliente?.wooId ||
+                    ''
+                ).trim();
+
+                return (
+                    (ventaClienteId && ventaClienteId === String(viewingHistory.id)) ||
+                    (clienteWooId && ventaWooId && clienteWooId === ventaWooId) ||
+                    (clienteNombre && ventaClienteNombre && clienteNombre === ventaClienteNombre) ||
+                    (clienteTelefono && ventaClienteTelefono && clienteTelefono === ventaClienteTelefono)
+                );
+            })
+            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    }, [posVentas, viewingHistory]);
+
+    const ultimaCompraCliente = ventasClienteSeleccionado[0] || null;
 
     const handleSaveCliente = (clienteData) => {
         if (clienteData.id) {
@@ -264,29 +313,38 @@ export default function ClientesPage() {
 
                         <div style={{ padding: '1rem', flex: 1, overflowY: 'auto' }}>
                             <h4 style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '6px' }}><History size={16} /> Historial de Compras</h4>
-                            {(() => {
-                                const ventasCliente = posVentas.filter(v => v.clienteId === viewingHistory.id).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-
-                                if (ventasCliente.length === 0) {
-                                    return <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-sm)', textAlign: 'center', padding: '1rem 0' }}>No hay compras registradas en el Punto de Venta para este cliente.</div>;
-                                }
-
-                                return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {ventasCliente.map(venta => (
-                                            <div key={venta.id} style={{ background: 'var(--bg-input)', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', fontSize: 'var(--fs-sm)' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                    <span style={{ fontWeight: 'bold' }}>{new Date(venta.fecha).toLocaleDateString()} {new Date(venta.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                    <span style={{ fontWeight: 'bold', color: 'var(--success)' }}>${venta.totalFinal?.toFixed(2) || venta.total?.toFixed(2)}</span>
-                                                </div>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                                                    {venta.items?.length || 0} artículos
-                                                </div>
-                                            </div>
-                                        ))}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                                <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px' }}>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Ultima compra</div>
+                                    <div style={{ fontWeight: 'bold' }}>
+                                        {ultimaCompraCliente
+                                            ? `${new Date(ultimaCompraCliente.fecha).toLocaleDateString()} ${new Date(ultimaCompraCliente.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                            : '-'}
                                     </div>
-                                );
-                            })()}
+                                </div>
+                                <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px' }}>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Veces que compro</div>
+                                    <div style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{ventasClienteSeleccionado.length}</div>
+                                </div>
+                            </div>
+
+                            {ventasClienteSeleccionado.length === 0 ? (
+                                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-sm)', textAlign: 'center', padding: '1rem 0' }}>No hay compras registradas en el Punto de Venta para este cliente.</div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {ventasClienteSeleccionado.map(venta => (
+                                        <div key={venta.id} style={{ background: 'var(--bg-input)', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', fontSize: 'var(--fs-sm)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                <span style={{ fontWeight: 'bold' }}>{new Date(venta.fecha).toLocaleDateString()} {new Date(venta.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                <span style={{ fontWeight: 'bold', color: 'var(--success)' }}>${venta.totalFinal?.toFixed(2) || venta.total?.toFixed(2) || '0.00'}</span>
+                                            </div>
+                                            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                                                {venta.items?.length || 0} artículos
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
