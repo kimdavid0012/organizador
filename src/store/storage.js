@@ -33,6 +33,33 @@ const DEFAULT_ESTADOS_CORTE = [
     { id: 'falta', nombre: 'Falta', color: '#ef4444' },
 ];
 
+export const SUPPORT_WOO_CREDENTIALS = {
+    wooUrl: 'https://celavie.com.ar',
+    wooKey: 'ck_0abd4bc2e628702e2f1aad337a38c11c58547019',
+    wooSecret: 'cs_12621d75437aa33853a0bb0420749882dad3088e'
+};
+
+const DEFAULT_MARKETING = {
+    metaToken: '',
+    metaAdAccountId: '938112566730962',
+    metaPixelId: '',
+    tiktokToken: '',
+    tiktokPixelId: '',
+    wooUrl: SUPPORT_WOO_CREDENTIALS.wooUrl,
+    wooKey: SUPPORT_WOO_CREDENTIALS.wooKey,
+    wooSecret: SUPPORT_WOO_CREDENTIALS.wooSecret,
+    openaiKey: ''
+};
+
+const normalizeMarketingConfig = (marketing = {}) => ({
+    ...DEFAULT_MARKETING,
+    ...marketing,
+    metaAdAccountId: marketing?.metaAdAccountId || DEFAULT_MARKETING.metaAdAccountId,
+    wooUrl: marketing?.wooUrl || SUPPORT_WOO_CREDENTIALS.wooUrl,
+    wooKey: marketing?.wooKey || SUPPORT_WOO_CREDENTIALS.wooKey,
+    wooSecret: marketing?.wooSecret || SUPPORT_WOO_CREDENTIALS.wooSecret
+});
+
 export const DEFAULT_DATA = {
     moldes: [],
     tareas: [],
@@ -67,17 +94,7 @@ export const DEFAULT_DATA = {
             surfaceColor: 'rgba(25, 25, 40, 0.55)',
             textColor: '#f0f0fa'
         },
-        marketing: {
-            metaToken: '',
-            metaAdAccountId: '938112566730962',
-            metaPixelId: '',
-            tiktokToken: '',
-            tiktokPixelId: '',
-            wooUrl: 'https://celavie.com.ar',
-            wooKey: '',
-            wooSecret: '',
-            openaiKey: ''
-        },
+        marketing: DEFAULT_MARKETING,
         marketingCache: {
             accountInsights: null,
             campaigns: [],
@@ -127,10 +144,7 @@ export function normalizeData(parsed) {
                 ...DEFAULT_DATA.config.uiTheme,
                 ...parsed.config?.uiTheme
             },
-            marketing: {
-                ...DEFAULT_DATA.config.marketing,
-                ...parsed.config?.marketing,
-            },
+            marketing: normalizeMarketingConfig(parsed.config?.marketing),
             marketingCache: {
                 ...DEFAULT_DATA.config.marketingCache,
                 ...parsed.config?.marketingCache

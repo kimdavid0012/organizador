@@ -3,7 +3,7 @@ import { Columns3, Users, Tag, CalendarRange, Download, Upload, Database, Plus, 
 import { useData } from '../store/DataContext';
 import { useI18n } from '../store/I18nContext';
 import { useAuth } from '../store/AuthContext';
-import { getStorageUsage, clearData, migrateLocalToFirestore, loadDataFromLocal } from '../store/storage';
+import { getStorageUsage, clearData, migrateLocalToFirestore, loadDataFromLocal, SUPPORT_WOO_CREDENTIALS } from '../store/storage';
 import { generateId } from '../utils/helpers';
 import { exportMoldesCSV, exportTelasCSV, parseCSV } from '../utils/csvUtils';
 import './Settings.css';
@@ -519,9 +519,9 @@ export default function Settings() {
                                     updateConfig({
                                         marketing: {
                                             ...(config.marketing || {}),
-                                            wooUrl: 'https://celavie.com.ar',
-                                            wooKey: 'ck_0abd4bc2e628702e2f1aad337a38c11c58547019',
-                                            wooSecret: 'cs_12621d75437aa33853a0bb0420749882dad3088e'
+                                            wooUrl: SUPPORT_WOO_CREDENTIALS.wooUrl,
+                                            wooKey: SUPPORT_WOO_CREDENTIALS.wooKey,
+                                            wooSecret: SUPPORT_WOO_CREDENTIALS.wooSecret
                                         }
                                     });
                                     alert('Credenciales de WooCommerce sincronizadas con éxito.');
