@@ -6,6 +6,9 @@ import { useAuth } from '../store/AuthContext';
 
 const normalizeText = (value) => (value || '').toString().trim();
 const normalizeUpper = (value) => normalizeText(value).toUpperCase();
+const formatTallerLabel = (value) => normalizeText(value)
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 const extractCorteNumber = (value) => {
     const raw = normalizeText(value);
     if (!raw) return '';
@@ -52,25 +55,31 @@ export default function TalleresPage() {
     };
 
     const talleres = useMemo(() => {
-        const merged = new Set(
-            manualTalleres
-                .map(normalizeText)
-                .filter(Boolean)
-        );
+        const merged = new Map();
+        const registerTaller = (rawName) => {
+            const normalizedName = normalizeText(rawName);
+            const key = normalizeUpper(normalizedName);
+            if (!key) return;
+
+            const preferredLabel = formatTallerLabel(normalizedName);
+            if (!merged.has(key) || preferredLabel === normalizedName) {
+                merged.set(key, preferredLabel);
+            }
+        };
+
+        manualTalleres.forEach(registerTaller);
 
         cortes.forEach((corte) => {
             (corte.moldesData || []).forEach((item) => {
-                const assigned = normalizeText(item.tallerAsignado || item.taller);
-                if (assigned) merged.add(assigned);
+                registerTaller(item.tallerAsignado || item.taller);
             });
         });
 
         mercaderiaConteos.forEach((item) => {
-            const taller = normalizeText(item.taller);
-            if (taller) merged.add(taller);
+            registerTaller(item.taller);
         });
 
-        return Array.from(merged).sort((left, right) => left.localeCompare(right, 'es'));
+        return Array.from(merged.values()).sort((left, right) => left.localeCompare(right, 'es'));
     }, [manualTalleres, cortes, mercaderiaConteos]);
 
     const conteosByTaller = useMemo(() => {
@@ -110,7 +119,7 @@ export default function TalleresPage() {
             const corteDate = corte?.fecha || '';
 
             (corte.moldesData || []).forEach((item) => {
-                const tallerName = normalizeText(item.tallerAsignado || item.taller);
+                const tallerName = formatTallerLabel(item.tallerAsignado || item.taller);
                 if (!tallerName) return;
 
                 const molde = moldeMap.get(item.id);
@@ -210,6 +219,11 @@ export default function TalleresPage() {
         return map;
     }, [talleres, tallerRecords]);
 
+    const visibleTalleres = useMemo(
+        () => talleres.filter((name) => (stats[name]?.total || 0) > 0),
+        [talleres, stats]
+    );
+
     const selectedStats = selected ? stats[selected] : null;
 
     const addTaller = () => {
@@ -262,12 +276,12 @@ export default function TalleresPage() {
                         )}
 
                         <div className="settings-list">
-                            {talleres.length === 0 && (
+                            {visibleTalleres.length === 0 && (
                                 <div style={{ padding: 'var(--sp-6)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--fs-sm)' }}>
                                     {t('agregarTaller')}
                                 </div>
                             )}
-                            {talleres.map((name) => {
+                            {visibleTalleres.map((name) => {
                                 const s = stats[name];
                                 return (
                                     <div
