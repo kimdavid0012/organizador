@@ -3,6 +3,8 @@ import { db } from './firebase';
 
 const STORAGE_KEY = 'organizador_moldes_data';
 const BACKUP_INDEX_KEY = 'organizador_moldes_data_backups';
+const RECOVERY_SESSION_KEY = 'organizador_moldes_data_recovery';
+const PENDING_CHANGES_KEY = 'organizador_moldes_data_pending';
 const FIRESTORE_DOC = 'app-data/main';
 const MAX_LOCAL_BACKUPS = 12;
 
@@ -100,6 +102,11 @@ export const DEFAULT_DATA = {
         posGastos: [],
         posProductos: [],
         posVentas: [],
+        syncMeta: {
+            revision: 0,
+            updatedAt: null,
+            source: 'bootstrap'
+        },
         uiTheme: {
             backgroundColor: '#0a0a12',
             accentColor: DEFAULT_ACCENT_COLOR,
@@ -155,6 +162,10 @@ export function normalizeData(parsed) {
             posGastos: parsed.config?.posGastos || [],
             posProductos: parsed.config?.posProductos || [],
             posVentas: parsed.config?.posVentas || [],
+            syncMeta: {
+                ...DEFAULT_DATA.config.syncMeta,
+                ...parsed.config?.syncMeta
+            },
             uiTheme: {
                 ...DEFAULT_DATA.config.uiTheme,
                 ...parsed.config?.uiTheme,
@@ -357,6 +368,45 @@ export const clearData = () => {
         localStorage.removeItem(BACKUP_INDEX_KEY);
     } catch {
         localStorage.removeItem(BACKUP_INDEX_KEY);
+    }
+};
+
+export const saveProtectedSessionSnapshot = (data) => {
+    try {
+        localStorage.setItem(RECOVERY_SESSION_KEY, JSON.stringify(data));
+    } catch (err) {
+        console.error('Error guardando snapshot de recuperacion:', err);
+    }
+};
+
+export const loadProtectedSessionSnapshot = () => {
+    try {
+        const raw = localStorage.getItem(RECOVERY_SESSION_KEY);
+        if (!raw) return null;
+        return normalizeData(JSON.parse(raw));
+    } catch (err) {
+        console.error('Error cargando snapshot de recuperacion:', err);
+        return null;
+    }
+};
+
+export const clearProtectedSessionSnapshot = () => {
+    localStorage.removeItem(RECOVERY_SESSION_KEY);
+};
+
+export const setPendingLocalChangesFlag = (value) => {
+    try {
+        localStorage.setItem(PENDING_CHANGES_KEY, value ? '1' : '0');
+    } catch (err) {
+        console.error('Error guardando estado pendiente local:', err);
+    }
+};
+
+export const loadPendingLocalChangesFlag = () => {
+    try {
+        return localStorage.getItem(PENDING_CHANGES_KEY) === '1';
+    } catch {
+        return false;
     }
 };
 

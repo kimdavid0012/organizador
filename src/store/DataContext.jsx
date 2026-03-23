@@ -1,7 +1,18 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db, firestoreOfflineReady } from './firebase';
-import { DEFAULT_DATA, loadDataFromLocal, loadLatestBackupFromLocal, saveDataToLocal, normalizeData, downloadBackupJSON } from './storage';
+import {
+    DEFAULT_DATA,
+    loadDataFromLocal,
+    loadLatestBackupFromLocal,
+    loadProtectedSessionSnapshot,
+    loadPendingLocalChangesFlag,
+    saveDataToLocal,
+    saveProtectedSessionSnapshot,
+    setPendingLocalChangesFlag,
+    normalizeData,
+    downloadBackupJSON
+} from './storage';
 import { generateId } from '../utils/helpers';
 import { wooService } from '../utils/wooService';
 import { metaService } from '../utils/metaService';
@@ -62,6 +73,20 @@ const hasRicherLocalData = (localData, remoteData) => {
 
     return Object.keys(localCounts).some((key) => localCounts[key] > remoteCounts[key]);
 };
+
+const getSyncRevision = (data) => Number(data?.config?.syncMeta?.revision || 0);
+
+const stampStateForPersistence = (data, revision, source = 'local') => normalizeData({
+    ...data,
+    config: {
+        ...(data?.config || {}),
+        syncMeta: {
+            revision,
+            updatedAt: new Date().toISOString(),
+            source
+        }
+    }
+});
 
 const sanitizeStockBreakdown = (entries = []) =>
     entries
@@ -1276,28 +1301,39 @@ function dataReducer(state, action) {
 }
 
 export function DataProvider({ children }) {
-    const [state, dispatch] = useReducer(dataReducer, null, () => DEFAULT_DATA);
+    const [state, dispatch] = useReducer(
+        dataReducer,
+        null,
+        () => loadProtectedSessionSnapshot() || loadDataFromLocal() || loadLatestBackupFromLocal() || DEFAULT_DATA
+    );
     const [syncStatus, setSyncStatus] = useState({
         online: typeof navigator !== 'undefined' ? navigator.onLine : true,
         hasPendingWrites: false,
-        pendingChanges: 0,
+        pendingChanges: loadPendingLocalChangesFlag() ? 1 : 0,
         lastLocalSaveAt: null,
         lastCloudSaveAt: null,
         lastError: null,
-        status: firestoreOfflineReady ? 'Sincronizado' : 'Modo local',
+        status: loadPendingLocalChangesFlag()
+            ? 'Pendiente de sincronizar'
+            : (firestoreOfflineReady ? 'Sincronizado' : 'Modo local'),
         firestoreOfflineReady
     });
     const isFromFirestore = useRef(false);
     const saveTimeout = useRef(null);
     const initialized = useRef(false);
     const stateRef = useRef(state);
+    const currentRevisionRef = useRef(getSyncRevision(state));
     const justSaved = useRef(false);
     const localChangeTimestamp = useRef(0); // timestamp of last local change
-    const pendingCloudSave = useRef(false);
-    const pendingChangesCount = useRef(0);
+    const pendingCloudSave = useRef(loadPendingLocalChangesFlag());
+    const pendingChangesCount = useRef(loadPendingLocalChangesFlag() ? 1 : 0);
 
     useEffect(() => {
         stateRef.current = state;
+        const stateRevision = getSyncRevision(state);
+        if (stateRevision > currentRevisionRef.current) {
+            currentRevisionRef.current = stateRevision;
+        }
     }, [state]);
 
     const updateSyncStatus = useCallback((updates) => {
@@ -1328,11 +1364,72 @@ export function DataProvider({ children }) {
         };
     }, [updateSyncStatus]);
 
+    useEffect(() => {
+        const persistRecoverySnapshot = () => {
+            if (!stateRef.current) return;
+            const stampedState = stampStateForPersistence(
+                stateRef.current,
+                Math.max(currentRevisionRef.current, getSyncRevision(stateRef.current)),
+                pendingCloudSave.current ? 'local-pending' : 'local'
+            );
+            saveDataToLocal(stampedState);
+            saveProtectedSessionSnapshot(stampedState);
+            setPendingLocalChangesFlag(Boolean(pendingCloudSave.current || pendingChangesCount.current > 0));
+        };
+
+        const handlePageHide = () => {
+            persistRecoverySnapshot();
+        };
+
+        const handleBeforeUnload = (event) => {
+            persistRecoverySnapshot();
+
+            if (pendingCloudSave.current || pendingChangesCount.current > 0) {
+                const warning = 'Hay cambios pendientes de sincronizar. Espera unos segundos antes de cerrar o actualizar.';
+                event.preventDefault();
+                event.returnValue = warning;
+                return warning;
+            }
+
+            return undefined;
+        };
+
+        window.addEventListener('pagehide', handlePageHide);
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('pagehide', handlePageHide);
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, []);
+
     // Listen for real-time updates from Firestore (watch the config doc as primary)
     useEffect(() => {
         if (!db) {
+            const localData = loadProtectedSessionSnapshot() || loadDataFromLocal() || loadLatestBackupFromLocal();
+            if (localData) {
+                currentRevisionRef.current = getSyncRevision(localData);
+                dispatch({ type: ACTION_TYPES.SET_DATA, payload: localData });
+                initialized.current = true;
+                updateSyncStatus({
+                    lastLocalSaveAt: localData?.config?.syncMeta?.updatedAt || new Date().toISOString(),
+                    pendingChanges: loadPendingLocalChangesFlag() ? Math.max(pendingChangesCount.current, 1) : pendingChangesCount.current
+                });
+            }
             updateSyncStatus({ firestoreOfflineReady: false, status: 'Modo local' });
             return undefined;
+        }
+
+        const startupLocalData = loadProtectedSessionSnapshot() || loadDataFromLocal() || loadLatestBackupFromLocal();
+        if (startupLocalData) {
+            currentRevisionRef.current = getSyncRevision(startupLocalData);
+            localChangeTimestamp.current = Date.now();
+            dispatch({ type: ACTION_TYPES.SET_DATA, payload: startupLocalData });
+            initialized.current = true;
+            updateSyncStatus({
+                lastLocalSaveAt: startupLocalData?.config?.syncMeta?.updatedAt || new Date().toISOString(),
+                pendingChanges: loadPendingLocalChangesFlag() ? Math.max(pendingChangesCount.current, 1) : pendingChangesCount.current
+            });
         }
 
         // We listen to the config doc as the "trigger" — when it changes, we reload all docs
@@ -1356,6 +1453,7 @@ export function DataProvider({ children }) {
                     lastCloudSaveAt: new Date().toISOString(),
                     lastError: null
                 });
+                setPendingLocalChangesFlag(false);
             }
 
             if (snap.metadata.hasPendingWrites) {
@@ -1379,6 +1477,9 @@ export function DataProvider({ children }) {
                     // Load all 4 docs
                     const { loadDataFromFirestore } = await import('./storage');
                     const fullData = await loadDataFromFirestore();
+                    const localRecoveryData = loadProtectedSessionSnapshot() || loadDataFromLocal() || loadLatestBackupFromLocal();
+                    const remoteRevision = getSyncRevision(fullData);
+                    const localRevision = getSyncRevision(localRecoveryData);
 
                     // Protección: no sobreescribir si tenemos más datos localmente
                     if (initialized.current && hasRicherLocalData(stateRef.current, fullData)) {
@@ -1386,8 +1487,14 @@ export function DataProvider({ children }) {
                         return;
                     }
 
+                    if (initialized.current && localRecoveryData && localRevision > remoteRevision) {
+                        console.warn(`🛡️ Snapshot remoto ignorado: la sesion local tiene una revision mas nueva.`);
+                        return;
+                    }
+
                     isFromFirestore.current = true;
                     dispatch({ type: ACTION_TYPES.SET_DATA, payload: fullData });
+                    currentRevisionRef.current = remoteRevision;
                     initialized.current = true;
                 } catch (err) {
                     console.error('Error loading split docs:', err);
@@ -1425,12 +1532,17 @@ export function DataProvider({ children }) {
         }
 
         // SIEMPRE guardar a localStorage inmediatamente como backup
-        saveDataToLocal(state);
+        const nextRevision = currentRevisionRef.current + 1;
+        currentRevisionRef.current = nextRevision;
+        const persistableState = stampStateForPersistence(state, nextRevision, 'local');
+        saveDataToLocal(persistableState);
+        saveProtectedSessionSnapshot(persistableState);
         localChangeTimestamp.current = Date.now();
         pendingCloudSave.current = true;
         pendingChangesCount.current += 1;
+        setPendingLocalChangesFlag(true);
         updateSyncStatus({
-            lastLocalSaveAt: new Date().toISOString(),
+            lastLocalSaveAt: persistableState.config?.syncMeta?.updatedAt || new Date().toISOString(),
             pendingChanges: pendingChangesCount.current,
             lastError: null
         });
@@ -1439,7 +1551,7 @@ export function DataProvider({ children }) {
         if (saveTimeout.current) clearTimeout(saveTimeout.current);
         saveTimeout.current = setTimeout(async () => {
             try {
-                const currentState = stateRef.current;
+                const currentState = stampStateForPersistence(stateRef.current, currentRevisionRef.current, 'cloud');
                 const { saveDataToFirestore } = await import('./storage');
                 justSaved.current = true;
                 await saveDataToFirestore(currentState);
@@ -1458,6 +1570,7 @@ export function DataProvider({ children }) {
                     lastCloudSaveAt: new Date().toISOString(),
                     lastError: null
                 });
+                setPendingLocalChangesFlag(false);
             } catch (err) {
                 justSaved.current = false;
                 pendingCloudSave.current = true;
@@ -1480,7 +1593,7 @@ export function DataProvider({ children }) {
         const retryTimer = setTimeout(async () => {
             try {
                 const { saveDataToFirestore } = await import('./storage');
-                await saveDataToFirestore(stateRef.current);
+                await saveDataToFirestore(stampStateForPersistence(stateRef.current, currentRevisionRef.current, 'cloud'));
                 pendingCloudSave.current = false;
                 pendingChangesCount.current = 0;
                 justSaved.current = true;
@@ -1490,6 +1603,7 @@ export function DataProvider({ children }) {
                     lastCloudSaveAt: new Date().toISOString(),
                     lastError: null
                 });
+                setPendingLocalChangesFlag(false);
             } catch (err) {
                 console.error('❌ Error reintentando sincronizacion:', err);
                 updateSyncStatus({
