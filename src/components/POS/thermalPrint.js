@@ -43,29 +43,29 @@ const buildTicketHtml = (ticketData) => {
     <meta charset="UTF-8" />
     <title>Ticket ${escapeHtml(nroComprobante)}</title>
     <style>
-        @page { size: 80mm auto; margin: 0; }
+        @page { size: 58mm auto; margin: 0; }
         html, body {
-            width: 80mm;
+            width: 58mm;
             margin: 0;
             padding: 0;
             background: #fff;
             color: #000;
             overflow: visible;
             font-family: "Courier New", Courier, monospace;
-            font-size: 10px;
+            font-size: 9px;
             line-height: 1.1;
         }
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .thermal-ticket {
             box-sizing: border-box;
-            width: 76mm;
-            padding: 2mm 2mm 6mm;
+            width: 54mm;
+            padding: 1.5mm 1.5mm 5mm;
         }
         .ticket-header h2 {
             text-align: center;
-            font-size: 17px;
+            font-size: 15px;
             margin: 2px 0 4px;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
             font-weight: bold;
             text-transform: uppercase;
         }
@@ -74,7 +74,7 @@ const buildTicketHtml = (ticketData) => {
         .ticket-meta, .ticket-summary, .item-details, .ticket-col-headers {
             display: flex;
             justify-content: space-between;
-            gap: 6px;
+            gap: 4px;
         }
         .ticket-meta, .ticket-summary { margin: 1px 0; }
         .ticket-col-headers {
@@ -84,7 +84,7 @@ const buildTicketHtml = (ticketData) => {
             margin-top: 2px;
         }
         .ticket-col-headers span:first-child { width: 100%; }
-        .ticket-col-headers span:last-child { width: 62px; text-align: right; flex-shrink: 0; }
+        .ticket-col-headers span:last-child { width: 48px; text-align: right; flex-shrink: 0; }
         .ticket-items { margin: 4px 0; }
         .ticket-item-row {
             margin-bottom: 4px;
@@ -93,11 +93,25 @@ const buildTicketHtml = (ticketData) => {
             page-break-inside: avoid;
             break-inside: avoid;
         }
-        .item-name { font-weight: bold; word-break: break-word; margin-bottom: 1px; }
-        .item-details span:first-child { flex: 1; min-width: 0; word-break: break-word; }
-        .item-details span:last-child { flex-shrink: 0; text-align: right; }
+        .item-name {
+            font-weight: bold;
+            word-break: break-word;
+            margin-bottom: 1px;
+            overflow-wrap: anywhere;
+        }
+        .item-details span:first-child {
+            flex: 1;
+            min-width: 0;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+        .item-details span:last-child {
+            flex-shrink: 0;
+            text-align: right;
+            width: 48px;
+        }
         .grand-total {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: bold;
             border-top: 1px double #000;
             padding-top: 3px;
@@ -105,6 +119,17 @@ const buildTicketHtml = (ticketData) => {
         }
         .center { text-align: center; }
         .strong { font-weight: bold; }
+        .ticket-meta span:last-child,
+        .ticket-summary span:last-child {
+            flex-shrink: 0;
+            text-align: right;
+            max-width: 48%;
+        }
+        .ticket-meta span:first-child,
+        .ticket-summary span:first-child {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
     </style>
 </head>
 <body>
