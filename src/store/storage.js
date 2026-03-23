@@ -6,7 +6,7 @@ const BACKUP_INDEX_KEY = 'organizador_moldes_data_backups';
 const RECOVERY_SESSION_KEY = 'organizador_moldes_data_recovery';
 const PENDING_CHANGES_KEY = 'organizador_moldes_data_pending';
 const FIRESTORE_DOC = 'app-data/main';
-const MAX_LOCAL_BACKUPS = 12;
+const MAX_LOCAL_BACKUPS = 3;
 
 const DEFAULT_COLUMNAS = [
     { id: 'por-hacer', nombre: 'Por hacer', orden: 0, color: '#6366f1' },
@@ -184,6 +184,73 @@ export function normalizeData(parsed) {
     };
 }
 
+const stripInlineImagePayload = (items = []) => (
+    (Array.isArray(items) ? items : []).map((item) => {
+        if (!item || typeof item !== 'object') return item;
+        const next = { ...item };
+        delete next.data;
+        delete next.base64;
+        delete next.preview;
+        delete next.localPreview;
+        delete next.thumbDataUrl;
+        delete next.dataUrl;
+        delete next.imageData;
+        return next;
+    })
+);
+
+const buildLocalStorageSafeData = (data, { keepBackupMeta = false } = {}) => {
+    const normalized = normalizeData(data);
+
+    return {
+        ...normalized,
+        moldes: (normalized.moldes || []).map((molde) => ({
+            ...molde,
+            imagenes: stripInlineImagePayload(molde.imagenes)
+        })),
+        telas: (normalized.telas || []).map((tela) => ({
+            ...tela,
+            imagenes: stripInlineImagePayload(tela.imagenes)
+        })),
+        config: {
+            ...normalized.config,
+            fotoTasks: (normalized.config.fotoTasks || []).map((task) => ({
+                ...task,
+                imagenes: stripInlineImagePayload(task.imagenes),
+                fotos: stripInlineImagePayload(task.fotos)
+            })),
+            imageLibrary: (normalized.config.imageLibrary || []).map((image) => {
+                const next = { ...image };
+                delete next.dataUrl;
+                delete next.thumbDataUrl;
+                delete next.preview;
+                delete next.localPreview;
+                return next;
+            }),
+            posProductos: (normalized.config.posProductos || []).map((product) => ({
+                ...product,
+                imagenes: stripInlineImagePayload(product.imagenes),
+                imagenesArticulo: [],
+                imagenBibliotecaThumb: ''
+            })),
+            marketingCache: {
+                accountInsights: normalized.config.marketingCache?.accountInsights || null,
+                campaigns: Array.isArray(normalized.config.marketingCache?.campaigns)
+                    ? normalized.config.marketingCache.campaigns.slice(0, 50)
+                    : [],
+                adSets: {},
+                aiReport: keepBackupMeta ? '' : (normalized.config.marketingCache?.aiReport || '').slice(0, 3000),
+                lastSyncedAt: normalized.config.marketingCache?.lastSyncedAt || null
+            },
+            paginaWebCache: {
+                allProducts: [],
+                productStatsById: {},
+                lastLoadedAt: normalized.config.paginaWebCache?.lastLoadedAt || null
+            }
+        }
+    };
+};
+
 // ============ FIRESTORE (SPLIT INTO MULTIPLE DOCS) ============
 // Firestore limit = 1MB per document
 // We split data into multiple docs to stay under the 1MB Firestore limit:
@@ -310,7 +377,7 @@ const saveBackupSnapshotToLocal = (data) => {
         const parsedIndex = JSON.parse(rawIndex || '[]');
         const backupKeys = Array.isArray(parsedIndex) ? parsedIndex : [];
 
-        localStorage.setItem(backupKey, JSON.stringify(data));
+        localStorage.setItem(backupKey, JSON.stringify(buildLocalStorageSafeData(data, { keepBackupMeta: true })));
         const nextKeys = [...backupKeys, backupKey].slice(-MAX_LOCAL_BACKUPS);
 
         while (backupKeys.length >= MAX_LOCAL_BACKUPS) {
@@ -328,11 +395,23 @@ const saveBackupSnapshotToLocal = (data) => {
 
 export const saveDataToLocal = (data) => {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(buildLocalStorageSafeData(data)));
         saveBackupSnapshotToLocal(data);
     } catch (err) {
         console.error('Error guardando datos locales:', err);
         if (err.name === 'QuotaExceededError') {
+            try {
+                const rawIndex = localStorage.getItem(BACKUP_INDEX_KEY);
+                const backupKeys = JSON.parse(rawIndex || '[]');
+                if (Array.isArray(backupKeys)) {
+                    backupKeys.forEach((key) => localStorage.removeItem(key));
+                }
+                localStorage.removeItem(BACKUP_INDEX_KEY);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(buildLocalStorageSafeData(data)));
+                return;
+            } catch (retryErr) {
+                console.error('Error reintentando guardado local compacto:', retryErr);
+            }
             alert('⚠️ Se alcanzó el límite de almacenamiento local.');
         }
     }
@@ -388,7 +467,7 @@ export const clearData = () => {
 
 export const saveProtectedSessionSnapshot = (data) => {
     try {
-        localStorage.setItem(RECOVERY_SESSION_KEY, JSON.stringify(data));
+        localStorage.setItem(RECOVERY_SESSION_KEY, JSON.stringify(buildLocalStorageSafeData(data)));
     } catch (err) {
         console.error('Error guardando snapshot de recuperacion:', err);
     }
