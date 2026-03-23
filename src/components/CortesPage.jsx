@@ -306,6 +306,23 @@ export default function CortesPage() {
 
     const selectedCorte = cortes.find(c => c.id === selected);
 
+    const getCorteTelaResumen = (corte) => {
+        const telaNames = new Set();
+
+        (corte?.moldeIds || []).forEach((moldeId) => {
+            const molde = moldes.find((item) => item.id === moldeId);
+            (molde?.telasIds || []).forEach((telaId) => {
+                const tela = telas.find((item) => item.id === telaId);
+                if (tela?.nombre) telaNames.add(tela.nombre);
+            });
+        });
+
+        const names = Array.from(telaNames).filter(Boolean);
+        if (names.length === 0) return 'Sin tela';
+        if (names.length <= 2) return names.join(' · ');
+        return `${names.slice(0, 2).join(' · ')} +${names.length - 2}`;
+    };
+
     // Transferir molde de corte a posProductos (Artículos)
     const transferirAArticulos = (molde, cData, cost) => {
         const img = getCoverImage(molde);
@@ -549,6 +566,7 @@ export default function CortesPage() {
                             )}
                             {cortes.map(corte => {
                                 const count = (corte.moldeIds || []).length;
+                                const telasResumen = getCorteTelaResumen(corte);
                                 return (
                                     <div
                                         key={corte.id}
@@ -567,7 +585,7 @@ export default function CortesPage() {
                                                 {corte.nombre}
                                             </div>
                                             <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: 2 }}>
-                                                {corte.fecha} · {count} artículos
+                                                {corte.fecha} · {count} artículos · Tela: {telasResumen}
                                             </div>
                                         </div>
                                         <ChevronRight style={{ width: 14, height: 14, color: 'var(--text-muted)' }} />
