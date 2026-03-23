@@ -186,16 +186,18 @@ export function normalizeData(parsed) {
 
 // ============ FIRESTORE (SPLIT INTO MULTIPLE DOCS) ============
 // Firestore limit = 1MB per document
-// We split data into 4 docs to stay under the limit:
-//   app-data/config  → config object (cortes, POS, clientes, settings)
-//   app-data/moldes  → moldes array
-//   app-data/telas   → telas array
-//   app-data/tareas  → tareas array
+// We split data into multiple docs to stay under the 1MB Firestore limit:
+//   app-data/config       → config object (without mercaderiaConteos)
+//   app-data/mercaderia   → mercaderiaConteos array
+//   app-data/moldes       → moldes array
+//   app-data/telas        → telas array
+//   app-data/tareas       → tareas array
 
 export const loadDataFromFirestore = async () => {
     try {
-        const [configSnap, moldesSnap, telasSnap, tareasSnap, legacySnap] = await Promise.all([
+        const [configSnap, mercaderiaSnap, moldesSnap, telasSnap, tareasSnap, legacySnap] = await Promise.all([
             getDoc(doc(db, 'app-data', 'config')),
+            getDoc(doc(db, 'app-data', 'mercaderia')),
             getDoc(doc(db, 'app-data', 'moldes')),
             getDoc(doc(db, 'app-data', 'telas')),
             getDoc(doc(db, 'app-data', 'tareas')),
@@ -204,7 +206,14 @@ export const loadDataFromFirestore = async () => {
 
         // If new split format exists, use it
         if (configSnap.exists()) {
-            const config = configSnap.data()?.config || configSnap.data() || {};
+            const configBase = configSnap.data()?.config || configSnap.data() || {};
+            const mercaderiaConteos = mercaderiaSnap.exists()
+                ? (mercaderiaSnap.data()?.mercaderiaConteos || [])
+                : (configBase.mercaderiaConteos || []);
+            const config = {
+                ...configBase,
+                mercaderiaConteos
+            };
             const moldes = moldesSnap.exists() ? (moldesSnap.data()?.moldes || []) : [];
             const telas = telasSnap.exists() ? (telasSnap.data()?.telas || []) : [];
             const tareas = tareasSnap.exists() ? (tareasSnap.data()?.tareas || []) : [];
@@ -242,13 +251,19 @@ export const saveDataToFirestore = async (data) => {
             return m;
         });
 
+        const configWithoutMercaderia = {
+            ...(data.config || {}),
+            mercaderiaConteos: []
+        };
+
         await Promise.all([
-            setDoc(doc(db, 'app-data', 'config'), { config: data.config || {} }),
+            setDoc(doc(db, 'app-data', 'config'), { config: configWithoutMercaderia }),
+            setDoc(doc(db, 'app-data', 'mercaderia'), { mercaderiaConteos: data.config?.mercaderiaConteos || [] }),
             setDoc(doc(db, 'app-data', 'moldes'), { moldes: moldesClean }),
             setDoc(doc(db, 'app-data', 'telas'), { telas: data.telas || [] }),
             setDoc(doc(db, 'app-data', 'tareas'), { tareas: data.tareas || [] }),
         ]);
-        console.log('✅ Datos guardados en Firestore (4 documentos)');
+        console.log('✅ Datos guardados en Firestore (5 documentos)');
     } catch (err) {
         console.error('Error guardando datos en Firestore:', err);
         throw err;
