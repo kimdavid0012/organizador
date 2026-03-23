@@ -7,6 +7,11 @@ const RECOVERY_SESSION_KEY = 'organizador_moldes_data_recovery';
 const PENDING_CHANGES_KEY = 'organizador_moldes_data_pending';
 const FIRESTORE_DOC = 'app-data/main';
 const MAX_LOCAL_BACKUPS = 3;
+const APP_STORAGE_DB_NAME = 'organizador-app-storage';
+const APP_STORAGE_DB_VERSION = 1;
+const APP_STORAGE_STORE = 'snapshots';
+const APP_MAIN_SNAPSHOT_KEY = 'main';
+const APP_RECOVERY_SNAPSHOT_KEY = 'recovery';
 
 const DEFAULT_COLUMNAS = [
     { id: 'por-hacer', nombre: 'Por hacer', orden: 0, color: '#6366f1' },
@@ -251,6 +256,61 @@ const buildLocalStorageSafeData = (data, { keepBackupMeta = false } = {}) => {
     };
 };
 
+const openAppStorageDb = () => new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+        reject(new Error('IndexedDB no esta disponible en este dispositivo.'));
+        return;
+    }
+
+    const request = indexedDB.open(APP_STORAGE_DB_NAME, APP_STORAGE_DB_VERSION);
+
+    request.onupgradeneeded = () => {
+        const dbInstance = request.result;
+        if (!dbInstance.objectStoreNames.contains(APP_STORAGE_STORE)) {
+            dbInstance.createObjectStore(APP_STORAGE_STORE, { keyPath: 'key' });
+        }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('No se pudo abrir la base local de la app.'));
+});
+
+const writeAppSnapshotToIndexedDb = async (key, data) => {
+    try {
+        const dbInstance = await openAppStorageDb();
+        await new Promise((resolve, reject) => {
+            const tx = dbInstance.transaction(APP_STORAGE_STORE, 'readwrite');
+            tx.objectStore(APP_STORAGE_STORE).put({
+                key,
+                savedAt: new Date().toISOString(),
+                data
+            });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error || new Error('No se pudo guardar snapshot local en IndexedDB.'));
+        });
+        dbInstance.close();
+    } catch (err) {
+        console.error('Error guardando snapshot en IndexedDB:', err);
+    }
+};
+
+const readAppSnapshotFromIndexedDb = async (key) => {
+    try {
+        const dbInstance = await openAppStorageDb();
+        const record = await new Promise((resolve, reject) => {
+            const tx = dbInstance.transaction(APP_STORAGE_STORE, 'readonly');
+            const request = tx.objectStore(APP_STORAGE_STORE).get(key);
+            request.onsuccess = () => resolve(request.result?.data || null);
+            request.onerror = () => reject(request.error || new Error('No se pudo leer snapshot local desde IndexedDB.'));
+        });
+        dbInstance.close();
+        return record ? normalizeData(record) : null;
+    } catch (err) {
+        console.error('Error leyendo snapshot en IndexedDB:', err);
+        return null;
+    }
+};
+
 // ============ FIRESTORE (SPLIT INTO MULTIPLE DOCS) ============
 // Firestore limit = 1MB per document
 // We split data into multiple docs to stay under the 1MB Firestore limit:
@@ -369,6 +429,10 @@ export const loadLatestBackupFromLocal = () => {
     }
 };
 
+export const loadProtectedSessionSnapshotFromIndexedDb = async () => readAppSnapshotFromIndexedDb(APP_RECOVERY_SNAPSHOT_KEY);
+
+export const loadDataFromIndexedDb = async () => readAppSnapshotFromIndexedDb(APP_MAIN_SNAPSHOT_KEY);
+
 const saveBackupSnapshotToLocal = (data) => {
     try {
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -396,6 +460,7 @@ const saveBackupSnapshotToLocal = (data) => {
 export const saveDataToLocal = (data) => {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(buildLocalStorageSafeData(data)));
+        void writeAppSnapshotToIndexedDb(APP_MAIN_SNAPSHOT_KEY, data);
         saveBackupSnapshotToLocal(data);
     } catch (err) {
         console.error('Error guardando datos locales:', err);
@@ -408,6 +473,7 @@ export const saveDataToLocal = (data) => {
                 }
                 localStorage.removeItem(BACKUP_INDEX_KEY);
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(buildLocalStorageSafeData(data)));
+                void writeAppSnapshotToIndexedDb(APP_MAIN_SNAPSHOT_KEY, data);
                 return;
             } catch (retryErr) {
                 console.error('Error reintentando guardado local compacto:', retryErr);
@@ -468,6 +534,7 @@ export const clearData = () => {
 export const saveProtectedSessionSnapshot = (data) => {
     try {
         localStorage.setItem(RECOVERY_SESSION_KEY, JSON.stringify(buildLocalStorageSafeData(data)));
+        void writeAppSnapshotToIndexedDb(APP_RECOVERY_SNAPSHOT_KEY, data);
     } catch (err) {
         console.error('Error guardando snapshot de recuperacion:', err);
     }

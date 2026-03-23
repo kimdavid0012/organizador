@@ -4,8 +4,10 @@ import { db, firestoreOfflineReady } from './firebase';
 import {
     DEFAULT_DATA,
     loadDataFromLocal,
+    loadDataFromIndexedDb,
     loadLatestBackupFromLocal,
     loadProtectedSessionSnapshot,
+    loadProtectedSessionSnapshotFromIndexedDb,
     loadPendingLocalChangesFlag,
     saveDataToLocal,
     saveProtectedSessionSnapshot,
@@ -1335,6 +1337,34 @@ export function DataProvider({ children }) {
             currentRevisionRef.current = stateRevision;
         }
     }, [state]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const hydrateFromIndexedDb = async () => {
+            const indexedState = await loadProtectedSessionSnapshotFromIndexedDb() || await loadDataFromIndexedDb();
+            if (cancelled || !indexedState) return;
+
+            const indexedRevision = getSyncRevision(indexedState);
+            const currentRevision = getSyncRevision(stateRef.current);
+
+            if (indexedRevision > currentRevision || hasRicherLocalData(indexedState, stateRef.current)) {
+                dispatch({ type: ACTION_TYPES.SET_DATA, payload: indexedState });
+                currentRevisionRef.current = indexedRevision;
+                initialized.current = true;
+                updateSyncStatus({
+                    lastLocalSaveAt: indexedState?.config?.syncMeta?.updatedAt || new Date().toISOString(),
+                    pendingChanges: loadPendingLocalChangesFlag() ? Math.max(pendingChangesCount.current, 1) : pendingChangesCount.current
+                });
+            }
+        };
+
+        void hydrateFromIndexedDb();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [updateSyncStatus]);
 
     const updateSyncStatus = useCallback((updates) => {
         setSyncStatus((prev) => {
