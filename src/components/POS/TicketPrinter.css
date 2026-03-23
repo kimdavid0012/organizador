@@ -12,6 +12,16 @@
         size: 80mm auto;
     }
 
+    html,
+    body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 80mm !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: #fff !important;
+    }
+
     body * {
         visibility: hidden;
     }
@@ -22,21 +32,45 @@
     }
 
     .thermal-ticket-container {
-        position: absolute;
+        display: block !important;
+        position: static !important;
         left: 0;
         top: 0;
         width: 80mm;
+        min-height: auto !important;
+        height: auto !important;
         margin: 0;
+        padding: 0 0 8mm 0;
+        overflow: visible !important;
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
     }
 
     .thermal-ticket {
-        width: 72mm;
+        width: 76mm;
         font-family: 'Courier New', Courier, monospace;
         font-size: 11px;
         color: #000;
-        padding: 1.5mm 2mm;
+        line-height: 1.25;
+        padding: 1.5mm 2mm 6mm;
+        height: auto !important;
+        min-height: auto !important;
+        overflow: visible !important;
+        page-break-inside: auto;
+        break-inside: auto;
+        box-sizing: border-box;
+    }
+
+    .ticket-header,
+    .ticket-items,
+    .ticket-footer {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .ticket-item-row {
+        page-break-inside: avoid;
+        break-inside: avoid;
     }
 }
 
@@ -112,12 +146,25 @@
 .item-name {
     width: 100%;
     font-weight: bold;
+    word-break: break-word;
 }
 
 .item-details {
     display: flex;
     justify-content: space-between;
+    gap: 8px;
     padding-left: 5px;
+}
+
+.item-details span:first-child {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.item-details span:last-child {
+    flex-shrink: 0;
+    text-align: right;
 }
 
 .ticket-summary {

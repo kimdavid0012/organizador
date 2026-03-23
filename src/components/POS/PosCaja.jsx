@@ -66,6 +66,7 @@ export default function PosCaja({ onOpenCatalog }) {
     const [ultimoTicket, setUltimoTicket] = useState(null);
     const ticketRef = useRef(null);
     const searchInputRef = useRef(null);
+    const printFallbackTimeoutRef = useRef(null);
 
     // Auto-focus search on load
     useEffect(() => {
@@ -229,12 +230,42 @@ export default function PosCaja({ onOpenCatalog }) {
     };
 
     const triggerPrint = () => {
+        if (!ultimoTicket) return;
         setImprimiendo(true);
-        setTimeout(() => {
-            window.print();
-            setImprimiendo(false);
-        }, 300);
     };
+
+    useEffect(() => {
+        if (!imprimiendo || !ultimoTicket) return undefined;
+
+        const finishPrint = () => {
+            if (printFallbackTimeoutRef.current) {
+                clearTimeout(printFallbackTimeoutRef.current);
+                printFallbackTimeoutRef.current = null;
+            }
+            setImprimiendo(false);
+        };
+
+        const startPrintTimeout = setTimeout(() => {
+            window.print();
+
+            // Fallback para navegadores donde afterprint no responde consistente.
+            printFallbackTimeoutRef.current = setTimeout(() => {
+                setImprimiendo(false);
+                printFallbackTimeoutRef.current = null;
+            }, 1200);
+        }, 450);
+
+        window.addEventListener('afterprint', finishPrint);
+
+        return () => {
+            clearTimeout(startPrintTimeout);
+            window.removeEventListener('afterprint', finishPrint);
+            if (printFallbackTimeoutRef.current) {
+                clearTimeout(printFallbackTimeoutRef.current);
+                printFallbackTimeoutRef.current = null;
+            }
+        };
+    }, [imprimiendo, ultimoTicket]);
 
     useEffect(() => {
         const handleShortcut = (event) => {
