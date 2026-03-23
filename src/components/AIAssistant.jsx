@@ -14,6 +14,12 @@ const DEFAULT_GREETING = {
 const ADMIN_ASSISTANT_ACTIONS = new Set(['addMolde', 'addCliente', 'addTarea', 'addTela', 'addPosProduct', 'addCorte', 'addExpense', 'updateConfig']);
 const NADIA_ASSISTANT_ACTIONS = new Set(['addCliente', 'addTarea']);
 const NADIA_EMAIL = 'nadia@celavie.com';
+const DEFAULT_EMPLOYEES = [
+    { id: 'emp-nadia', nombre: 'Nadia', puesto: 'Encargada' },
+    { id: 'emp-juan', nombre: 'Juan', puesto: 'Pedidos Online' },
+    { id: 'emp-naara', nombre: 'Naara', puesto: 'Deposito' },
+    { id: 'emp-rocio', nombre: 'Rocio', puesto: 'Fotos y Atencion' }
+];
 
 const getNormalizedEmail = (user) => (user?.email || '').toLowerCase().trim();
 
@@ -43,6 +49,223 @@ const normalizeComparable = (value) => normalizeText(value)
     .replace(/[^A-Z0-9]/g, '');
 const normalizePhone = (value) => normalizeText(value).replace(/\D/g, '');
 const toNumber = (value) => Number.parseFloat(value || 0) || 0;
+const parseDateValue = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+    }
+
+    const raw = value.toString().trim();
+    if (!raw) return null;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        const date = new Date(`${raw}T12:00:00`);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(raw)) {
+        const [datePart] = raw.split(/\s+/);
+        const [day, month, year] = datePart.split('/');
+        const normalizedYear = year?.length === 2 ? `20${year}` : year;
+        const date = new Date(`${normalizedYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00`);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const buildEmployeeSnapshot = (config = {}) => {
+    const mergedEmployees = new Map();
+    [...DEFAULT_EMPLOYEES, ...(Array.isArray(config.empleados) ? config.empleados : [])].forEach((employee) => {
+        const key = normalizeComparable(employee.nombre || employee.id);
+        if (!key) return;
+        mergedEmployees.set(key, {
+            ...(mergedEmployees.get(key) || {}),
+            ...employee
+        });
+    });
+
+    const asistencia = Array.isArray(config.asistencia) ? config.asistencia : [];
+    const sortedAttendance = [...asistencia].sort((a, b) => {
+        const left = parseDateValue(a?.fecha)?.getTime() || 0;
+        const right = parseDateValue(b?.fecha)?.getTime() || 0;
+        return right - left;
+    });
+
+    return Array.from(mergedEmployees.values()).map((employee) => {
+        const latestDay = sortedAttendance.find((day) => Array.isArray(day.registros) && day.registros.some((item) => item.empleadoId === employee.id));
+        const latestEntry = latestDay?.registros?.find((item) => item.empleadoId === employee.id) || null;
+        const lastLateDay = sortedAttendance.find((day) => Array.isArray(day.registros) && day.registros.some((item) => (
+            item.empleadoId === employee.id &&
+            (normalizeText(item.estado).toLowerCase() === 'tarde' || normalizeText(item.horaLlegada) > '08:00')
+        )));
+        const lastLateEntry = lastLateDay?.registros?.find((item) => item.empleadoId === employee.id) || null;
+
+        return {
+            nombre: normalizeText(employee.nombre) || 'Sin nombre',
+            puesto: normalizeText(employee.puesto) || 'General',
+            ultimaAsistenciaFecha: latestDay?.fecha || '',
+            ultimoEstado: normalizeText(latestEntry?.estado) || 'sin registro',
+            ultimaHoraLlegada: normalizeText(latestEntry?.horaLlegada) || '',
+            seRetiroTempranoUltimaVez: Boolean(latestEntry?.retiroTemprano),
+            llegoTardeUltimaVez: normalizeText(latestEntry?.estado).toLowerCase() === 'tarde' || normalizeText(latestEntry?.horaLlegada) > '08:00',
+            ultimaTardanzaFecha: lastLateDay?.fecha || '',
+            ultimaTardanzaHora: normalizeText(lastLateEntry?.horaLlegada) || ''
+        };
+    });
+};
+
+const buildClientInsightSnapshot = (clientes = [], sales = [], pedidosOnline = []) => {
+    const clientInsights = new Map();
+
+    const ensureClientInsight = (payload = {}) => {
+        const nombre = normalizeText(payload.nombre || payload.email || payload.telefono || 'Cliente sin nombre');
+        const primaryKey = [
+            normalizeComparable(payload.id),
+            normalizeComparable(payload.wooId),
+            normalizePhone(payload.telefono),
+            normalizeComparable(payload.email),
+            normalizeComparable(nombre)
+        ].find(Boolean) || nombre;
+
+        if (!clientInsights.has(primaryKey)) {
+            clientInsights.set(primaryKey, {
+                id: payload.id || '',
+                wooId: payload.wooId || '',
+                nombre,
+                telefono: normalizeText(payload.telefono || ''),
+                email: normalizeText(payload.email || ''),
+                ultimaCompraPOS: '',
+                ultimoPedidoOnline: '',
+                ultimaActividad: '',
+                origenUltimaActividad: '',
+                totalGastadoPOS: 0,
+                comprasPOS: 0,
+                pedidosOnlineCantidad: 0,
+                totalOnline: 0
+            });
+        }
+
+        const current = clientInsights.get(primaryKey);
+        current.id = current.id || payload.id || '';
+        current.wooId = current.wooId || payload.wooId || '';
+        current.telefono = current.telefono || normalizeText(payload.telefono || '');
+        current.email = current.email || normalizeText(payload.email || '');
+        current.nombre = current.nombre || nombre;
+        return current;
+    };
+
+    const findClientInsight = (payload = {}) => {
+        const candidateKeys = [
+            normalizeComparable(payload.id),
+            normalizeComparable(payload.wooId),
+            normalizePhone(payload.telefono),
+            normalizeComparable(payload.email),
+            normalizeComparable(payload.nombre)
+        ].filter(Boolean);
+
+        for (const [key, insight] of clientInsights.entries()) {
+            if (candidateKeys.includes(key)) {
+                return insight;
+            }
+            if (candidateKeys.some((candidate) => (
+                candidate &&
+                (
+                    candidate === normalizeComparable(insight.id) ||
+                    candidate === normalizeComparable(insight.wooId) ||
+                    candidate === normalizePhone(insight.telefono) ||
+                    candidate === normalizeComparable(insight.email) ||
+                    candidate === normalizeComparable(insight.nombre)
+                )
+            ))) {
+                return insight;
+            }
+        }
+
+        return ensureClientInsight(payload);
+    };
+
+    clientes.forEach((cliente) => {
+        ensureClientInsight({
+            id: cliente.id,
+            wooId: cliente.wooId,
+            nombre: cliente.nombre,
+            telefono: cliente.telefono,
+            email: cliente.email
+        });
+    });
+
+    sales.forEach((sale) => {
+        const saleDate = sale.fecha || sale.createdAt || sale.date || '';
+        const client = findClientInsight({
+            id: sale.clienteId,
+            wooId: sale.wooCustomerId || sale.clienteWooId || sale.cliente?.wooId,
+            nombre: sale.clienteNombre || sale.nombreCliente || sale.cliente?.nombre || sale.cliente,
+            telefono: sale.clienteTelefono || sale.telefonoCliente || sale.cliente?.telefono,
+            email: sale.cliente?.email
+        });
+
+        client.totalGastadoPOS += toNumber(sale.totalFinal || sale.total);
+        client.comprasPOS += 1;
+
+        const saleParsed = parseDateValue(saleDate);
+        const currentPosParsed = parseDateValue(client.ultimaCompraPOS);
+        if (saleParsed && (!currentPosParsed || saleParsed > currentPosParsed)) {
+            client.ultimaCompraPOS = saleDate;
+        }
+
+        const currentActivityParsed = parseDateValue(client.ultimaActividad);
+        if (saleParsed && (!currentActivityParsed || saleParsed > currentActivityParsed)) {
+            client.ultimaActividad = saleDate;
+            client.origenUltimaActividad = 'POS';
+        }
+    });
+
+    pedidosOnline.forEach((pedido) => {
+        const orderDate = pedido.fecha || pedido.date_created || pedido.createdAt || '';
+        const client = findClientInsight({
+            wooId: pedido.customer_id || pedido.wooCustomerId,
+            nombre: pedido.clienteNombre ||
+                `${pedido.billing?.first_name || ''} ${pedido.billing?.last_name || ''}`.trim() ||
+                `${pedido.shipping?.first_name || ''} ${pedido.shipping?.last_name || ''}`.trim() ||
+                pedido.email,
+            telefono: pedido.telefono || pedido.billing?.phone || pedido.shipping?.phone,
+            email: pedido.email || pedido.billing?.email
+        });
+
+        client.pedidosOnlineCantidad += 1;
+        client.totalOnline += toNumber(pedido.total || pedido.totalAmount);
+
+        const orderParsed = parseDateValue(orderDate);
+        const currentOnlineParsed = parseDateValue(client.ultimoPedidoOnline);
+        if (orderParsed && (!currentOnlineParsed || orderParsed > currentOnlineParsed)) {
+            client.ultimoPedidoOnline = orderDate;
+        }
+
+        const currentActivityParsed = parseDateValue(client.ultimaActividad);
+        if (orderParsed && (!currentActivityParsed || orderParsed > currentActivityParsed)) {
+            client.ultimaActividad = orderDate;
+            client.origenUltimaActividad = 'WooCommerce';
+        }
+    });
+
+    return Array.from(clientInsights.values())
+        .map((client) => ({
+            nombre: client.nombre,
+            telefono: client.telefono,
+            email: client.email,
+            ultimaCompraPOS: client.ultimaCompraPOS,
+            ultimoPedidoOnline: client.ultimoPedidoOnline,
+            ultimaActividad: client.ultimaActividad,
+            origenUltimaActividad: client.origenUltimaActividad,
+            comprasPOS: client.comprasPOS,
+            pedidosOnlineCantidad: client.pedidosOnlineCantidad,
+            totalGastadoPOS: client.totalGastadoPOS,
+            totalOnline: client.totalOnline
+        }))
+        .sort((a, b) => (parseDateValue(b.ultimaActividad)?.getTime() || 0) - (parseDateValue(a.ultimaActividad)?.getTime() || 0));
+};
 
 const collectAssistantSales = (config = {}) => {
     const currentSales = Array.isArray(config?.posVentas) ? config.posVentas : [];
@@ -62,6 +285,8 @@ const buildAssistantSnapshot = (state) => {
     const conteos = Array.isArray(config.mercaderiaConteos) ? config.mercaderiaConteos : [];
     const pedidosOnline = Array.isArray(config.pedidosOnline) ? config.pedidosOnline : [];
     const allSales = collectAssistantSales(config);
+    const employees = buildEmployeeSnapshot(config);
+    const clientInsights = buildClientInsightSnapshot(clientes, allSales, pedidosOnline);
 
     const last30Days = new Date();
     last30Days.setDate(last30Days.getDate() - 30);
@@ -178,9 +403,14 @@ const buildAssistantSnapshot = (state) => {
         commercial: {
             totalClientes: clientes.length,
             topClients,
+            recentClientActivity: clientInsights,
             salesByChannel: Array.from(salesByChannel.entries())
                 .map(([canal, total]) => ({ canal, total }))
                 .sort((a, b) => b.total - a.total)
+        },
+        people: {
+            totalEmpleados: employees.length,
+            employees
         },
         inventory: {
             totalProducts: products.length,
@@ -246,6 +476,9 @@ REGLAS OPERATIVAS IMPORTANTES:
 - Para preguntas comerciales y financieras, usá los datos del snapshot operativo inyectado abajo como fuente principal.
 - Si te preguntan "qué cliente compró más", "cuánto stock queda", "si conviene producir", "qué canal rindió más" o "qué pasó este mes", respondé con los datos del snapshot y explicá el criterio.
 - No inventes datos existentes si no están en el contexto.
+
+- Si preguntan por empleados, usÃ¡ people.employees y respondÃ© con fecha exacta de Ãºltima asistencia, hora de llegada, si llegÃ³ tarde y si se retirÃ³ temprano.
+- Si preguntan por clientes, usÃ¡ commercial.recentClientActivity y respondÃ© con fecha exacta de Ãºltima compra POS, Ãºltimo pedido online y Ãºltima actividad conocida.
 
 PERMISOS DEL USUARIO ACTUAL:
 - Usuario actual: ${user?.name || 'Sin nombre'} (${user?.role || 'sin rol'}).
