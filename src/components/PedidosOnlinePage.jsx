@@ -6,7 +6,7 @@ import { Plus, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Save, RefreshCw
 import './PedidosOnlinePage.css';
 
 export default function PedidosOnlinePage() {
-    const { state, addPedidoOnline, updatePedidoOnlineStatus, updatePedidoItem, fetchWooOrders } = useData();
+    const { state, addPedidoOnline, addPedidoItem, updatePedidoOnlineStatus, updatePedidoItem, fetchWooOrders } = useData();
     const { user } = useAuth();
     const pedidos = state.config?.pedidosOnline || [];
     const posProductos = state.config?.posProductos || [];
@@ -170,6 +170,12 @@ export default function PedidosOnlinePage() {
         } finally {
             setLoadingWoo(false);
         }
+    };
+
+    const handlePedidoStatusChange = (event, pedidoId, newEstado) => {
+        event.preventDefault();
+        event.stopPropagation();
+        updatePedidoOnlineStatus(pedidoId, newEstado);
     };
 
     const resolveItemImage = (item) => {
@@ -367,20 +373,23 @@ export default function PedidosOnlinePage() {
                                         <label>Preparacion del pedido:</label>
                                         <div className="status-buttons">
                                             <button
+                                                type="button"
                                                 className={`btn ${pedido.estado === 'listo-juan' ? 'btn-success' : 'btn-outline'}`}
-                                                onClick={() => updatePedidoOnlineStatus(pedido.id, 'listo-juan')}
+                                                onClick={(event) => handlePedidoStatusChange(event, pedido.id, 'listo-juan')}
                                             >
                                                 <CheckCircle size={16} /> Listo Juan
                                             </button>
                                             <button
+                                                type="button"
                                                 className={`btn ${pedido.estado === 'incompleto' ? 'btn-error' : 'btn-outline'}`}
-                                                onClick={() => updatePedidoOnlineStatus(pedido.id, 'incompleto')}
+                                                onClick={(event) => handlePedidoStatusChange(event, pedido.id, 'incompleto')}
                                             >
                                                 <AlertCircle size={16} /> Falta Algo
                                             </button>
                                             <button
+                                                type="button"
                                                 className={`btn ${pedido.estado === 'pendiente' ? 'btn-warning' : 'btn-outline'}`}
-                                                onClick={() => updatePedidoOnlineStatus(pedido.id, 'pendiente')}
+                                                onClick={(event) => handlePedidoStatusChange(event, pedido.id, 'pendiente')}
                                             >
                                                 Restaurar a Pendiente
                                             </button>
@@ -416,8 +425,9 @@ export default function PedidosOnlinePage() {
                                         <label>Chequeo de Nadia:</label>
                                         <div className="status-buttons">
                                             <button
+                                                type="button"
                                                 className={`btn ${pedido.estado === 'listo' ? 'btn-success' : 'btn-outline'}`}
-                                                onClick={() => updatePedidoOnlineStatus(pedido.id, 'listo')}
+                                                onClick={(event) => handlePedidoStatusChange(event, pedido.id, 'listo')}
                                                 disabled={pedido.estado !== 'listo-juan'}
                                             >
                                                 <CheckCircle size={16} /> Listo Nadia
@@ -571,6 +581,7 @@ export default function PedidosOnlinePage() {
                                                     {newItemImage ? 'Foto cargada' : 'Subir foto'}
                                                 </label>
                                                 <button
+                                                    type="button"
                                                     className="btn btn-sm btn-primary"
                                                     onClick={() => handleAddItem(pedido.id)}
                                                     disabled={!newItemDesc.trim() && !newItemProductId}
