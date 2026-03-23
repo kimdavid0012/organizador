@@ -166,7 +166,7 @@ export default function SaldoPage() {
     const [monto, setMonto] = useState('');
     const pageText = PAGE_TEXT[lang] || PAGE_TEXT.es;
 
-    if (user.role !== 'admin') {
+    if (!['admin', 'encargada'].includes(user.role)) {
         return <div style={{ padding: 'var(--sp-4)' }}>{pageText.adminOnly}</div>;
     }
 

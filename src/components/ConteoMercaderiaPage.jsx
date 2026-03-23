@@ -18,7 +18,8 @@ const EMPTY_FORM = {
     cantidadOriginal: '',
     cantidadContada: '',
     cantidadEllos: '',
-    fallado: ''
+    fallado: '',
+    trajoMuestra: false
 };
 
 const RESPONSABLES = ['Juan', 'Naara'];
@@ -224,6 +225,7 @@ export default function ConteoMercaderiaPage() {
             cantidadContada: toNumber(baseItem.cantidadContada),
             cantidadEllos: toNumber(baseItem.cantidadEllos),
             fallado: toNumber(baseItem.fallado),
+            trajoMuestra: Boolean(baseItem.trajoMuestra),
             chequeado: Boolean(baseItem.chequeado),
             chequeadoPor: baseItem.chequeadoPor || '',
             chequeadoAt: baseItem.chequeadoAt || '',
@@ -383,6 +385,8 @@ export default function ConteoMercaderiaPage() {
                         ? normalizeCode(value)
                         : field === 'numeroCorte'
                         ? extractCorteNumber(value)
+                        : field === 'trajoMuestra'
+                        ? Boolean(value)
                         : ['cantidadOriginal', 'cantidadContada', 'cantidadEllos', 'fallado'].includes(field)
                         ? toNumber(value)
                         : value
@@ -409,7 +413,7 @@ export default function ConteoMercaderiaPage() {
     };
 
     const exportCsv = () => {
-        const headers = ['Articulo fabrica', 'Articulo venta', 'Descripcion', 'Tipo tela', 'Color', 'Numero corte', 'Fecha ingreso', 'Taller', 'Responsable', 'Cantidad original', 'Cantidad contada', 'Cantidad ellos', 'Fallado', 'Chequeado', 'Comentario control', 'Diferencia'];
+        const headers = ['Articulo fabrica', 'Articulo venta', 'Descripcion', 'Tipo tela', 'Color', 'Numero corte', 'Fecha ingreso', 'Taller', 'Responsable', 'Cantidad original', 'Cantidad contada', 'Cantidad ellos', 'Fallado', 'Trajo muestra', 'Chequeado', 'Comentario control', 'Diferencia'];
         const rows = conteos.map((item) => {
             const diferencia = toNumber(item.cantidadContada) - toNumber(item.cantidadOriginal);
             return [
@@ -426,6 +430,7 @@ export default function ConteoMercaderiaPage() {
                 item.cantidadContada,
                 item.cantidadEllos,
                 item.fallado,
+                item.trajoMuestra ? 'SI' : 'NO',
                 item.chequeado ? 'SI' : 'NO',
                 item.comentarioControl,
                 diferencia
@@ -482,6 +487,7 @@ export default function ConteoMercaderiaPage() {
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Cantidad contada</span><input className="form-input" type="number" value={formData.cantidadContada} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadContada: e.target.value }))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Cantidad de ellos</span><input className="form-input" type="number" value={formData.cantidadEllos} onChange={(e) => setFormData((prev) => ({ ...prev, cantidadEllos: e.target.value }))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fallado</span><input className="form-input" type="number" value={formData.fallado} onChange={(e) => setFormData((prev) => ({ ...prev, fallado: e.target.value }))} disabled={!canEditInventoryRows} /></label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 42, paddingTop: 22 }}><input type="checkbox" checked={Boolean(formData.trajoMuestra)} onChange={(e) => setFormData((prev) => ({ ...prev, trajoMuestra: e.target.checked }))} disabled={!canEditInventoryRows} /><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Taller trajo muestra</span></label>
                 </div>
 
                 <datalist id="conteo-articulos-venta">{articleOptions.filter((item) => item.articuloVenta).map((item) => <option key={`venta-${item.articuloVenta}`} value={item.articuloVenta}>{item.descripcion}</option>)}</datalist>
@@ -526,6 +532,7 @@ export default function ConteoMercaderiaPage() {
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Contada</span><input className="form-input" type="number" value={item.cantidadContada || 0} onChange={(e) => handleCellChange(item.id, 'cantidadContada', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Ellos</span><input className="form-input" type="number" value={item.cantidadEllos || 0} onChange={(e) => handleCellChange(item.id, 'cantidadEllos', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fallado</span><input className="form-input" type="number" value={item.fallado || 0} onChange={(e) => handleCellChange(item.id, 'fallado', e.target.value)} disabled={!canEditInventoryRows} /></label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 42, paddingTop: 22 }}><input type="checkbox" checked={Boolean(item.trajoMuestra)} onChange={(e) => handleCellChange(item.id, 'trajoMuestra', e.target.checked)} disabled={!canEditInventoryRows} /><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Trajo muestra</span></label>
                                 <div style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Diferencia</span><div className="form-input" style={{ display: 'flex', alignItems: 'center', fontWeight: 700, color: diferencia < 0 ? '#ff7a7a' : 'var(--success)' }}>{diferencia}</div></div>
                             </div>
 

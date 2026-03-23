@@ -76,7 +76,8 @@ const sanitizeStockBreakdown = (entries = []) =>
             cantidadOriginal: Number.parseInt(entry.cantidadOriginal || 0, 10) || 0,
             cantidadContada: Number.parseInt(entry.cantidadContada || 0, 10) || 0,
             cantidadEllos: Number.parseInt(entry.cantidadEllos || 0, 10) || 0,
-            fallado: Number.parseInt(entry.fallado || 0, 10) || 0
+            fallado: Number.parseInt(entry.fallado || 0, 10) || 0,
+            trajoMuestra: Boolean(entry.trajoMuestra)
         }))
         .filter((entry) => entry.articuloFabrica || entry.articuloVenta || entry.tipoTela || entry.color || entry.numeroCorte || entry.taller || entry.cantidadOriginal || entry.cantidadContada || entry.cantidadEllos || entry.fallado);
 
@@ -188,6 +189,10 @@ const mergePosProductGroup = (products = []) => {
         if (!merged.imagen && product.imagen) merged.imagen = product.imagen;
         if (!merged.image && product.image) merged.image = product.image;
         if (!merged.thumbnail && product.thumbnail) merged.thumbnail = product.thumbnail;
+        if (!merged.imagenBibliotecaId && product.imagenBibliotecaId) merged.imagenBibliotecaId = product.imagenBibliotecaId;
+        if (!merged.imagenBibliotecaThumb && product.imagenBibliotecaThumb) merged.imagenBibliotecaThumb = product.imagenBibliotecaThumb;
+        if (!merged.articuloVenta && product.articuloVenta) merged.articuloVenta = product.articuloVenta;
+        if (!merged.articuloFabrica && product.articuloFabrica) merged.articuloFabrica = product.articuloFabrica;
 
         if ((!merged.precioCosto || merged.precioCosto === 0) && Number(product.precioCosto || 0) > 0) merged.precioCosto = product.precioCosto;
         if ((!merged.precioVentaL1 || merged.precioVentaL1 === 0) && Number(product.precioVentaL1 || 0) > 0) merged.precioVentaL1 = product.precioVentaL1;
@@ -219,6 +224,29 @@ const mergePosProductGroup = (products = []) => {
     }
 
     return merged;
+};
+
+const attachProductLibraryImages = (products = [], imageLibrary = []) => {
+    const libraryByProduct = imageLibrary.reduce((map, image) => {
+        const key = normalizeText(image?.productId);
+        if (!key) return map;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(image);
+        return map;
+    }, new Map());
+
+    return products.map((product) => {
+        const productImages = libraryByProduct.get(normalizeText(product?.id)) || [];
+        const coverImage = productImages.find((image) => image.id === product.imagenBibliotecaId) || productImages[0];
+        if (!coverImage) return product;
+
+        return {
+            ...product,
+            imagenBibliotecaId: product.imagenBibliotecaId || coverImage.id,
+            imagenBibliotecaThumb: product.imagenBibliotecaThumb || coverImage.thumbDataUrl || '',
+            imagenesArticulo: productImages
+        };
+    });
 };
 
 const dedupePosProducts = (products = []) => {
@@ -408,10 +436,14 @@ const reconcilePosProductStocks = (products = [], moldes = [], config = {}) => {
     });
 };
 
-const withReconciledPosProducts = (config = {}, moldes = []) => ({
-    ...config,
-    posProductos: reconcilePosProductStocks(dedupePosProducts(config.posProductos || []), moldes, config)
-});
+const withReconciledPosProducts = (config = {}, moldes = []) => {
+    const dedupedProducts = dedupePosProducts(config.posProductos || []);
+    const reconciledProducts = reconcilePosProductStocks(dedupedProducts, moldes, config);
+    return {
+        ...config,
+        posProductos: attachProductLibraryImages(reconciledProducts, config.imageLibrary || [])
+    };
+};
 
 const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = []) => {
     const conteos = Array.isArray(mercaderiaConteos) ? mercaderiaConteos : [];
@@ -444,6 +476,7 @@ const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = [
         const cantidadContada = Number.parseInt(item.cantidadContada || 0, 10) || 0;
         const cantidadEllos = Number.parseInt(item.cantidadEllos || 0, 10) || 0;
         const fallado = Number.parseInt(item.fallado || 0, 10) || 0;
+        const trajoMuestra = Boolean(item.trajoMuestra);
         const stockDisponible = Math.max(0, cantidadContada - fallado);
 
         if (descripcion) group.detalleCorto = descripcion;
@@ -461,6 +494,7 @@ const syncMercaderiaWithProducts = (existingProducts = [], mercaderiaConteos = [
             cantidadContada,
             cantidadEllos,
             fallado,
+            trajoMuestra,
             stockDisponible
         });
     });
@@ -1087,7 +1121,8 @@ function dataReducer(state, action) {
                 cantidadOriginal: Number.parseInt(item.cantidadOriginal || 0, 10) || 0,
                 cantidadContada: Number.parseInt(item.cantidadContada || 0, 10) || 0,
                 cantidadEllos: Number.parseInt(item.cantidadEllos || 0, 10) || 0,
-                fallado: Number.parseInt(item.fallado || 0, 10) || 0
+                fallado: Number.parseInt(item.fallado || 0, 10) || 0,
+                trajoMuestra: Boolean(item.trajoMuestra)
             }));
 
             const conteoDerivedProducts = Array.from(
@@ -1131,7 +1166,8 @@ function dataReducer(state, action) {
                         cantidadOriginal: item.cantidadOriginal,
                         cantidadContada: item.cantidadContada,
                         cantidadEllos: item.cantidadEllos,
-                        fallado: item.fallado
+                        fallado: item.fallado,
+                        trajoMuestra: item.trajoMuestra
                     }];
                     map.set(code, current);
                     return map;
@@ -1552,6 +1588,7 @@ export function DataProvider({ children }) {
                 const mapped = orders.map(o => ({
                     id: generateId(),
                     wooId: o.id,
+                    customer_id: o.customer_id || '',
                     cliente: `${o.billing.first_name} ${o.billing.last_name}`,
                     monto: parseFloat(o.total),
                     metodoPago: o.payment_method_title,
@@ -1598,6 +1635,8 @@ export function DataProvider({ children }) {
                         id: generateId(),
                         wooId: p.id,
                         codigoInterno: p.sku || '',
+                        articuloVenta: p.sku || '',
+                        articuloFabrica: '',
                         detalleCorto: p.name || '',
                         detalleLargo: p.short_description?.replace(/<[^>]*>?/gm, '') || '',
                         precioVentaL1: displayPrice,

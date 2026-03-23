@@ -6,7 +6,7 @@ import { generateId } from '../../utils/helpers';
 import TicketPrinter from './TicketPrinter';
 import './PosCaja.css';
 
-const SALES_CHANNELS = ['LOCAL', 'PAGINA WEB', 'WHATSAPP', 'MODATEX', 'DISTRITO', 'CHLOE'];
+const SALES_CHANNELS = ['LOCAL', 'PAGINA WEB', 'WHATSAPP', 'MODATEX', 'DISTRITO', 'CHLOE', 'LUIS'];
 
 const getChannelPricing = (product, channel) => {
     switch (channel) {
@@ -17,17 +17,23 @@ const getChannelPricing = (product, channel) => {
                 price: Number(product.precioVentaWeb || product.precioVentaL1 || 0)
             };
         case 'MODATEX':
+        case 'DISTRITO':
             return {
                 listKey: 'precioVentaL2',
                 listLabel: 'LISTA 2',
                 price: Number(product.precioVentaL2 || product.precioVentaL1 || 0)
             };
-        case 'DISTRITO':
         case 'CHLOE':
             return {
                 listKey: 'precioVentaL3',
                 listLabel: 'LISTA 3',
                 price: Number(product.precioVentaL3 || product.precioVentaL2 || product.precioVentaL1 || 0)
+            };
+        case 'LUIS':
+            return {
+                listKey: 'precioVentaL4',
+                listLabel: 'LISTA 4',
+                price: Number(product.precioVentaL4 || product.precioVentaL2 || product.precioVentaL1 || 0)
             };
         case 'WHATSAPP':
         case 'LOCAL':
@@ -72,7 +78,8 @@ export default function PosCaja({ onOpenCatalog }) {
         if (!search.trim()) return [];
         const query = search.toLowerCase();
         return activeProducts.filter(p =>
-            p.codigoInterno.toLowerCase().includes(query) ||
+            (p.articuloVenta || p.codigoInterno).toLowerCase().includes(query) ||
+            (p.articuloFabrica || '').toLowerCase().includes(query) ||
             (p.codigoBarras && p.codigoBarras.toLowerCase().includes(query)) ||
             p.detalleCorto.toLowerCase().includes(query)
         ).slice(0, 5);
@@ -98,7 +105,9 @@ export default function PosCaja({ onOpenCatalog }) {
             }
             return [...prev, {
                 id: product.id,
-                codigoInterno: product.codigoInterno,
+                codigoInterno: product.articuloVenta || product.codigoInterno,
+                articuloVenta: product.articuloVenta || product.codigoInterno,
+                articuloFabrica: product.articuloFabrica || '',
                 detalleCorto: product.detalleCorto,
                 precioOriginal: pricing.price,
                 precioUnitario: pricing.price,

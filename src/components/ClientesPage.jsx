@@ -59,7 +59,7 @@ const normalizeWooProvince = (billing = {}, shipping = {}) => {
 
 export default function ClientesPage() {
     const { state, addCliente, updateCliente, deleteCliente } = useData();
-    const { clientes = [], posVentas = [] } = state.config;
+    const { clientes = [], posVentas = [], pedidosOnline = [] } = state.config;
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCliente, setEditingCliente] = useState(null);
     const [viewingHistory, setViewingHistory] = useState(null);
@@ -119,8 +119,47 @@ export default function ClientesPage() {
                     (clienteTelefono && ventaClienteTelefono && clienteTelefono === ventaClienteTelefono)
                 );
             })
+            .map((venta) => ({
+                ...venta,
+                origen: venta.origen || 'POS',
+                total: Number(venta.total || 0)
+            }))
+            .concat(
+                (pedidosOnline || [])
+                    .filter((pedido) => {
+                        const pedidoNombre = normalizeClientMatch(
+                            pedido.clienteNombre ||
+                            ((pedido.billing?.first_name || pedido.billing?.last_name)
+                                ? `${pedido.billing?.first_name || ''} ${pedido.billing?.last_name || ''}`
+                                : pedido.billing?.first_name ||
+                                  pedido.shipping?.first_name ||
+                                  pedido.email)
+                        );
+                        const pedidoTelefono = normalizeWooPhone(
+                            pedido.telefono ||
+                            pedido.billing?.phone ||
+                            pedido.shipping?.phone ||
+                            ''
+                        );
+                        const pedidoWooId = String(pedido.customer_id || pedido.wooCustomerId || '').trim();
+
+                        return (
+                            (clienteWooId && pedidoWooId && clienteWooId === pedidoWooId) ||
+                            (clienteNombre && pedidoNombre && clienteNombre === pedidoNombre) ||
+                            (clienteTelefono && pedidoTelefono && clienteTelefono === pedidoTelefono)
+                        );
+                    })
+                    .map((pedido) => ({
+                        id: pedido.id,
+                        fecha: pedido.fecha || pedido.date_created || pedido.createdAt || '',
+                        total: Number(pedido.total || pedido.totalAmount || 0),
+                        items: pedido.items || pedido.line_items || [],
+                        origen: 'WooCommerce',
+                        nroComprobante: pedido.numero || pedido.number || pedido.id
+                    }))
+            )
             .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-    }, [posVentas, viewingHistory]);
+    }, [posVentas, pedidosOnline, viewingHistory]);
 
     const ultimaCompraCliente = ventasClienteSeleccionado[0] || null;
 

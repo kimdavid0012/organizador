@@ -199,9 +199,15 @@ export default function FotosPage() {
         setLoadingImageId(imageId);
         try {
             const url = await getArticleLibraryImageUrl(imageId);
-            if (url) setLightboxSrc(url);
+            const fallbackUrl = imageLibrary.find((item) => item.id === imageId)?.sharedPreviewUrl || '';
+            if (url || fallbackUrl) setLightboxSrc(url || fallbackUrl);
         } catch (error) {
-            alert(`No se pudo abrir la imagen: ${error.message}`);
+            const fallbackUrl = imageLibrary.find((item) => item.id === imageId)?.sharedPreviewUrl || '';
+            if (fallbackUrl) {
+                setLightboxSrc(fallbackUrl);
+            } else {
+                alert(`No se pudo abrir la imagen: ${error.message}`);
+            }
         } finally {
             setLoadingImageId('');
         }

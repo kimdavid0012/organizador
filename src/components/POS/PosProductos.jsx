@@ -6,6 +6,8 @@ import * as XLSX from 'xlsx';
 import './PosProductos.css';
 
 const DEFAULT_PRODUCT = {
+    articuloVenta: '',
+    articuloFabrica: '',
     codigoInterno: '',
     codigoBarras: '',
     detalleCorto: '',
@@ -57,10 +59,16 @@ export default function PosProductos() {
     const handleOpenModal = (product = null) => {
         if (product) {
             setEditingProduct(product.id);
-            setFormData({ ...product });
+            setFormData({
+                ...DEFAULT_PRODUCT,
+                ...product,
+                articuloVenta: product.articuloVenta || product.codigoInterno || '',
+                articuloFabrica: product.articuloFabrica || ''
+            });
         } else {
             setEditingProduct(null);
-            setFormData({ ...DEFAULT_PRODUCT, codigoInterno: generateId().slice(0, 6).toUpperCase() });
+            const localCode = generateId().slice(0, 6).toUpperCase();
+            setFormData({ ...DEFAULT_PRODUCT, codigoInterno: localCode, articuloVenta: localCode });
         }
         setIsModalOpen(true);
     };
@@ -71,10 +79,17 @@ export default function PosProductos() {
             return;
         }
 
+        const productPayload = {
+            ...formData,
+            codigoInterno: (formData.articuloVenta || formData.codigoInterno || '').toString().trim().toUpperCase(),
+            articuloVenta: (formData.articuloVenta || formData.codigoInterno || '').toString().trim().toUpperCase(),
+            articuloFabrica: (formData.articuloFabrica || '').toString().trim().toUpperCase()
+        };
+
         if (editingProduct) {
-            updatePosProduct(editingProduct, formData);
+            updatePosProduct(editingProduct, productPayload);
         } else {
-            addPosProduct({ ...formData, id: generateId() });
+            addPosProduct({ ...productPayload, id: generateId() });
         }
         setIsModalOpen(false);
     };
@@ -158,6 +173,7 @@ export default function PosProductos() {
                 const newProducts = json.map(row => {
                     // Buscar el artículo (número) y descripción en distintos nombres de columna
                     const artNum = (row['ART'] || row['Articulo'] || row['Art'] || row['Código Interno'] || row['Codigo'] || '').toString();
+                    const localCode = artNum || generateId().slice(0, 6).toUpperCase();
                     const descripcion = (row['DESCRIPCION'] || row['Descripcion'] || row['Detalle'] || row['Nombre'] || 'Sin nombre').toString().trim();
                     const taller = (row['TALLER'] || row['Taller'] || '').toString();
                     const tela = (row['TELA'] || row['Tela'] || row['Proveedor'] || '').toString();
@@ -165,7 +181,9 @@ export default function PosProductos() {
 
                     return {
                         id: generateId(),
-                        codigoInterno: artNum || generateId().slice(0, 6).toUpperCase(),
+                        codigoInterno: localCode,
+                        articuloVenta: localCode,
+                        articuloFabrica: (row['Art Fabrica'] || row['Artículo Fábrica'] || row['Art. Fabrica'] || '').toString().trim().toUpperCase(),
                         codigoBarras: (row['Código Barras'] || row['CodBarras'] || '').toString(),
                         detalleCorto: descripcion || 'Sin nombre',
                         detalleLargo: tela ? `Tela: ${tela}` : '',
@@ -339,7 +357,8 @@ export default function PosProductos() {
                                     )}
                                 </div>
                                 <div>
-                                    <div className="pos-product-card-code">{p.codigoInterno || 'Sin codigo'}</div>
+                                    <div className="pos-product-card-code">Local: {p.articuloVenta || p.codigoInterno || 'Sin codigo'}</div>
+                                    <div className="pos-product-card-code" style={{ opacity: 0.8 }}>Fabrica: {p.articuloFabrica || '-'}</div>
                                     <h3>{p.detalleCorto}</h3>
                                 </div>
                             </div>
@@ -364,16 +383,16 @@ export default function PosProductos() {
                                 <strong className="pos-product-card-price">{formatCurrency(p.precioVentaL1)}</strong>
                             </div>
                             <div>
-                                <span className="pos-product-card-label">Lista 2 / Modatex</span>
+                                <span className="pos-product-card-label">Lista 2 / Minorista</span>
                                 <strong>{formatCurrency(p.precioVentaL2)}</strong>
                             </div>
                             <div>
-                                <span className="pos-product-card-label">Lista 3 / Distrito</span>
+                                <span className="pos-product-card-label">Lista 3 / Chloe</span>
                                 <strong>{formatCurrency(p.precioVentaL3)}</strong>
                             </div>
                             <div>
-                                <span className="pos-product-card-label">Web</span>
-                                <strong>{formatCurrency(p.precioVentaWeb)}</strong>
+                                <span className="pos-product-card-label">Lista 4 / Luis</span>
+                                <strong>{formatCurrency(p.precioVentaL4)}</strong>
                             </div>
                         </div>
 

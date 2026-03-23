@@ -92,7 +92,10 @@ export const saveArticleLibraryImage = async (file, meta = {}) => {
         drawResizedImage(file, 220, 220, 0.7)
     ]);
 
-    const thumbDataUrl = await blobToDataUrl(thumb.blob);
+    const [thumbDataUrl, sharedPreviewUrl] = await Promise.all([
+        blobToDataUrl(thumb.blob),
+        blobToDataUrl(blob)
+    ]);
 
     await saveImageRecord({
         id,
@@ -116,7 +119,9 @@ export const saveArticleLibraryImage = async (file, meta = {}) => {
             note: meta.note || '',
             sizeBytes: blob.size || 0,
             width,
-            height
+            height,
+            thumbDataUrl,
+            sharedPreviewUrl
         },
         thumbDataUrl
     };

@@ -314,6 +314,8 @@ export default function CortesPage() {
         const nuevoProducto = {
             id: generateId(),
             codigoInterno: molde.codigo || molde.nombre?.slice(0, 6).toUpperCase() || generateId().slice(0, 6).toUpperCase(),
+            articuloVenta: molde.codigo || molde.nombre?.slice(0, 6).toUpperCase() || generateId().slice(0, 6).toUpperCase(),
+            articuloFabrica: molde.codigo || '',
             codigoBarras: '',
             detalleCorto: molde.nombre || '(sin nombre)',
             detalleLargo: molde.observaciones || '',
@@ -342,6 +344,8 @@ export default function CortesPage() {
         const existingProduct = (config.posProductos || []).find((product) => (product.codigoInterno || '').toString().trim().toUpperCase() === codigoInterno);
         const productoBase = {
             codigoInterno,
+            articuloVenta: existingProduct?.articuloVenta || codigoInterno,
+            articuloFabrica: molde.codigo || existingProduct?.articuloFabrica || '',
             codigoBarras: existingProduct?.codigoBarras || '',
             detalleCorto: molde.nombre || '(sin nombre)',
             detalleLargo: molde.observaciones || existingProduct?.detalleLargo || '',
@@ -425,6 +429,8 @@ export default function CortesPage() {
         const cantidadU = cData?.cantidad !== undefined ? parseFloat(cData.cantidad) : (parseFloat(m.cantidadCorte) || 1);
         const costoTallerVal = cData?.costoTaller !== undefined ? parseFloat(cData.costoTaller) : (parseFloat(m.costoTaller) || 0);
         const costoCortadorVal = cData?.costoCortador !== undefined ? parseFloat(cData.costoCortador) : (parseFloat(m.costoCortador) || 0);
+        const costoTallerPrueba = cData?.costoTallerPrueba !== undefined ? parseFloat(cData.costoTallerPrueba) : costoTallerVal;
+        const costoFasonPrueba = cData?.costoFasonPrueba !== undefined ? parseFloat(cData.costoFasonPrueba) : costoCortadorVal;
 
         const acc1 = cData?.costoAccesorio !== undefined ? parseFloat(cData.costoAccesorio) : (parseFloat(m.costoAccesorio) || 0);
         const acc2 = cData?.costoAccesorio2 !== undefined ? parseFloat(cData.costoAccesorio2) : (parseFloat(m.costoAccesorio2) || 0);
@@ -440,11 +446,15 @@ export default function CortesPage() {
 
         const costoTotal = costoTelaCalc + costoCortadorVal + costoTallerVal + acc1 + acc2 + (moldeC + gason) / (cantidadU || 1);
         const precioVentaSugerido = costoTotal * (1 + (margen / 100));
+        const costoPruebaTotal = costoTelaCalc + costoFasonPrueba + costoTallerPrueba + acc1 + acc2 + (moldeC + gason) / (cantidadU || 1);
         const precioLocal = cData?.precioLocal !== undefined && cData.precioLocal !== null && cData.precioLocal > 0
             ? parseFloat(cData.precioLocal)
             : precioVentaSugerido;
+        const precioPrueba = cData?.precioPrueba !== undefined && cData.precioPrueba !== null && cData.precioPrueba > 0
+            ? parseFloat(cData.precioPrueba)
+            : costoPruebaTotal * (1 + (margen / 100));
 
-        return { costoTotal, precioVentaSugerido, precioLocal, margen, cantidadU, pctTela, consumo, telaName: telaObj?.nombre || '', costoTallerVal, costoCortadorVal, acc1, acc2 };
+        return { costoTotal, precioVentaSugerido, precioLocal, costoPruebaTotal, precioPrueba, margen, cantidadU, pctTela, consumo, telaName: telaObj?.nombre || '', costoTallerVal, costoCortadorVal, costoTallerPrueba, costoFasonPrueba, acc1, acc2 };
     };
 
     // Calculate Unique Fabrics used in this Corte to populate consumos
@@ -779,8 +789,10 @@ export default function CortesPage() {
                                                         </div>
                                                         {user?.role === 'admin' && (
                                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: '11px' }}>
-                                                                <span style={{ color: 'var(--text-secondary)' }}>Costo: <strong style={{ color: 'var(--warning)' }}>${cost.costoTotal.toFixed(0)}</strong></span>
-                                                                <span style={{ color: 'var(--text-secondary)' }}>Venta: <strong style={{ color: 'var(--success)' }}>${cost.precioLocal.toFixed(0)}</strong></span>
+                                                                <span style={{ color: 'var(--text-secondary)' }}>Costo real: <strong style={{ color: 'var(--warning)' }}>${cost.costoTotal.toFixed(0)}</strong></span>
+                                                                <span style={{ color: 'var(--text-secondary)' }}>Venta real: <strong style={{ color: 'var(--success)' }}>${cost.precioLocal.toFixed(0)}</strong></span>
+                                                                <span style={{ color: 'var(--text-secondary)' }}>Costo prueba: <strong style={{ color: '#f59e0b' }}>${cost.costoPruebaTotal.toFixed(0)}</strong></span>
+                                                                <span style={{ color: 'var(--text-secondary)' }}>Venta prueba: <strong style={{ color: '#60a5fa' }}>${cost.precioPrueba.toFixed(0)}</strong></span>
                                                             </div>
                                                         )}
                                                     </div>
@@ -927,11 +939,19 @@ export default function CortesPage() {
                                                                     />
                                                                 </div>
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Precio Venta</span>
+                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Precio real venta</span>
                                                                     <input
                                                                         type="number" className="form-input"
                                                                         value={cData.precioLocal ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioLocal: parseFloat(e.target.value) || 0 })}
                                                                         style={{ padding: '6px', fontSize: '12px', color: 'var(--success)', fontWeight: 'bold' }}
+                                                                    />
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                    <span style={{ fontSize: '9px', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 'bold' }}>Precio de prueba</span>
+                                                                    <input
+                                                                        type="number" className="form-input"
+                                                                        value={cData.precioPrueba ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioPrueba: parseFloat(e.target.value) || 0 })}
+                                                                        style={{ padding: '6px', fontSize: '12px', color: '#60a5fa', fontWeight: 'bold' }}
                                                                     />
                                                                 </div>
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -967,6 +987,22 @@ export default function CortesPage() {
                                                                         type="number" className="form-input"
                                                                         value={cData.costoAccesorio2 !== undefined ? cData.costoAccesorio2 : cost.acc2}
                                                                         onChange={e => updateMoldeInCorte(selected, m.id, { costoAccesorio2: parseFloat(e.target.value) || 0 })}
+                                                                        style={{ padding: '6px', fontSize: '12px' }}
+                                                                    />
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Taller prueba</span>
+                                                                    <input
+                                                                        type="number" className="form-input"
+                                                                        value={cData.costoTallerPrueba ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { costoTallerPrueba: parseFloat(e.target.value) || 0 })}
+                                                                        style={{ padding: '6px', fontSize: '12px' }}
+                                                                    />
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>FasÃ³n prueba</span>
+                                                                    <input
+                                                                        type="number" className="form-input"
+                                                                        value={cData.costoFasonPrueba ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { costoFasonPrueba: parseFloat(e.target.value) || 0 })}
                                                                         style={{ padding: '6px', fontSize: '12px' }}
                                                                     />
                                                                 </div>
