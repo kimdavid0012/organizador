@@ -51,7 +51,8 @@ export default function PosProductos() {
 
     const filteredProducts = productos.filter(p =>
         (p.detalleCorto || '').toLowerCase().includes(search.toLowerCase()) ||
-        (p.codigoInterno || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.articuloVenta || p.codigoInterno || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.articuloFabrica || '').toLowerCase().includes(search.toLowerCase()) ||
         (p.codigoBarras || '').toLowerCase().includes(search.toLowerCase())
     );
 
@@ -260,7 +261,8 @@ export default function PosProductos() {
                 <table className="pos-table">
                     <thead>
                         <tr>
-                            <th>Código</th>
+                            <th>Art. Local</th>
+                            <th>Art. Fabrica</th>
                             <th>Barras</th>
                             <th>Detalle</th>
                             <th>Stock</th>
@@ -275,7 +277,8 @@ export default function PosProductos() {
                     <tbody>
                         {filteredProducts.map(p => (
                             <tr key={p.id} className="pos-table-row">
-                                <td style={{ fontWeight: 'bold' }}>{p.codigoInterno}</td>
+                                <td style={{ fontWeight: 'bold' }}>{p.articuloVenta || p.codigoInterno}</td>
+                                <td>{p.articuloFabrica || '-'}</td>
                                 <td>{p.codigoBarras || '-'}</td>
                                 <td>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -325,7 +328,7 @@ export default function PosProductos() {
                         ))}
                         {filteredProducts.length === 0 && (
                             <tr>
-                                <td colSpan={10} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                <td colSpan={11} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                                     No se encontraron productos. Añade uno nuevo o importa desde Excel.
                                 </td>
                             </tr>
@@ -448,12 +451,24 @@ export default function PosProductos() {
                                 </div>
                             </div>
                             <div className="form-group">
-                                <label>Código Interno</label>
-                                <input className="form-input" name="codigoInterno" value={formData.codigoInterno} onChange={handleChange} />
+                                <label>Artículo Local</label>
+                                <input className="form-input" name="articuloVenta" value={formData.articuloVenta} onChange={handleChange} />
+                            </div>
+                            <div className="form-group">
+                                <label>Artículo Fábrica</label>
+                                <input className="form-input" name="articuloFabrica" value={formData.articuloFabrica} onChange={handleChange} />
                             </div>
                             <div className="form-group">
                                 <label>Código de Barras</label>
                                 <input className="form-input" name="codigoBarras" value={formData.codigoBarras} onChange={handleChange} />
+                            </div>
+                            <div className="form-group">
+                                <label>Artículo Local</label>
+                                <input className="form-input" name="articuloVenta" value={formData.articuloVenta} onChange={handleChange} />
+                            </div>
+                            <div className="form-group">
+                                <label>Artículo Fábrica</label>
+                                <input className="form-input" name="articuloFabrica" value={formData.articuloFabrica} onChange={handleChange} />
                             </div>
                             <div className="form-group full-width">
                                 <label>Detalle Corto *</label>
@@ -488,20 +503,16 @@ export default function PosProductos() {
                                 <input type="number" className="form-input" name="precioVentaL1" value={formData.precioVentaL1} onChange={handleChange} />
                             </div>
                             <div className="form-group">
-                                <label>Lista 2 (Modatex)</label>
+                                <label>Lista 2 (Minorista)</label>
                                 <input type="number" className="form-input" name="precioVentaL2" value={formData.precioVentaL2} onChange={handleChange} />
                             </div>
                             <div className="form-group">
-                                <label>Lista 3 (Distrito / Chloe)</label>
+                                <label>Lista 3 (Chloe)</label>
                                 <input type="number" className="form-input" name="precioVentaL3" value={formData.precioVentaL3} onChange={handleChange} />
                             </div>
                             <div className="form-group">
-                                <label>Lista 4</label>
+                                <label>Lista 4 (Luis)</label>
                                 <input type="number" className="form-input" name="precioVentaL4" value={formData.precioVentaL4} onChange={handleChange} />
-                            </div>
-                            <div className="form-group">
-                                <label>Lista 5</label>
-                                <input type="number" className="form-input" name="precioVentaL5" value={formData.precioVentaL5} onChange={handleChange} />
                             </div>
                             <div className="form-group">
                                 <label>Precio Web</label>
@@ -534,7 +545,7 @@ export default function PosProductos() {
                         <div className="pos-modal-body" style={{ display: 'block' }}>
                             <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)', marginBottom: 16 }}>
                                 Sube un archivo <strong>.xlsx</strong>. Columnas detectadas:
-                                <em> Código Interno, Detalle, Costo, L1, L2, L3, L4, L5, Web, Stock</em>.
+                                <em> Art Local, Art Fabrica, Detalle, Costo, L1 Local, L2 Minorista, L3 Chloe, L4 Luis, Web, Stock</em>.
                             </p>
                             <div
                                 className={`excel-drop-zone ${dragActive ? 'active' : ''}`}

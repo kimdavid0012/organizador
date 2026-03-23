@@ -272,7 +272,7 @@ export default function PosCaja({ onOpenCatalog }) {
                         <input
                             ref={searchInputRef}
                             type="text"
-                            placeholder="Buscar por código [Enter] o detalle..."
+                            placeholder="Buscar por art. local, fabrica o detalle..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             onKeyDown={handleSearchKeyDown}
@@ -282,7 +282,7 @@ export default function PosCaja({ onOpenCatalog }) {
                         <div className="pos-search-results">
                             {searchResults.map(p => (
                                 <div key={p.id} className="pos-search-item" onClick={() => handleAddToCart(p)}>
-                                    <span><strong>{p.codigoInterno}</strong> - {p.detalleCorto}</span>
+                                    <span><strong>{p.articuloVenta || p.codigoInterno}</strong>{p.articuloFabrica ? ` / Fab ${p.articuloFabrica}` : ''} - {p.detalleCorto}</span>
                                     <span>${getChannelPricing(p, canalVenta).price}</span>
                                 </div>
                             ))}
@@ -319,8 +319,9 @@ export default function PosCaja({ onOpenCatalog }) {
                                         </div>
                                     </td>
                                     <td>
-                                        <div style={{ fontWeight: 'var(--fw-semibold)' }}>{item.codigoInterno}</div>
+                                        <div style={{ fontWeight: 'var(--fw-semibold)' }}>{item.articuloVenta || item.codigoInterno}</div>
                                         <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-secondary)' }}>{item.detalleCorto}</div>
+                                        {item.articuloFabrica && <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Fab: {item.articuloFabrica}</div>}
                                     </td>
                                     <td>
                                         <div>${item.precioOriginal}</div>
@@ -384,10 +385,12 @@ export default function PosCaja({ onOpenCatalog }) {
                         <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                             {canalVenta === 'PAGINA WEB'
                                 ? 'Usa precio web'
-                                : canalVenta === 'MODATEX'
+                                : canalVenta === 'MODATEX' || canalVenta === 'DISTRITO'
                                 ? 'Usa Lista 2'
-                                : canalVenta === 'DISTRITO' || canalVenta === 'CHLOE'
+                                : canalVenta === 'CHLOE'
                                 ? 'Usa Lista 3'
+                                : canalVenta === 'LUIS'
+                                ? 'Usa Lista 4'
                                 : 'Usa Lista 1'}
                         </span>
                     </div>

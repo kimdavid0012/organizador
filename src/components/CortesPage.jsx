@@ -324,9 +324,9 @@ export default function CortesPage() {
             precioCosto: cost.costoTotal || 0,
             alertaStockMinimo: 0,
             precioVentaL1: precioVenta,
-            precioVentaL2: 0,
-            precioVentaL3: 0,
-            precioVentaL4: 0,
+            precioVentaL2: cData?.precioVentaL2 || 0,
+            precioVentaL3: cData?.precioVentaL3 || 0,
+            precioVentaL4: cData?.precioVentaL4 || 0,
             precioVentaL5: 0,
             precioVentaWeb: 0,
             activo: true,
@@ -354,9 +354,9 @@ export default function CortesPage() {
             precioCosto: cost.costoTotal || existingProduct?.precioCosto || 0,
             alertaStockMinimo: existingProduct?.alertaStockMinimo || 0,
             precioVentaL1: precioVenta,
-            precioVentaL2: existingProduct?.precioVentaL2 || 0,
-            precioVentaL3: existingProduct?.precioVentaL3 || 0,
-            precioVentaL4: existingProduct?.precioVentaL4 || 0,
+            precioVentaL2: cData?.precioVentaL2 !== undefined ? cData.precioVentaL2 : (existingProduct?.precioVentaL2 || 0),
+            precioVentaL3: cData?.precioVentaL3 !== undefined ? cData.precioVentaL3 : (existingProduct?.precioVentaL3 || 0),
+            precioVentaL4: cData?.precioVentaL4 !== undefined ? cData.precioVentaL4 : (existingProduct?.precioVentaL4 || 0),
             precioVentaL5: existingProduct?.precioVentaL5 || 0,
             precioVentaWeb: existingProduct?.precioVentaWeb || 0,
             activo: existingProduct?.activo ?? true,
@@ -783,6 +783,12 @@ export default function CortesPage() {
                                                             <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-bold)', color: 'var(--text)' }}>
                                                                 {m.nombre || '(sin nombre)'} {m.codigo ? `(#${m.codigo})` : ''}
                                                             </span>
+                                                            <span style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(255,255,255,0.08)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
+                                                                Local: {cData.articuloVenta || m.codigo || '-'}
+                                                            </span>
+                                                            <span style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(255,255,255,0.08)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
+                                                                Fabrica: {cData.articuloFabrica || m.codigo || '-'}
+                                                            </span>
                                                             {user?.role === 'admin' && (
                                                                 <span style={{ fontSize: '9px', padding: '2px 6px', background: 'rgba(255,255,255,0.08)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>{cost.telaName}</span>
                                                             )}
@@ -824,6 +830,24 @@ export default function CortesPage() {
 
                                                         {/* Basic Data */}
                                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 12, width: '100%', marginBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 12 }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Art local</span>
+                                                                <input
+                                                                    type="text" className="form-input"
+                                                                    value={cData.articuloVenta ?? m.codigo ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { articuloVenta: e.target.value.toUpperCase() })}
+                                                                    style={{ padding: '6px', fontSize: '12px' }}
+                                                                    disabled={user?.role !== 'admin' && user?.role !== 'encargada'}
+                                                                />
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Art fabrica</span>
+                                                                <input
+                                                                    type="text" className="form-input"
+                                                                    value={cData.articuloFabrica ?? m.codigo ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { articuloFabrica: e.target.value.toUpperCase() })}
+                                                                    style={{ padding: '6px', fontSize: '12px' }}
+                                                                    disabled={user?.role !== 'admin' && user?.role !== 'encargada'}
+                                                                />
+                                                            </div>
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                                                 <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Cantidad</span>
                                                                 <input
@@ -952,6 +976,30 @@ export default function CortesPage() {
                                                                         type="number" className="form-input"
                                                                         value={cData.precioPrueba ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioPrueba: parseFloat(e.target.value) || 0 })}
                                                                         style={{ padding: '6px', fontSize: '12px', color: '#60a5fa', fontWeight: 'bold' }}
+                                                                    />
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Lista 2 Minorista</span>
+                                                                    <input
+                                                                        type="number" className="form-input"
+                                                                        value={cData.precioVentaL2 ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioVentaL2: parseFloat(e.target.value) || 0 })}
+                                                                        style={{ padding: '6px', fontSize: '12px' }}
+                                                                    />
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Lista 3 Chloe</span>
+                                                                    <input
+                                                                        type="number" className="form-input"
+                                                                        value={cData.precioVentaL3 ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioVentaL3: parseFloat(e.target.value) || 0 })}
+                                                                        style={{ padding: '6px', fontSize: '12px' }}
+                                                                    />
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Lista 4 Luis</span>
+                                                                    <input
+                                                                        type="number" className="form-input"
+                                                                        value={cData.precioVentaL4 ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioVentaL4: parseFloat(e.target.value) || 0 })}
+                                                                        style={{ padding: '6px', fontSize: '12px' }}
                                                                     />
                                                                 </div>
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
