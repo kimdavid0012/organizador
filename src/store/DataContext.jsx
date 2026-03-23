@@ -1338,6 +1338,21 @@ export function DataProvider({ children }) {
         }
     }, [state]);
 
+    const updateSyncStatus = useCallback((updates) => {
+        setSyncStatus((prev) => {
+            const next = { ...prev, ...updates };
+            let status = next.status;
+
+            if (!next.online) status = 'Sin internet';
+            else if (next.lastError) status = 'Error de sincronizacion';
+            else if (next.hasPendingWrites || next.pendingChanges > 0) status = 'Pendiente de sincronizar';
+            else if (next.firestoreOfflineReady) status = 'Sincronizado';
+            else status = 'Modo local';
+
+            return { ...next, status };
+        });
+    }, []);
+
     useEffect(() => {
         let cancelled = false;
 
@@ -1365,21 +1380,6 @@ export function DataProvider({ children }) {
             cancelled = true;
         };
     }, [updateSyncStatus]);
-
-    const updateSyncStatus = useCallback((updates) => {
-        setSyncStatus((prev) => {
-            const next = { ...prev, ...updates };
-            let status = next.status;
-
-            if (!next.online) status = 'Sin internet';
-            else if (next.lastError) status = 'Error de sincronizacion';
-            else if (next.hasPendingWrites || next.pendingChanges > 0) status = 'Pendiente de sincronizar';
-            else if (next.firestoreOfflineReady) status = 'Sincronizado';
-            else status = 'Modo local';
-
-            return { ...next, status };
-        });
-    }, []);
 
     useEffect(() => {
         const handleOnline = () => updateSyncStatus({ online: true, lastError: null });
