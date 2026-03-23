@@ -1132,11 +1132,11 @@ function dataReducer(state, action) {
             };
         case ACTION_TYPES.SAVE_MERCADERIA_CONTEOS: {
             const conteos = action.payload.map((item) => ({
-                ...item,
-                codigoInterno: normalizeProductCode(item.articuloVenta || item.codigoInterno || item.articulo),
-                articulo: normalizeProductCode(item.articuloFabrica || item.articulo),
+                articuloVenta: normalizeProductCode(item.articuloVenta),
                 articuloFabrica: normalizeProductCode(item.articuloFabrica || item.articulo),
-                articuloVenta: normalizeProductCode(item.articuloVenta || item.codigoInterno || item.articulo),
+                ...item,
+                codigoInterno: normalizeProductCode(item.articuloVenta) || normalizeProductCode(item.codigoInterno || item.articuloFabrica || item.articulo),
+                articulo: normalizeProductCode(item.articuloFabrica || item.articulo) || normalizeProductCode(item.articuloVenta || item.codigoInterno),
                 descripcion: normalizeText(item.descripcion),
                 tipoTela: normalizeText(item.tipoTela),
                 color: normalizeText(item.color),

@@ -205,8 +205,24 @@ export default function ConteoMercaderiaPage() {
             findLinkedArticleByAnyCode(baseItem.articuloFabrica) ||
             findLinkedArticleByAnyCode(baseItem.codigoInterno) ||
             findLinkedArticleByAnyCode(baseItem.articulo);
-        const articuloVenta = normalizeCode(baseItem.articuloVenta || linkedArticle?.articuloVenta || baseItem.codigoInterno || linkedArticle?.articuloFabrica);
-        const articuloFabrica = normalizeCode(baseItem.articuloFabrica || linkedArticle?.articuloFabrica || baseItem.articulo || articuloVenta);
+        const hasArticuloVenta = Object.prototype.hasOwnProperty.call(baseItem, 'articuloVenta');
+        const hasArticuloFabrica = Object.prototype.hasOwnProperty.call(baseItem, 'articuloFabrica');
+        const hasDescripcion = Object.prototype.hasOwnProperty.call(baseItem, 'descripcion');
+        const hasNumeroCorte = Object.prototype.hasOwnProperty.call(baseItem, 'numeroCorte');
+        const hasFechaIngreso = Object.prototype.hasOwnProperty.call(baseItem, 'fechaIngreso');
+        const hasTaller = Object.prototype.hasOwnProperty.call(baseItem, 'taller');
+        const hasCantidadOriginal = Object.prototype.hasOwnProperty.call(baseItem, 'cantidadOriginal');
+
+        const articuloVenta = normalizeCode(
+            hasArticuloVenta
+                ? baseItem.articuloVenta
+                : (linkedArticle?.articuloVenta ?? baseItem.codigoInterno ?? linkedArticle?.articuloFabrica ?? '')
+        );
+        const articuloFabrica = normalizeCode(
+            hasArticuloFabrica
+                ? baseItem.articuloFabrica
+                : (linkedArticle?.articuloFabrica ?? baseItem.articulo ?? articuloVenta)
+        );
         return {
             ...baseItem,
             productId: baseItem.productId || productos.find((producto) => normalizeCode(producto.codigoInterno) === articuloVenta)?.id || null,
@@ -214,14 +230,24 @@ export default function ConteoMercaderiaPage() {
             articulo: articuloFabrica,
             articuloFabrica,
             articuloVenta,
-            descripcion: baseItem.descripcion || linkedArticle?.descripcion || articuloVenta || articuloFabrica,
+            descripcion: hasDescripcion
+                ? normalizeText(baseItem.descripcion)
+                : (normalizeText(linkedArticle?.descripcion) || articuloVenta || articuloFabrica),
             tipoTela: normalizeText(baseItem.tipoTela),
             color: normalizeText(baseItem.color),
-            numeroCorte: extractCorteNumber(baseItem.numeroCorte || linkedArticle?.numeroCorte),
-            fechaIngreso: normalizeText(baseItem.fechaIngreso),
-            taller: normalizeText(baseItem.taller || linkedArticle?.proveedor || ''),
+            numeroCorte: hasNumeroCorte
+                ? extractCorteNumber(baseItem.numeroCorte)
+                : extractCorteNumber(linkedArticle?.numeroCorte),
+            fechaIngreso: hasFechaIngreso
+                ? normalizeText(baseItem.fechaIngreso)
+                : normalizeText(linkedArticle?.fechaIngreso),
+            taller: hasTaller
+                ? normalizeText(baseItem.taller)
+                : normalizeText(linkedArticle?.proveedor || ''),
             responsable: normalizeText(baseItem.responsable),
-            cantidadOriginal: toNumber(baseItem.cantidadOriginal || linkedArticle?.stock),
+            cantidadOriginal: hasCantidadOriginal
+                ? toNumber(baseItem.cantidadOriginal)
+                : toNumber(linkedArticle?.stock),
             cantidadContada: toNumber(baseItem.cantidadContada),
             cantidadEllos: toNumber(baseItem.cantidadEllos),
             fallado: toNumber(baseItem.fallado),
