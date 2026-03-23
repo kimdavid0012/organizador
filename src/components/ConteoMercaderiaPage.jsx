@@ -81,7 +81,9 @@ export default function ConteoMercaderiaPage() {
     const fileInputRef = useRef(null);
     const normalizedEmail = (user?.email || '').toLowerCase();
     const isNadiaController = normalizedEmail === 'nadia@celavie.com';
+    const isNaaraController = normalizedEmail === 'naara@celavie.com';
     const canEditInventoryRows = user?.role === 'admin' || normalizedEmail === 'naara@celavie.com' || normalizedEmail === 'juan@celavie.com';
+    const canMarkConteoChecked = isNadiaController || isNaaraController || user?.role === 'admin';
 
     const articleOptions = useMemo(() => {
         const mergedOptions = [];
@@ -565,14 +567,14 @@ export default function ConteoMercaderiaPage() {
                             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr', gap: 12, marginTop: 14 }}>
                                 <div style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.05)' }}>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: checked ? 'var(--success)' : '#ff7a7a' }}>
-                                        <input type="checkbox" checked={checked} onChange={(e) => handleControlChange(item.id, 'chequeado', e.target.checked)} disabled={!(isNadiaController || user?.role === 'admin')} />
+                                        <input type="checkbox" checked={checked} onChange={(e) => handleControlChange(item.id, 'chequeado', e.target.checked)} disabled={!canMarkConteoChecked} />
                                         {checked ? 'Chequeado en verde' : 'No chequeado en rojo'}
                                     </label>
                                     {item.chequeadoPor && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>Revisado por {item.chequeadoPor}</div>}
                                 </div>
                                 <label style={{ display: 'grid', gap: 6 }}>
                                     <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Comentarios de control</span>
-                                    <textarea className="form-input" rows={3} value={item.comentarioControl || ''} onChange={(e) => handleControlChange(item.id, 'comentarioControl', e.target.value)} disabled={!(isNadiaController || user?.role === 'admin')} style={{ resize: 'vertical', minHeight: 90 }} />
+                                    <textarea className="form-input" rows={3} value={item.comentarioControl || ''} onChange={(e) => handleControlChange(item.id, 'comentarioControl', e.target.value)} disabled={!canMarkConteoChecked} style={{ resize: 'vertical', minHeight: 90 }} />
                                 </label>
                             </div>
                         </section>
