@@ -1,16 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { Search, Printer, Eye } from 'lucide-react';
 import { useData } from '../../store/DataContext';
-import TicketPrinter from './TicketPrinter';
+import { printThermalTicket } from './thermalPrint';
 
 export default function PosHistorial() {
     const { state } = useData();
     const ventas = state.config.posVentas || [];
     const [search, setSearch] = useState('');
     const [selectedDate, setSelectedDate] = useState('');
-    const [ticketToPrint, setTicketToPrint] = useState(null);
-    const [isPrinting, setIsPrinting] = useState(false);
-    const ticketRef = useRef(null);
+    const printFrameRef = useRef(null);
 
     const filteredVentas = ventas.filter(v => {
         const matchesSearch =
@@ -22,13 +20,7 @@ export default function PosHistorial() {
     }).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
     const handlePrint = (ticket) => {
-        setTicketToPrint(ticket);
-        setIsPrinting(true);
-        setTimeout(() => {
-            window.print();
-            setIsPrinting(false);
-            setTicketToPrint(null);
-        }, 300);
+        printThermalTicket(ticket, printFrameRef);
     };
 
     return (
@@ -93,10 +85,6 @@ export default function PosHistorial() {
                     </tbody>
                 </table>
             </div>
-
-            {isPrinting && ticketToPrint && (
-                <TicketPrinter ref={ticketRef} ticketData={ticketToPrint} />
-            )}
         </div>
     );
 }
