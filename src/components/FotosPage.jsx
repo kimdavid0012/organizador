@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, CheckCircle2, Circle, Eye, ImagePlus, Search, Star, Trash2 } from 'lucide-react';
 import { useData } from '../store/DataContext';
+import { getProductThumb } from '../utils/helpers';
 import { useAuth } from '../store/AuthContext';
 import {
     deleteArticleLibraryImage,
@@ -290,7 +291,7 @@ export default function FotosPage() {
                     const record = getTaskRecord(product.id);
                     const completed = FOTO_TASKS.filter((task) => record.states?.[task.id]).length;
                     const productImages = (libraryByProductId.get(product.id) || []).sort((left, right) => (right.uploadedAt || '').localeCompare(left.uploadedAt || ''));
-                    const coverThumb = product.imagenBibliotecaThumb || thumbs[product.imagenBibliotecaId] || '';
+                    const coverThumb = product.imagenBibliotecaThumb || thumbs[product.imagenBibliotecaId] || getProductThumb(product.codigoInterno, allProducts) || '';
 
                     return (
                         <div
