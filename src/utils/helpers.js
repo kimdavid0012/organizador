@@ -75,3 +75,20 @@ export const resizeImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7
 
 export const MAX_IMAGE_SIZE_MB = 5;
 export const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+
+// Returns the best available thumbnail for a product (works across all devices since thumbDataUrl is in Firestore)
+export const getProductThumb = (codigoInterno, posProductos = []) => {
+    if (!codigoInterno || !posProductos.length) return '';
+    const code = (codigoInterno || '').toString().trim().toUpperCase();
+    const product = posProductos.find((p) => {
+        const pCode = (p?.codigoInterno || '').toString().trim().toUpperCase();
+        return pCode && pCode === code;
+    });
+    if (!product) return '';
+    return product.imagenBibliotecaThumb
+        || (Array.isArray(product.imagenes) && product.imagenes[0]?.url)
+        || product.imagen
+        || product.image
+        || product.thumbnail
+        || '';
+};
