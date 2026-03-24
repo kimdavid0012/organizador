@@ -85,7 +85,9 @@ export const getProductThumb = (codigoInterno, posProductos = []) => {
         return pCode && pCode === code;
     });
     if (!product) return '';
+    // Prefer Firebase Storage URL (works on all devices), fallback to thumb base64
     return product.imagenBibliotecaThumb
+        || product.storageUrl
         || (Array.isArray(product.imagenes) && product.imagenes[0]?.url)
         || product.imagen
         || product.image
