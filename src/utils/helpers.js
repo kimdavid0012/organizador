@@ -85,12 +85,19 @@ export const getProductThumb = (codigoInterno, posProductos = []) => {
         return pCode && pCode === code;
     });
     if (!product) return '';
-    // Prefer Firebase Storage URL (works on all devices), fallback to thumb base64
+
+    // WooCommerce images come as URL strings — use them directly (work on all devices)
+    const wooImage = Array.isArray(product.imagenes)
+        ? product.imagenes.map(img => (typeof img === 'string' ? img : img?.url || img?.src || '')).find(Boolean)
+        : '';
+
+    // Priority: Firebase Storage thumb > WooCommerce image > local base64 thumb > other fields
     return product.imagenBibliotecaThumb
         || product.storageUrl
-        || (Array.isArray(product.imagenes) && product.imagenes[0]?.url)
+        || wooImage
         || product.imagen
         || product.image
         || product.thumbnail
+        || product.imagenBibliotecaThumb
         || '';
 };
