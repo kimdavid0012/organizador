@@ -3,7 +3,7 @@ import { Plus, Trash2, PackageOpen, ChevronRight, DollarSign, TrendingUp, Image 
 import { useData } from '../store/DataContext';
 import { useI18n } from '../store/I18nContext';
 import { useAuth } from '../store/AuthContext';
-import { generateId } from '../utils/helpers';
+import { generateId, getProductThumb } from '../utils/helpers';
 import * as XLSX from 'xlsx';
 
 export default function CortesPage() {
