@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Plus, Edit2, Trash2, Upload, Search, FileSpreadsheet } from 'lucide-react';
 import { useData } from '../../store/DataContext';
-import { generateId } from '../../utils/helpers';
+import { generateId, getProductThumb } from '../../utils/helpers';
 import * as XLSX from 'xlsx';
 import './PosProductos.css';
 
@@ -293,11 +293,7 @@ export default function PosProductos() {
                                             alignItems: 'center',
                                             justifyContent: 'center'
                                         }}>
-                                            {p.imagenBibliotecaThumb ? (
-                                                <img src={p.imagenBibliotecaThumb} alt={p.detalleCorto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            ) : (
-                                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Sin foto</span>
-                                            )}
+                                            {(() => { const t = getProductThumb(p.codigoInterno, productos); return t ? <img src={t} alt={p.detalleCorto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Sin foto</span>; })()}
                                         </div>
                                         <span>{p.detalleCorto}</span>
                                     </div>
@@ -439,11 +435,7 @@ export default function PosProductos() {
                                         alignItems: 'center',
                                         justifyContent: 'center'
                                     }}>
-                                        {formData.imagenBibliotecaThumb ? (
-                                            <img src={formData.imagenBibliotecaThumb} alt={formData.detalleCorto || 'Producto'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                        ) : (
-                                            <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: 8 }}>Sin foto</span>
-                                        )}
+                                        {(() => { const t = getProductThumb(formData.codigoInterno, productos); return t ? <img src={t} alt={formData.detalleCorto || 'Producto'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: 8 }}>Sin foto</span>; })()}
                                     </div>
                                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                                         Las fotos del artículo se administran desde la sección <strong>Fotos</strong>.
