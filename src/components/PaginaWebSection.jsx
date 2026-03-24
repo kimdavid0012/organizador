@@ -7,6 +7,7 @@ import { getProductThumb } from '../utils/helpers';
 export default function PaginaWebSection() {
     const { state, setPaginaWebCache } = useData();
     const { config } = state;
+    const posProductos = config.posProductos || [];
     const marketing = config.marketing || {};
     const paginaWebCache = config.paginaWebCache || {};
 
