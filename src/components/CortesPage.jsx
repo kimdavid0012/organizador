@@ -792,7 +792,7 @@ export default function CortesPage() {
 
                                                     {/* Thumbnail */}
                                                     <div style={{ width: 42, height: 42, borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                        {img ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImageIcon style={{ width: 20, height: 20, color: 'var(--text-muted)', opacity: 0.3 }} />}
+                                                        {(() => { const src = img || getProductThumb(cData.articuloVenta || m.codigo, config.posProductos || []); return src ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImageIcon style={{ width: 20, height: 20, color: 'var(--text-muted)', opacity: 0.3 }} />; })()}
                                                     </div>
 
                                                     {/* Name and cost summary */}
