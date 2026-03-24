@@ -1497,7 +1497,7 @@ export function DataProvider({ children }) {
 
             // Bloquear snapshots por 3 segundos después de cualquier cambio local
             const timeSinceLocalChange = Date.now() - localChangeTimestamp.current;
-            if (initialized.current && timeSinceLocalChange < 15000) {
+            if (initialized.current && timeSinceLocalChange < 15000 && (snap.exists() ? Number(snap.data()?.config?.syncMeta?.revision || 0) : 0) <= currentRevisionRef.current) {
                 console.log(`🛡️ Snapshot ignorado (cambio local hace ${timeSinceLocalChange}ms)`);
                 return;
             }
