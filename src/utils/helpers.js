@@ -79,9 +79,14 @@ export const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 // Returns the best available thumbnail for a product (works across all devices since thumbDataUrl is in Firestore)
 export const getProductThumb = (codigoInterno, posProductos = []) => {
     if (!codigoInterno || !posProductos.length) return '';
-    const code = (codigoInterno || '').toString().trim().toUpperCase();
+
+    // Normalize: strip "ART " prefix and spaces for flexible matching
+    // e.g. "6208", "ART 6208", "ART6208" all match product with codigoInterno "ART 6208"
+    const normalizeCode = (val) => (val || '').toString().trim().toUpperCase().replace(/^ART\s*/, '');
+    const code = normalizeCode(codigoInterno);
+
     const product = posProductos.find((p) => {
-        const pCode = (p?.codigoInterno || '').toString().trim().toUpperCase();
+        const pCode = normalizeCode(p?.codigoInterno);
         return pCode && pCode === code;
     });
     if (!product) return '';
@@ -91,13 +96,12 @@ export const getProductThumb = (codigoInterno, posProductos = []) => {
         ? product.imagenes.map(img => (typeof img === 'string' ? img : img?.url || img?.src || '')).find(Boolean)
         : '';
 
-    // Priority: Firebase Storage thumb > WooCommerce image > local base64 thumb > other fields
+    // Priority: thumb base64 (Firestore) > Firebase Storage URL > WooCommerce image > other fields
     return product.imagenBibliotecaThumb
         || product.storageUrl
         || wooImage
         || product.imagen
         || product.image
         || product.thumbnail
-        || product.imagenBibliotecaThumb
         || '';
 };
