@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Boxes, Plus, Trash2, Download, Upload, CheckCircle2, CircleAlert, Factory, ShoppingBag } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
-import { generateId } from '../utils/helpers';
+import { generateId, getProductThumb } from '../utils/helpers';
 import * as XLSX from 'xlsx';
 
 const EMPTY_FORM = {
@@ -539,6 +539,12 @@ export default function ConteoMercaderiaPage() {
                         <section key={item.id} style={getFormCardStyle(checked)}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
                                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    {(() => {
+                                        const thumb = getProductThumb(item.articuloVenta || item.articuloFabrica, productos);
+                                        return thumb
+                                            ? <img src={thumb} alt={item.descripcion || ''} style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }} />
+                                            : <div style={{ width: 48, height: 48, borderRadius: 10, background: 'rgba(255,255,255,0.05)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: 'var(--text-muted)' }}>Sin foto</div>;
+                                    })()}
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.07)', fontSize: 12 }}><Factory size={14} /> Fab: {item.articuloFabrica || '-'}</span>
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.07)', fontSize: 12 }}><ShoppingBag size={14} /> Venta: {item.articuloVenta || '-'}</span>
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 999, background: checked ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.16)', color: checked ? 'var(--success)' : '#ff7a7a', fontWeight: 700 }}>{checked ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}{checked ? 'Chequeado' : 'No chequeado'}</span>
