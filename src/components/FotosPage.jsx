@@ -123,7 +123,8 @@ export default function FotosPage() {
     const setProductCover = (product, imageMeta, thumbDataUrl) => {
         updatePosProduct(product.id, {
             imagenBibliotecaId: imageMeta.id,
-            imagenBibliotecaThumb: thumbDataUrl || thumbs[imageMeta.id] || product.imagenBibliotecaThumb || ''
+            imagenBibliotecaThumb: thumbDataUrl || thumbs[imageMeta.id] || product.imagenBibliotecaThumb || '',
+            storageUrl: imageMeta.storageUrl || imageMeta.sharedPreviewUrl || ''
         });
     };
 
@@ -162,6 +163,12 @@ export default function FotosPage() {
             const currentImages = libraryByProductId.get(product.id) || [];
             if (!product.imagenBibliotecaId || currentImages.length === 0) {
                 setProductCover(product, uploaded[0].metadata, uploaded[0].thumbDataUrl);
+            } else {
+                // Update storageUrl if this is the current cover (re-upload or first-time storage)
+                const isCover = product.imagenBibliotecaId === uploaded[0].metadata.id;
+                if (isCover && uploaded[0].metadata.storageUrl) {
+                    updatePosProduct(product.id, { storageUrl: uploaded[0].metadata.storageUrl });
+                }
             }
         } catch (error) {
             alert(`No se pudo subir la imagen: ${error.message}`);
@@ -174,7 +181,7 @@ export default function FotosPage() {
         if (!window.confirm('¿Borrar esta foto de la biblioteca del artículo?')) return;
 
         try {
-            await deleteArticleLibraryImage(imageMeta.id);
+            await deleteArticleLibraryImage(imageMeta.id, imageMeta.storagePath);
             const nextLibrary = imageLibrary.filter((item) => item.id !== imageMeta.id);
             updateConfig({ imageLibrary: nextLibrary });
             setThumbs((prev) => {
