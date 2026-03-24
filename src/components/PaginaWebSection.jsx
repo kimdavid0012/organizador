@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Globe, RefreshCw, ArrowLeft, TrendingUp, ShoppingCart, Package, ChevronRight, Search, ArrowUpDown, Filter } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { wooService } from '../utils/wooService';
+import { getProductThumb } from '../utils/helpers';
 
 export default function PaginaWebSection() {
     const { state, setPaginaWebCache } = useData();
@@ -43,7 +44,7 @@ export default function PaginaWebSection() {
                 productId: tp.product_id,
                 productName: tp.extended_info?.name || 'Sin Nombre',
                 sku: tp.extended_info?.sku || 'N/A',
-                image: tp.extended_info?.image || '',
+                image: tp.extended_info?.image || getProductThumb(tp.extended_info?.sku, posProductos) || '',
                 itemsSold: tp.items_sold || 0,
                 netRevenue: tp.net_revenue || 0,
                 ordersCount: tp.orders_count || 0,
