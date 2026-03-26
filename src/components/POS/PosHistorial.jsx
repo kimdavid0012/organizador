@@ -1,20 +1,23 @@
 import React, { useState, useRef } from 'react';
-import { Search, Printer, Eye } from 'lucide-react';
+import { Search, Printer } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import { printThermalTicket } from './thermalPrint';
+import { buildPosTicketHistory } from '../../utils/posTicketHistory';
 
 export default function PosHistorial() {
     const { state } = useData();
-    const ventas = state.config.posVentas || [];
+    const ventas = buildPosTicketHistory(state.config);
     const [search, setSearch] = useState('');
     const [selectedDate, setSelectedDate] = useState('');
     const printFrameRef = useRef(null);
 
     const filteredVentas = ventas.filter(v => {
         const matchesSearch =
-            v.nroComprobante.includes(search) ||
-            v.fecha.includes(search) ||
-            v.vendedor.toLowerCase().includes(search.toLowerCase());
+            (v.nroComprobante || '').toString().includes(search) ||
+            (v.fecha || '').includes(search) ||
+            (v.vendedor || '').toLowerCase().includes(search.toLowerCase()) ||
+            (v.cliente || '').toLowerCase().includes(search.toLowerCase()) ||
+            (v.canalVenta || '').toLowerCase().includes(search.toLowerCase());
         const matchesDate = !selectedDate || (v.fecha || '').slice(0, 10) === selectedDate;
         return matchesSearch && matchesDate;
     }).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));

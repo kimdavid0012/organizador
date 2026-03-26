@@ -64,9 +64,11 @@ const getCriticalCounts = (data) => ({
     mercaderiaConteos: countEntries(data?.config?.mercaderiaConteos),
     posProductos: countEntries(data?.config?.posProductos),
     posVentas: countEntries(data?.config?.posVentas),
+    posHistorialTickets: countEntries(data?.config?.posHistorialTickets),
     bankPayments: countEntries(data?.config?.bankPayments),
     fabricPayments: countEntries(data?.config?.fabricPayments),
-    clientes: countEntries(data?.config?.clientes)
+    clientes: countEntries(data?.config?.clientes),
+    planillasCortes: countEntries(data?.config?.planillasCortes)
 });
 
 const hasRicherLocalData = (localData, remoteData) => {
@@ -993,7 +995,11 @@ function dataReducer(state, action) {
                 ...state,
                 config: withReconciledPosProducts({
                     ...state.config,
-                    posVentas: [action.payload, ...(state.config.posVentas || [])]
+                    posVentas: [action.payload, ...(state.config.posVentas || [])],
+                    posHistorialTickets: [
+                        action.payload,
+                        ...((state.config.posHistorialTickets || []).filter((ticket) => ticket?.id !== action.payload?.id))
+                    ]
                 }, state.moldes)
             };
         case ACTION_TYPES.IMPORT_WOO_PRODUCTS: {

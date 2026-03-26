@@ -35,6 +35,7 @@ export default function FotosPage() {
     const [lightboxSrc, setLightboxSrc] = useState('');
     const [loadingImageId, setLoadingImageId] = useState('');
     const fileInputRef = useRef(null);
+    const searchInputRef = useRef(null);
 
     const allProducts = state.config.posProductos || [];
     const fotoTasks = state.config.fotoTasks || [];
@@ -62,6 +63,15 @@ export default function FotosPage() {
             })
             .slice(0, 120);
     }, [allProducts, search]);
+
+    useEffect(() => {
+        const savedSearch = window.localStorage.getItem('fotos-page-search') || '';
+        if (savedSearch) setSearch(savedSearch);
+    }, []);
+
+    useEffect(() => {
+        window.localStorage.setItem('fotos-page-search', search);
+    }, [search]);
 
     useEffect(() => {
         let cancelled = false;
@@ -260,10 +270,13 @@ export default function FotosPage() {
                         <div style={{ position: 'relative' }}>
                             <Search size={16} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
                             <input
+                                ref={searchInputRef}
                                 className="form-input"
                                 style={{ paddingLeft: 34 }}
                                 value={search}
                                 onChange={(event) => setSearch(event.target.value)}
+                                onKeyDown={(event) => event.stopPropagation()}
+                                onFocus={(event) => event.stopPropagation()}
                                 placeholder="Buscar por codigo o articulo"
                             />
                         </div>

@@ -4,6 +4,7 @@ import { useData } from '../../store/DataContext';
 import { useAuth } from '../../store/AuthContext';
 import { generateId } from '../../utils/helpers';
 import { printThermalTicket } from './thermalPrint';
+import { buildPosTicketHistory } from '../../utils/posTicketHistory';
 import './PosCaja.css';
 
 const SALES_CHANNELS = ['LOCAL', 'PAGINA WEB', 'WHATSAPP', 'MODATEX', 'DISTRITO', 'CHLOE', 'LUIS'];
@@ -63,6 +64,7 @@ export default function PosCaja({ onOpenCatalog }) {
     const [pagoRecibido, setPagoRecibido] = useState('');
 
     const [ultimoTicket, setUltimoTicket] = useState(null);
+    const [lastQuickAddedProductId, setLastQuickAddedProductId] = useState('');
     const searchInputRef = useRef(null);
     const printFrameRef = useRef(null);
 
@@ -84,6 +86,8 @@ export default function PosCaja({ onOpenCatalog }) {
         ).slice(0, 5);
     }, [search, activeProducts]);
 
+    const recentTickets = useMemo(() => buildPosTicketHistory(state.config).slice(0, 6), [state.config]);
+
     // Derived Totals
     const subtotal = cart.reduce((acc, item) => acc + (item.precioOriginal * item.cantidad), 0);
     const totalDescuentosItem = cart.reduce((acc, item) => {
@@ -98,10 +102,12 @@ export default function PosCaja({ onOpenCatalog }) {
         setCart(prev => {
             const existing = prev.find(i => i.id === product.id);
             if (existing) {
+                setLastQuickAddedProductId(product.id);
                 return prev.map(i =>
                     i.id === product.id ? { ...i, cantidad: i.cantidad + 1, importe: (i.cantidad + 1) * i.precioUnitario } : i
                 );
             }
+            setLastQuickAddedProductId(product.id);
             return [...prev, {
                 id: product.id,
                 codigoInterno: product.articuloVenta || product.codigoInterno,
@@ -188,6 +194,7 @@ export default function PosCaja({ onOpenCatalog }) {
         setCliente('Cons. Final');
         setCanalVenta('LOCAL');
         setNotasDePedido('');
+        setLastQuickAddedProductId('');
     };
 
     // --- Cobranza ---
@@ -254,7 +261,37 @@ export default function PosCaja({ onOpenCatalog }) {
     // Tecla rápida F6 para cobranza / confirmar venta
     // Escuchar Enter en buscador si hay 1 solo resultado
     const handleSearchKeyDown = (e) => {
-        if (e.key === 'Enter' && searchResults.length === 1) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+
+        const trimmed = search.trim();
+        if (!trimmed && searchResults.length === 0) return;
+
+        if (/^\d+$/.test(trimmed) && lastQuickAddedProductId) {
+            handleUpdateQuantityDirect(lastQuickAddedProductId, Number(trimmed));
+            setSearch('');
+            searchInputRef.current?.focus();
+            return;
+        }
+
+        const quantityAndQuery = trimmed.match(/^(\d+)\s+(.+)$/);
+        if (quantityAndQuery) {
+            const quantity = Number(quantityAndQuery[1]);
+            const query = quantityAndQuery[2].toLowerCase();
+            const matched = activeProducts.filter((p) =>
+                (p.articuloVenta || p.codigoInterno).toLowerCase().includes(query) ||
+                (p.articuloFabrica || '').toLowerCase().includes(query) ||
+                (p.codigoBarras && p.codigoBarras.toLowerCase().includes(query)) ||
+                p.detalleCorto.toLowerCase().includes(query)
+            );
+            if (matched.length === 1) {
+                handleAddToCart(matched[0]);
+                setTimeout(() => handleUpdateQuantityDirect(matched[0].id, quantity), 0);
+                return;
+            }
+        }
+
+        if (searchResults.length === 1) {
             handleAddToCart(searchResults[0]);
         }
     };
@@ -273,6 +310,9 @@ export default function PosCaja({ onOpenCatalog }) {
                             onChange={e => setSearch(e.target.value)}
                             onKeyDown={handleSearchKeyDown}
                         />
+                    </div>
+                    <div className="pos-search-helper">
+                        `Enter`: agrega. `3 Enter`: cambia cantidad del ultimo. `3 remera`: agrega con cantidad.
                     </div>
                     {searchResults.length > 0 && (
                         <div className="pos-search-results">
@@ -446,6 +486,36 @@ export default function PosCaja({ onOpenCatalog }) {
                             <Printer size={20} /> Reimprimir Últ. Ticket
                         </button>
                     )}
+                </div>
+
+                <div className="pos-ticket-history-panel">
+                    <div className="pos-ticket-history-head">
+                        <span>Historial de pagos</span>
+                        <span>{recentTickets.length} recientes</span>
+                    </div>
+                    <div className="pos-ticket-history-list">
+                        {recentTickets.length === 0 ? (
+                            <div className="pos-ticket-history-empty">Todavía no hay tickets guardados.</div>
+                        ) : recentTickets.map((ticket) => (
+                            <button
+                                key={ticket.id || `${ticket.nroComprobante}-${ticket.fecha}`}
+                                className="pos-ticket-history-item"
+                                onClick={() => triggerPrint(ticket)}
+                                title="Reimprimir ticket"
+                            >
+                                <div>
+                                    <div className="pos-ticket-history-number">#{ticket.nroComprobante || '----'}</div>
+                                    <div className="pos-ticket-history-meta">
+                                        {(ticket.cliente || 'Cons. Final')} · {(ticket.vendedor || 'Caja')}
+                                    </div>
+                                </div>
+                                <div className="pos-ticket-history-right">
+                                    <strong>${Number(ticket.total || 0).toFixed(0)}</strong>
+                                    <span>{new Date(ticket.fecha || '').toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 

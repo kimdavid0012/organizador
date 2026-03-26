@@ -96,6 +96,7 @@ export const DEFAULT_DATA = {
         mercaderiaConteos: [],
         fotoTasks: [],
         imageLibrary: [],
+        planillasCortes: [],
         mesanMovimientos: [],
         mesanVentasDiarias: [],
         mesanEmbeddedImports: [],
@@ -105,6 +106,7 @@ export const DEFAULT_DATA = {
         posPermissions: { encargadaCanCloseZ: false, encargadaCanAddExpenses: false },
         posCerradoZ: [],
         posGastos: [],
+        posHistorialTickets: [],
         posProductos: [],
         posVentas: [],
         syncMeta: {
@@ -156,6 +158,7 @@ export function normalizeData(parsed) {
             mercaderiaConteos: parsed.config?.mercaderiaConteos || [],
             fotoTasks: parsed.config?.fotoTasks || [],
             imageLibrary: parsed.config?.imageLibrary || [],
+            planillasCortes: parsed.config?.planillasCortes || [],
             mesanMovimientos: parsed.config?.mesanMovimientos || [],
             mesanVentasDiarias: parsed.config?.mesanVentasDiarias || [],
             mesanEmbeddedImports: parsed.config?.mesanEmbeddedImports || [],
@@ -165,6 +168,7 @@ export function normalizeData(parsed) {
             posPermissions: parsed.config?.posPermissions || { encargadaCanCloseZ: false, encargadaCanAddExpenses: false },
             posCerradoZ: parsed.config?.posCerradoZ || [],
             posGastos: parsed.config?.posGastos || [],
+            posHistorialTickets: parsed.config?.posHistorialTickets || [],
             posProductos: parsed.config?.posProductos || [],
             posVentas: parsed.config?.posVentas || [],
             syncMeta: {

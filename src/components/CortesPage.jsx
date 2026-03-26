@@ -5,6 +5,7 @@ import { useI18n } from '../store/I18nContext';
 import { useAuth } from '../store/AuthContext';
 import { generateId, getProductThumb } from '../utils/helpers';
 import * as XLSX from 'xlsx';
+import { mergePlanillaCortesIntoState, parsePlanillaCortesWorkbook } from '../utils/planillaCortesImport';
 
 export default function CortesPage() {
     const { state, updateConfig, updateMolde, addMolde, addTela, setData, addPosProduct, updatePosProduct, updateMoldeInCorte, addMoldeToCorte, removeMoldeFromCorte } = useData();
@@ -12,6 +13,7 @@ export default function CortesPage() {
     const { user } = useAuth();
     const { config, moldes, telas } = state;
     const cortes = config.cortes || [];
+    const planillasCortes = config.planillasCortes || [];
 
     const [collapsedMolds, setCollapsedMolds] = useState({});
     const toggleCollapse = (id) => setCollapsedMolds(prev => ({ ...prev, [id]: !prev[id] }));
@@ -40,251 +42,15 @@ export default function CortesPage() {
             try {
                 const data = new Uint8Array(evt.target.result);
                 const wb = XLSX.read(data, { type: 'array', cellDates: true });
-                const ws = wb.Sheets[wb.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+                const parsed = parsePlanillaCortesWorkbook(wb, XLSX.utils, file.name);
+                if (!parsed.blocks.length) {
+                    alert('No encontré tablas válidas de planilla de cortes en el Excel.');
+                    return;
+                }
 
-                if (rows.length === 0) { alert('El Excel está vacío.'); return; }
-
-                // Detectar columnas por header o por posición
-                const detectCol = (row, keys) => {
-                    // Primero buscar por key exacta
-                    for (const k of keys) {
-                        if (row[k] !== undefined && row[k] !== '') return row[k];
-                    }
-                    // Fallback: buscar case-insensitive con trim
-                    const rowKeys = Object.keys(row);
-                    for (const k of keys) {
-                        const kLower = k.toLowerCase().trim();
-                        for (const rk of rowKeys) {
-                            if (rk.toLowerCase().trim() === kLower && row[rk] !== undefined && row[rk] !== '') {
-                                return row[rk];
-                            }
-                        }
-                    }
-                    return '';
-                };
-
-                // Agrupar filas por # corte (columna P = "# corte")
-                const grouped = {};
-                rows.forEach(row => {
-                    const nroCorte = String(detectCol(row, ['# corte', '#corte', 'P', 'corte', '# Corte']) || 'sin-numero').trim();
-                    if (!grouped[nroCorte]) grouped[nroCorte] = [];
-                    grouped[nroCorte].push(row);
-                });
-
-                const newCortes = [...cortes];
-                const newMoldes = [...moldes];
-                const newTelas = [...telas];
-                let totalImported = 0;
-
-                Object.entries(grouped).forEach(([nroCorte, filas]) => {
-                    // Crear corte
-                    const primeraFila = filas[0];
-                    const fechaRaw = detectCol(primeraFila, ['fecha', 'Fecha', 'R']);
-                    let fechaStr = '';
-                    if (fechaRaw instanceof Date) {
-                        fechaStr = fechaRaw.toISOString().split('T')[0];
-                    } else if (fechaRaw) {
-                        fechaStr = String(fechaRaw).slice(0, 10);
-                    }
-
-                    const corteId = generateId();
-                    const corte = {
-                        id: corteId,
-                        nombre: `Corte #${nroCorte}`,
-                        fecha: fechaStr || new Date().toISOString().split('T')[0],
-                        moldeIds: [],
-                        moldesData: [],
-                        consumos: []
-                    };
-
-                    filas.forEach((row, rowIdx) => {
-                        // DEBUG: log primera fila para verificar detección de columnas
-                        if (rowIdx === 0 && Object.keys(grouped)[0] === nroCorte) {
-                            console.log('🔍 DEBUG Import - Keys del Excel:', Object.keys(row));
-                            console.log('🔍 DEBUG Import - row.DOMO:', row['DOMO'], '| row.taller2:', row['taller2']);
-                            console.log('🔍 DEBUG Import - Todos los valores:', Object.entries(row).map(([k,v]) => `${k}=${v}`).join(' | '));
-                        }
-                        // === COLUMNAS BÁSICAS ===
-                        // A (ART M) → se omite, usamos B (Column1 / ART D) como código principal
-                        const artD = String(detectCol(row, ['ART D', 'Column1', 'Art D', 'ART_D']) || '').trim();
-                        const descripcion = String(detectCol(row, ['Descripcion', 'descripcion', 'DESCRIPCION', 'Detalle']) || 'Sin nombre').trim();
-                        const telaName = String(detectCol(row, ['tela', 'Tela', 'TELA']) || '').trim();
-                        const cotizacion = parseFloat(detectCol(row, ['cotisacion', 'cotizacion', 'Cotizacion', 'COTIZACION']) || 0);
-                        const costoCalc = parseFloat(detectCol(row, ['COSTO', 'costo', 'Costo']) || 0);
-                        const costoTallerConf = parseFloat(detectCol(row, ['TALLER', 'taller', 'Taller']) || 0);
-                        // I (% ganancia) → variable por artículo, puede ser decimal (0.7) o entero (70)
-                        const margenRaw = parseFloat(detectCol(row, ['% ganancia', '% Ganancia', 'ganancia', '%ganancia']) || 0);
-                        const margen = margenRaw > 0 && margenRaw < 1 ? Math.round(margenRaw * 100) : margenRaw;
-
-                        // === PRECIOS ===
-                        // J (luis) → omitido
-                        const precioCalc = parseFloat(detectCol(row, ['precio', 'Precio', 'PRECIO']) || 0);
-                        // L (DOMO) → PRECIO DE VENTA LOCAL (el precio real de venta)
-                        const precioLocal = parseFloat(detectCol(row, ['DOMO', 'domo', 'Domo']) || 0);
-                        // M (PAPA) → omitido
-
-                        // === TALLER Y CORTADOR ===
-                        const tallerNombre = String(detectCol(row, ['taller2', 'Taller2', 'TALLER2']) || '').trim();
-                        const presioTaller = parseFloat(detectCol(row, ['presio taller', 'precio taller', 'Presio taller']) || 0);
-                        const cantidad = parseFloat(detectCol(row, ['cantidad', 'Cantidad', 'CANTIDAD']) || 0);
-
-                        // === TELA: precio USD, metros/kg, % de tela ===
-                        const telaPrecioUSD = parseFloat(detectCol(row, ['tela presio', 'tela precio', 'Tela Presio', 'tela_presio']) || 0);
-                        const metrosKgTotal = parseFloat(detectCol(row, ['m/kg', 'M/KG', 'mkg', 'metros']) || 0);
-                        const porcentajeTelaRaw = parseFloat(detectCol(row, ['%de tela', '% de tela', '%tela', 'porcentaje tela']) || 0);
-
-                        // === PRODUCCIÓN EXTRA ===
-                        const rollosCorte = parseFloat(detectCol(row, ['ROLLO', 'rollo', 'Rollo', 'rollos']) || 0);
-                        const costoAccesorio = parseFloat(detectCol(row, ['ACCESORIO', 'accesorio', 'Accesorio']) || 0);
-                        const costoAccesorio2 = parseFloat(detectCol(row, ['accesorio2', 'Accesorio2', 'ACCESORIO2']) || 0);
-                        const costoMolde = parseFloat(detectCol(row, ['molde', 'Molde', 'MOLDE']) || 0);
-                        const fason = parseFloat(detectCol(row, ['fason', 'Fason', 'FASON', 'fasón']) || 0);
-                        const pagoTaller = parseFloat(detectCol(row, ['pago taller', 'Pago taller', 'PAGO TALLER']) || 0);
-                        const costoTotal2 = parseFloat(detectCol(row, ['COSTO2', 'costo2', 'Costo2']) || 0);
-                        const precioDomo2 = parseFloat(detectCol(row, ['DOMO2', 'domo2', 'Domo2']) || 0);
-
-                        // U (%de tela) = porcentaje que usa ESTE artículo del total del rollo
-                        // Excel muestra: 23,05% / 24,42% / 12,22% etc. (viene como 0.2305)
-                        // Convertir a porcentaje exacto igual que el Excel
-                        const porcTelaFinal = porcentajeTelaRaw > 0 && porcentajeTelaRaw < 1 
-                            ? Math.round(porcentajeTelaRaw * 10000) / 100  // 0.2305 → 23.05
-                            : (porcentajeTelaRaw || 0);
-
-                        // Buscar o crear tela
-                        let telaObj = newTelas.find(t2 => t2.nombre?.toLowerCase() === telaName.toLowerCase());
-                        if (!telaObj && telaName) {
-                            telaObj = { id: generateId(), nombre: telaName, precioPorUnidad: telaPrecioUSD || 0, moneda: 'USD', color: '', descripcion: '' };
-                            newTelas.push(telaObj);
-                        } else if (telaObj && telaPrecioUSD > 0 && !telaObj.precioPorUnidad) {
-                            telaObj.precioPorUnidad = telaPrecioUSD;
-                        }
-
-                        // Buscar o crear molde por código ART D o nombre
-                        let molde = null;
-                        if (artD) {
-                            molde = newMoldes.find(m => String(m.codigo) === String(artD));
-                        }
-                        if (!molde) {
-                            molde = newMoldes.find(m => m.nombre?.toLowerCase() === descripcion.toLowerCase());
-                        }
-
-                        if (!molde) {
-                            molde = {
-                                id: generateId(),
-                                nombre: descripcion,
-                                codigo: artD || '',
-                                categoria: '',
-                                estado: config.columnas?.[0]?.id || 'por-hacer',
-                                telasIds: telaObj ? [telaObj.id] : [],
-                                consumoTela: telaPrecioUSD || 0,         // S = 4.9 (precio/consumo tela USD)
-                                porcentajeTela: porcTelaFinal,            // U = 23.05% (% del rollo por artículo)
-                                cotizacion: cotizacion || 0,
-                                cantidadCorte: cantidad || 0,
-                                costoTaller: costoTallerConf,
-                                costoCortador: presioTaller || fason || 0,
-                                costoAccesorio: costoAccesorio || 0,
-                                costoAccesorio2: costoAccesorio2 || 0,
-                                costoMolde: costoMolde || 0,
-                                margenGanancia: margen,
-                                precioLocal: precioLocal || precioCalc || 0,
-                                imagenes: [],
-                                checklist: [],
-                                observaciones: `Importado desde Excel · Corte #${nroCorte}`,
-                                createdAt: new Date().toISOString()
-                            };
-                            newMoldes.push(molde);
-                        } else {
-                            // Actualizar datos del molde existente
-                            if (telaObj && !(molde.telasIds || []).includes(telaObj.id)) {
-                                molde.telasIds = [...(molde.telasIds || []), telaObj.id];
-                            }
-                            if (!molde.consumoTela && telaPrecioUSD) molde.consumoTela = telaPrecioUSD;
-                            if (!molde.cotizacion && cotizacion) molde.cotizacion = cotizacion;
-                            if (precioLocal) molde.precioLocal = precioLocal;
-                            if (margen) molde.margenGanancia = margen;
-                            if (porcTelaFinal && (!molde.porcentajeTela || molde.porcentajeTela === 70)) molde.porcentajeTela = porcTelaFinal;
-                            if (!molde.costoAccesorio && costoAccesorio) molde.costoAccesorio = costoAccesorio;
-                            if (!molde.costoAccesorio2 && costoAccesorio2) molde.costoAccesorio2 = costoAccesorio2;
-                            if (!molde.costoMolde && costoMolde) molde.costoMolde = costoMolde;
-                        }
-
-                        // Agregar molde al corte con los datos específicos de esta tirada
-                        corte.moldeIds.push(molde.id);
-                        corte.moldesData.push({
-                            id: molde.id,
-                            cantidad: cantidad || 0,
-                            costoCortador: presioTaller || fason || 0,
-                            costoTaller: costoTallerConf || 0,
-                            tallerAsignado: tallerNombre || '',
-                            cortadorAsignado: '',
-                            precioLocal: precioLocal || precioCalc || 0,
-                            margenGanancia: margen || 0,
-                            porcentajeTela: porcTelaFinal || 0,       // U = 23.05% del Excel
-                            usoRealTela: telaPrecioUSD || 0,          // S = 4.9 consumo tela
-                            pagadoCortador: false,
-                            pagadoTaller: false,
-                            prendasFalladas: 0,
-                            rollosCorte: rollosCorte || 0,
-                            kilajeTotal: metrosKgTotal || 0,
-                            costoAccesorio: costoAccesorio || 0,
-                            costoAccesorio2: costoAccesorio2 || 0,
-                            costoMolde: costoMolde || 0,
-                            fason: fason || 0,
-                            pagoTallerTotal: pagoTaller || 0,
-                            costoTotal: costoCalc || 0,
-                            costoTotal2: costoTotal2 || 0,
-                            precioDomo2: precioDomo2 || 0,
-                            notas: `Costo: $${Math.round(costoCalc)} | Calc: $${Math.round(precioCalc)}${fason ? ` | Fasón: $${fason}` : ''}${pagoTaller ? ` | Pago Taller: $${Math.round(pagoTaller)}` : ''}`
-                        });
-
-                        totalImported++;
-
-                        // DEBUG: verificar valores importados
-                        if (rowIdx < 3) {
-                            console.log(`🔍 Art "${descripcion}" → precioLocal=${precioLocal}, tallerAsignado=${tallerNombre}, %tela=${porcTelaFinal}`);
-                        }
-                    });
-
-                    newCortes.push(corte);
-                });
-
-                // Recopilar talleres únicos del Excel para agregarlos a la config
-                const talleresExistentes = state.config.talleres || [];
-                const talleresNuevos = new Set(talleresExistentes);
-                newCortes.forEach(c => {
-                    (c.moldesData || []).forEach(md => {
-                        if (md.tallerAsignado && md.tallerAsignado.trim()) {
-                            talleresNuevos.add(md.tallerAsignado.trim().toUpperCase());
-                        }
-                    });
-                });
-
-                // ===== GUARDADO ATÓMICO =====
-                // En vez de hacer muchos dispatches individuales (que causan race conditions con Firestore),
-                // hacemos UN SOLO dispatch con todo el state actualizado de una vez.
-                const updatedConfig = {
-                    ...state.config,
-                    cortes: newCortes,
-                    talleres: [...talleresNuevos]
-                };
-
-                setData({
-                    ...state,
-                    moldes: newMoldes,
-                    telas: newTelas,
-                    config: updatedConfig
-                });
-
-                console.log('✅ Import completo:', {
-                    cortes: newCortes.length,
-                    moldes: newMoldes.length,
-                    telas: newTelas.length,
-                    talleres: [...talleresNuevos],
-                    primerCorte: newCortes[newCortes.length - Object.keys(grouped).length]
-                });
-
-                alert(`✅ Se importaron ${totalImported} artículos en ${Object.keys(grouped).length} cortes desde el Excel.`);
+                const nextState = mergePlanillaCortesIntoState(state, parsed, generateId);
+                setData(nextState);
+                alert(`✅ Se importaron ${parsed.blocks.length} tablas de planilla y se sincronizaron con cortes, telas y cortadores.`);
 
             } catch (err) {
                 console.error('Error importando Excel:', err);
@@ -555,6 +321,21 @@ export default function CortesPage() {
                                     <Upload style={{ width: 14, height: 14 }} /> Importar Planilla Excel
                                 </button>
                                 <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
+                                {planillasCortes.length > 0 && (
+                                    <div className="glass-panel" style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Planillas importadas
+                                        </div>
+                                        {planillasCortes.slice(0, 6).map((item) => (
+                                            <div key={item.id} style={{ fontSize: 11, padding: '6px 8px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.03)' }}>
+                                                <strong>{item.cortador}</strong> · {item.telaNombre} · Corte {item.corteNumero || 's/n'}
+                                                <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
+                                                    {item.fecha || 'Sin fecha'} · {Number(item.totalKilos || 0).toFixed(1)} kg · {Number(item.totalRollos || 0)} rollos
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 

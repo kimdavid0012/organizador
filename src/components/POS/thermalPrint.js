@@ -53,24 +53,33 @@ const buildTicketHtml = (ticketData) => {
             overflow: visible;
             font-family: "Courier New", Courier, monospace;
             font-size: 9px;
-            line-height: 1.1;
+            line-height: 1.18;
         }
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .thermal-shell {
+            width: 58mm;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            margin: 0 auto;
+            padding: 0;
+        }
         .thermal-ticket {
             box-sizing: border-box;
-            width: 54mm;
-            padding: 1.5mm 1.5mm 5mm;
+            width: 50mm;
+            margin: 0 auto;
+            padding: 2.5mm 0 6mm;
         }
         .ticket-header h2 {
             text-align: center;
             font-size: 15px;
-            margin: 2px 0 4px;
+            margin: 2px 0 5px;
             letter-spacing: 0.5px;
             font-weight: bold;
             text-transform: uppercase;
         }
         .ticket-header p, .ticket-footer p { margin: 2px 0; }
-        .divider { border-top: 1px dashed #000; margin: 4px 0; }
+        .divider { border-top: 1px dashed #000; margin: 5px 0; }
         .ticket-meta, .ticket-summary, .item-details, .ticket-col-headers {
             display: flex;
             justify-content: space-between;
@@ -133,7 +142,8 @@ const buildTicketHtml = (ticketData) => {
     </style>
 </head>
 <body>
-    <div class="thermal-ticket">
+        <div class="thermal-shell">
+        <div class="thermal-ticket">
         <div class="ticket-header">
             <h2>CELAVIE</h2>
             <p>Cuenca 544 - Flores</p>
@@ -195,7 +205,8 @@ const buildTicketHtml = (ticketData) => {
             <p class="center strong">COMPROBANTE NO VALIDO COMO FACTURA</p>
             <p class="center">CAMBIOS UNICAMENTE POR FALLA</p>
         </div>
-    </div>
+        </div>
+        </div>
 </body>
 </html>`;
 };
