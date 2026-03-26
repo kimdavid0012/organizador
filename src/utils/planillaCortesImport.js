@@ -24,28 +24,47 @@ const toDateInputValue = (date) => {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
-const parseDate = (value) => {
+const looksLikeDateString = (value) => {
+    const normalized = normalizeText(value);
+    if (!normalized) return false;
+    if (/CORTE|COLUMN|TOTAL/i.test(normalized)) return false;
+    return /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.test(normalized)
+        || /[A-Z]{3,}/i.test(normalized);
+};
+
+const parseDate = (value, { preferMonthFirst = false } = {}) => {
     if (!value) return '';
     if (value instanceof Date && !Number.isNaN(value.getTime())) {
         return toDateInputValue(value);
     }
+
+    if (typeof value === 'number') return '';
 
     const normalized = normalizeText(value);
     const slashMatch = normalized.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
     if (slashMatch) {
         let [, first, second, year] = slashMatch;
         const fullYear = year.length === 2 ? `20${year}` : year;
-        let day = Number(first);
-        let month = Number(second);
+        const firstNumber = Number(first);
+        const secondNumber = Number(second);
+        let day = firstNumber;
+        let month = secondNumber;
 
-        if (Number(first) <= 12 && Number(second) > 12) {
-            day = Number(second);
-            month = Number(first);
+        if (firstNumber <= 12 && secondNumber > 12) {
+            month = firstNumber;
+            day = secondNumber;
+        } else if (firstNumber > 12 && secondNumber <= 12) {
+            day = firstNumber;
+            month = secondNumber;
+        } else if (firstNumber <= 12 && secondNumber <= 12 && preferMonthFirst) {
+            month = firstNumber;
+            day = secondNumber;
         }
 
         return `${fullYear}-${pad(month)}-${pad(day)}`;
     }
 
+    if (!looksLikeDateString(normalized)) return '';
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '' : toDateInputValue(date);
 };
@@ -88,8 +107,23 @@ const isHeaderRow = (row = [], nextRow = []) => {
     if (!hasDetailsHeader) return false;
 
     const corteNumero = extractCorteNumber(row);
-    const fecha = row.some((cell) => Boolean(parseDate(cell)));
+    const fecha = row.some((cell) => Boolean(parseDate(cell, { preferMonthFirst: true })));
     return Boolean(corteNumero || fecha);
+};
+
+const extractTelaNombre = (row = []) => {
+    const corteNumero = extractCorteNumber(row);
+    const candidates = row
+        .map((cell) => normalizeText(cell))
+        .filter(Boolean)
+        .filter((cell) => !/^CORTE\s*#?\s*\d{1,5}$/i.test(cell))
+        .filter((cell) => !parseDate(cell, { preferMonthFirst: true }));
+
+    if (candidates.length === 0) return '';
+    if (corteNumero && /^CORTE/i.test(normalizeText(row[0])) && candidates[0] === normalizeText(row[0])) {
+        return candidates[1] || candidates[0];
+    }
+    return candidates[0];
 };
 
 const detectColumnIndexes = (row = []) => {
@@ -119,7 +153,7 @@ export const parsePlanillaCortesWorkbook = (workbook, xlsxUtils, fileName = 'PLA
     workbook.SheetNames.forEach((sheetName) => {
         const sheet = workbook.Sheets[sheetName];
         const rows = xlsxUtils?.sheet_to_json
-            ? xlsxUtils.sheet_to_json(sheet, { header: 1, defval: '', raw: false })
+            ? xlsxUtils.sheet_to_json(sheet, { header: 1, defval: '', raw: true })
             : [];
         const cortador = normalizeText(sheetName)
             .toLowerCase()
@@ -131,9 +165,9 @@ export const parsePlanillaCortesWorkbook = (workbook, xlsxUtils, fileName = 'PLA
 
             if (!isHeaderRow(row, nextRow)) continue;
 
-            const telaNombre = normalizeText(row[0]) || 'Sin tela';
+            const telaNombre = extractTelaNombre(row) || 'Sin tela';
             const corteNumero = extractCorteNumber(row);
-            const fecha = row.map((cell) => parseDate(cell)).find(Boolean) || '';
+            const fecha = row.map((cell) => parseDate(cell, { preferMonthFirst: true })).find(Boolean) || '';
             const { colorIndex, kiloIndex, cantidadIndex, rolloIndex } = detectColumnIndexes(nextRow);
 
             const detalles = [];
@@ -197,7 +231,7 @@ export const parsePlanillaCortesWorkbook = (workbook, xlsxUtils, fileName = 'PLA
                 });
             }
 
-            rowIndex = cursor;
+            rowIndex = Math.max(rowIndex, cursor - 1);
         }
     });
 
@@ -232,7 +266,16 @@ const extractCorteNumberFromName = (value = '') => {
 export const mergePlanillaCortesIntoState = (state, parsedBatch, generateId) => {
     const existingPlanillas = Array.isArray(state.config?.planillasCortes) ? state.config.planillasCortes : [];
     const nextPlanillas = existingPlanillas.filter((item) => item.batchId !== parsedBatch.batchId);
-    const nextCortes = Array.isArray(state.config?.cortes) ? state.config.cortes.map((corte) => ({ ...corte, consumos: [...(corte.consumos || [])] })) : [];
+    const nextCortes = Array.isArray(state.config?.cortes)
+        ? state.config.cortes
+            .filter((corte) => {
+                const blockKeys = Array.isArray(corte?.planillaBlockKeys) ? corte.planillaBlockKeys : [];
+                const allFromSameBatch = blockKeys.length > 0 && blockKeys.every((key) => key.startsWith(`${parsedBatch.batchId}|`));
+                const isPlanillaOnly = (!corte?.moldeIds || corte.moldeIds.length === 0) && (!corte?.moldesData || corte.moldesData.length === 0);
+                return !(allFromSameBatch && isPlanillaOnly);
+            })
+            .map((corte) => ({ ...corte, consumos: [...(corte.consumos || [])] }))
+        : [];
     const blockKeys = new Set(parsedBatch.blocks.map((block) => block.blockKey));
     const importedCutIds = new Set();
     const nextCortadores = new Set(Array.isArray(state.config?.cortadores) ? state.config.cortadores : []);
