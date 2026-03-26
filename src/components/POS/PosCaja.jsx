@@ -65,7 +65,9 @@ export default function PosCaja({ onOpenCatalog }) {
 
     const [ultimoTicket, setUltimoTicket] = useState(null);
     const [lastQuickAddedProductId, setLastQuickAddedProductId] = useState('');
+    const [quickQuantity, setQuickQuantity] = useState('1');
     const searchInputRef = useRef(null);
+    const quickQuantityRef = useRef(null);
     const printFrameRef = useRef(null);
 
     // Auto-focus search on load
@@ -97,7 +99,7 @@ export default function PosCaja({ onOpenCatalog }) {
     // Apply global discount
     const totalFinal = Math.max(0, subtotal - totalDescuentosItem - descuentoGlobal);
 
-    const handleAddToCart = (product) => {
+    const handleAddToCart = (product, { focusQuantity = false } = {}) => {
         const pricing = getChannelPricing(product, canalVenta);
         setCart(prev => {
             const existing = prev.find(i => i.id === product.id);
@@ -124,7 +126,15 @@ export default function PosCaja({ onOpenCatalog }) {
             }];
         });
         setSearch('');
-        searchInputRef.current?.focus();
+        setQuickQuantity('1');
+        if (focusQuantity) {
+            setTimeout(() => {
+                quickQuantityRef.current?.focus();
+                quickQuantityRef.current?.select?.();
+            }, 0);
+        } else {
+            searchInputRef.current?.focus();
+        }
     };
 
     useEffect(() => {
@@ -195,6 +205,7 @@ export default function PosCaja({ onOpenCatalog }) {
         setCanalVenta('LOCAL');
         setNotasDePedido('');
         setLastQuickAddedProductId('');
+        setQuickQuantity('1');
     };
 
     // --- Cobranza ---
@@ -267,13 +278,6 @@ export default function PosCaja({ onOpenCatalog }) {
         const trimmed = search.trim();
         if (!trimmed && searchResults.length === 0) return;
 
-        if (/^\d+$/.test(trimmed) && lastQuickAddedProductId) {
-            handleUpdateQuantityDirect(lastQuickAddedProductId, Number(trimmed));
-            setSearch('');
-            searchInputRef.current?.focus();
-            return;
-        }
-
         const quantityAndQuery = trimmed.match(/^(\d+)\s+(.+)$/);
         if (quantityAndQuery) {
             const quantity = Number(quantityAndQuery[1]);
@@ -285,15 +289,30 @@ export default function PosCaja({ onOpenCatalog }) {
                 p.detalleCorto.toLowerCase().includes(query)
             );
             if (matched.length === 1) {
-                handleAddToCart(matched[0]);
+                handleAddToCart(matched[0], { focusQuantity: true });
+                setQuickQuantity(String(quantity));
                 setTimeout(() => handleUpdateQuantityDirect(matched[0].id, quantity), 0);
                 return;
             }
         }
 
-        if (searchResults.length === 1) {
-            handleAddToCart(searchResults[0]);
+        if (searchResults.length >= 1) {
+            handleAddToCart(searchResults[0], { focusQuantity: true });
         }
+    };
+
+    const handleQuickQuantityKeyDown = (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        if (!lastQuickAddedProductId) {
+            searchInputRef.current?.focus();
+            return;
+        }
+
+        handleUpdateQuantityDirect(lastQuickAddedProductId, Number(quickQuantity) || 1);
+        setQuickQuantity('1');
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select?.();
     };
 
     return (
@@ -312,7 +331,18 @@ export default function PosCaja({ onOpenCatalog }) {
                         />
                     </div>
                     <div className="pos-search-helper">
-                        `Enter`: agrega. `3 Enter`: cambia cantidad del ultimo. `3 remera`: agrega con cantidad.
+                        `Enter`: agrega el primero encontrado. Después escribís cantidad y `Enter`.
+                    </div>
+                    <div className="pos-search-qty-row">
+                        <span>Cantidad rápida</span>
+                        <input
+                            ref={quickQuantityRef}
+                            type="number"
+                            min="1"
+                            value={quickQuantity}
+                            onChange={(event) => setQuickQuantity(event.target.value)}
+                            onKeyDown={handleQuickQuantityKeyDown}
+                        />
                     </div>
                     {searchResults.length > 0 && (
                         <div className="pos-search-results">

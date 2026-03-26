@@ -301,6 +301,46 @@ export default function CortesPage() {
         <div className="settings" style={{ maxWidth: 1200 }}>
             <h2><PackageOpen style={{ display: 'inline', marginRight: 8 }} /> {t('cortes')}</h2>
 
+            {user?.role === 'admin' && (
+                <div className="settings-section" style={{ marginBottom: 'var(--sp-4)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+                        <div>
+                            <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 'var(--fw-bold)' }}>Planilla de Cortes</div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 4 }}>
+                                Subí la planilla tal cual del taller. Reconoce hojas como Concordia y Zuveria, importa color, kilos, cantidad y rollos, y lo descuenta en telas como consumo.
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Upload style={{ width: 14, height: 14 }} /> Subir Excel planilla de cortes
+                            </button>
+                            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                {planillasCortes.length} tablas importadas
+                            </div>
+                        </div>
+                    </div>
+
+                    {planillasCortes.length > 0 && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 10 }}>
+                            {planillasCortes.slice(0, 8).map((item) => (
+                                <div key={item.id} className="glass-panel" style={{ padding: '10px 12px' }}>
+                                    <div style={{ fontWeight: 'var(--fw-semibold)', fontSize: '13px' }}>
+                                        {item.cortador} · Corte {item.corteNumero || 's/n'}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 4 }}>
+                                        {item.telaNombre} · {item.fecha || 'Sin fecha'}
+                                    </div>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: 6 }}>
+                                        {Number(item.totalKilos || 0).toFixed(1)} kg · {Number(item.totalPrendas || 0)} prendas · {Number(item.totalRollos || 0)} rollos
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: selected ? '280px 1fr' : '1fr', gap: 'var(--sp-5)', transition: 'all 0.3s ease' }}>
                 {/* Left: Cortes list */}
                 <div>
@@ -317,25 +357,6 @@ export default function CortesPage() {
                                     />
                                     <button className="btn btn-primary" onClick={addCorte}><Plus /></button>
                                 </div>
-                                <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                                    <Upload style={{ width: 14, height: 14 }} /> Importar Planilla Excel
-                                </button>
-                                <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
-                                {planillasCortes.length > 0 && (
-                                    <div className="glass-panel" style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            Planillas importadas
-                                        </div>
-                                        {planillasCortes.slice(0, 6).map((item) => (
-                                            <div key={item.id} style={{ fontSize: 11, padding: '6px 8px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.03)' }}>
-                                                <strong>{item.cortador}</strong> · {item.telaNombre} · Corte {item.corteNumero || 's/n'}
-                                                <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
-                                                    {item.fecha || 'Sin fecha'} · {Number(item.totalKilos || 0).toFixed(1)} kg · {Number(item.totalRollos || 0)} rollos
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
                             </div>
                         )}
 
