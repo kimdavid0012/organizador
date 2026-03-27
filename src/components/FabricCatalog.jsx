@@ -520,6 +520,68 @@ export default function FabricCatalog() {
         return { totalR, totalV };
     }, [telas, state.config.cortes, state.config.cotizacionUSD]);
 
+    const consumoStats = useMemo(() => {
+        const cortes = state.config.cortes || [];
+        const cotizacion = parseFloat(state.config.cotizacionUSD) || 1;
+        const telaMap = new Map((telas || []).map((tela) => [tela.id, tela]));
+        const byTela = new Map();
+        const byCategoria = new Map();
+
+        const addCategoria = (name, kilos, totalArs) => {
+            const key = name || 'Sin categoría';
+            const current = byCategoria.get(key) || { categoria: key, kilos: 0, totalArs: 0, registros: 0 };
+            current.kilos += kilos;
+            current.totalArs += totalArs;
+            current.registros += 1;
+            byCategoria.set(key, current);
+        };
+
+        cortes.forEach((corte) => {
+            (corte.consumos || []).forEach((consumo) => {
+                const tela = consumo.telaId ? telaMap.get(consumo.telaId) : null;
+                const telaNombre = tela?.nombre || consumo.telaNombreImportado || 'Tela sin identificar';
+                const unidad = tela?.unidadPrecio === 'kg' ? 'kg' : 'mts';
+                const precioUnidad = parseFloat(tela?.precioPorUnidad) || 0;
+                const cantidad = parseFloat(consumo.kilos ?? consumo.cantidad) || 0;
+                const moneda = tela?.moneda || 'ARS';
+                const totalBase = precioUnidad * cantidad;
+                const totalArs = moneda === 'USD' ? totalBase * cotizacion : totalBase;
+                const categoria = tela?.composicion || tela?.proveedor || 'Sin categoría';
+                const key = consumo.telaId || `imported:${telaNombre.toUpperCase()}`;
+                const current = byTela.get(key) || {
+                    key,
+                    telaId: tela?.id || '',
+                    nombre: telaNombre,
+                    categoria,
+                    kilos: 0,
+                    rollos: 0,
+                    precioUnidad,
+                    unidad,
+                    moneda,
+                    totalBase: 0,
+                    totalArs: 0
+                };
+
+                current.kilos += cantidad;
+                current.rollos += parseFloat(consumo.rollos) || 0;
+                current.totalBase += totalBase;
+                current.totalArs += totalArs;
+                if (!current.precioUnidad && precioUnidad) current.precioUnidad = precioUnidad;
+                if ((!current.categoria || current.categoria === 'Sin categoría') && categoria) current.categoria = categoria;
+                if ((!current.moneda || current.moneda === 'ARS') && moneda) current.moneda = moneda;
+                byTela.set(key, current);
+                addCategoria(categoria, cantidad, totalArs);
+            });
+        });
+
+        return {
+            totalKilos: Array.from(byTela.values()).reduce((acc, item) => acc + item.kilos, 0),
+            totalArs: Array.from(byTela.values()).reduce((acc, item) => acc + item.totalArs, 0),
+            byTela: Array.from(byTela.values()).sort((a, b) => b.totalArs - a.totalArs),
+            byCategoria: Array.from(byCategoria.values()).sort((a, b) => b.totalArs - a.totalArs)
+        };
+    }, [telas, state.config.cortes, state.config.cotizacionUSD]);
+
     const providerPayments = state.config.fabricPayments || [];
 
     const providerSummary = useMemo(() => {
@@ -643,6 +705,69 @@ export default function FabricCatalog() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {consumoStats.byTela.length > 0 && (
+                <div className="glass-panel" style={{ padding: 'var(--sp-4)', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+                        <div>
+                            <h3 style={{ marginBottom: 6 }}>Consumo registrado desde cortes</h3>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                Estas telas salen directo de lo cargado en <strong>Cortes</strong>, con kilaje consumido, precio por unidad y valor total.
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                            <div style={{ padding: '10px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total consumido</div>
+                                <div style={{ fontSize: 24, fontWeight: 800 }}>{consumoStats.totalKilos.toFixed(1)}</div>
+                            </div>
+                            <div style={{ padding: '10px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Valor total ARS</div>
+                                <div style={{ fontSize: 24, fontWeight: 800 }}>${consumoStats.totalArs.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(280px, 0.8fr)', gap: 16 }}>
+                        <div style={{ display: 'grid', gap: 8 }}>
+                            {consumoStats.byTela.slice(0, 12).map((item) => (
+                                <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.7fr 0.8fr 0.8fr', gap: 12, alignItems: 'center', padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 700 }}>{item.nombre}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{item.categoria || 'Sin categoría'}</div>
+                                    </div>
+                                    <div style={{ fontSize: 13 }}>
+                                        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Consumido</div>
+                                        <strong>{item.kilos.toFixed(1)} {item.unidad}</strong>
+                                    </div>
+                                    <div style={{ fontSize: 13 }}>
+                                        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Precio/{item.unidad}</div>
+                                        <strong>{item.precioUnidad ? `${item.moneda === 'USD' ? 'US$' : '$'}${item.precioUnidad.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : 'Sin precio'}</strong>
+                                    </div>
+                                    <div style={{ fontSize: 13, textAlign: 'right' }}>
+                                        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Total ARS</div>
+                                        <strong style={{ color: 'var(--warning)' }}>${item.totalArs.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div style={{ display: 'grid', gap: 8, alignContent: 'start' }}>
+                            <div style={{ fontSize: 14, fontWeight: 700 }}>Consumo por categoría de tela</div>
+                            {consumoStats.byCategoria.map((item) => (
+                                <div key={item.categoria} style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                                        <strong>{item.categoria}</strong>
+                                        <span style={{ color: 'var(--warning)', fontWeight: 700 }}>${item.totalArs.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                                    </div>
+                                    <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                        {item.kilos.toFixed(1)} kg/mts consumidos · {item.registros} registros
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
