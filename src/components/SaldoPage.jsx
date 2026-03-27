@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Camera, PlusCircle, Receipt, Search, Trash2, Wallet } from 'lucide-react';
+import { Camera, Landmark, PlusCircle, Receipt, Search, Trash2, Wallet } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
 import { useI18n } from '../store/I18nContext';
@@ -11,6 +11,7 @@ const MOVEMENT_TYPES = [
     { value: 'deuda', label: 'Deuda / Ticket' },
     { value: 'pago', label: 'Pago recibido' }
 ];
+const PAYMENT_METHODS = ['Banco', 'Mercado Pago'];
 
 const PAGE_TEXT = {
     es: {
@@ -164,11 +165,11 @@ export default function SaldoPage() {
     const [ticket, setTicket] = useState('');
     const [detalle, setDetalle] = useState('');
     const [monto, setMonto] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0]);
+    const [paymentStatus, setPaymentStatus] = useState('pagado');
     const pageText = PAGE_TEXT[lang] || PAGE_TEXT.es;
-    const canRegisterPayments = user.role === 'admin';
-    const movementTypes = canRegisterPayments
-        ? MOVEMENT_TYPES
-        : MOVEMENT_TYPES.filter((item) => item.value !== 'pago');
+    const canRegisterPayments = ['admin', 'encargada'].includes(user.role);
+    const movementTypes = MOVEMENT_TYPES;
 
     if (!['admin', 'encargada'].includes(user.role)) {
         return <div style={{ padding: 'var(--sp-4)' }}>{pageText.adminOnly}</div>;
@@ -177,6 +178,7 @@ export default function SaldoPage() {
     const clientes = state.config?.clientes || [];
     const saldoMovimientos = state.config?.saldoMovimientos || [];
     const saldoClienteFotos = state.config?.saldoClienteFotos || {};
+    const bankPayments = state.config?.bankPayments || [];
     const currentSales = state.config?.posVentas || [];
     const archivedSales = (state.config?.posCerradoZ || []).flatMap((close) => close.detalleVentas || []);
     const allSales = [...currentSales, ...archivedSales];
@@ -337,6 +339,22 @@ export default function SaldoPage() {
         ? (saldoClienteFotos[String(selectedGroup.clienteId || selectedGroup.key)] || [])
         : [];
 
+    const selectedClientBankPayments = useMemo(() => {
+        if (!selectedGroup) return [];
+        const clientName = normalizeComparable(selectedGroup.clienteNombre);
+        const clientPhone = normalizePhone(selectedGroup.telefono);
+        return bankPayments
+            .filter((entry) => {
+                const entryName = normalizeComparable(entry.cliente);
+                const entryPhone = normalizePhone(entry.telefono || '');
+                return (
+                    (clientName && entryName && clientName === entryName) ||
+                    (clientPhone && entryPhone && clientPhone === entryPhone)
+                );
+            })
+            .sort((left, right) => (right.fecha || '').localeCompare(left.fecha || ''));
+    }, [bankPayments, selectedGroup]);
+
     const totalSaldo = groupedClients.reduce((acc, item) => acc + item.saldo, 0);
     const totalDebt = groupedClients.reduce((acc, item) => acc + item.totalDeuda, 0);
     const totalPaid = groupedClients.reduce((acc, item) => acc + item.totalPagado, 0);
@@ -345,32 +363,49 @@ export default function SaldoPage() {
     const addMovement = () => {
         const client = clientes.find((item) => String(item.id) === String(selectedClientId));
         if (!client || !monto) return;
-        if (!canRegisterPayments && movementType === 'pago') return;
 
-        updateConfig({
-            saldoMovimientos: [
-                {
-                    id: `${Date.now()}`,
-                    clienteId: client.id,
-                    clienteNombre: client.nombre,
-                    cuit: client.cuit || '',
-                    telefono: client.telefono || '',
-                    email: client.email || '',
-                    tipo: movementType,
-                    fecha: useDate ? fecha : '',
-                    ticket: normalizeText(ticket),
-                    detalle: normalizeText(detalle),
-                    monto: Math.abs(toNumber(monto)),
-                    createdBy: user.email,
-                    createdAt: new Date().toISOString()
-                },
-                ...saldoMovimientos
-            ]
-        });
+        const movementId = `${Date.now()}`;
+        const nextMovement = {
+            id: movementId,
+            clienteId: client.id,
+            clienteNombre: client.nombre,
+            cuit: client.cuit || '',
+            telefono: client.telefono || '',
+            email: client.email || '',
+            tipo: movementType,
+            fecha: useDate ? fecha : '',
+            ticket: normalizeText(ticket),
+            detalle: normalizeText(detalle),
+            monto: Math.abs(toNumber(monto)),
+            createdBy: user.email,
+            createdAt: new Date().toISOString(),
+            medio: movementType === 'pago' ? paymentMethod : ''
+        };
+
+        const nextConfig = {
+            saldoMovimientos: [nextMovement, ...saldoMovimientos]
+        };
+
+        if (movementType === 'pago') {
+            nextConfig.bankPayments = [{
+                id: `saldo-${movementId}`,
+                fecha: useDate ? fecha : getTodayLocalDate(),
+                cliente: client.nombre,
+                metodo: paymentMethod,
+                monto: Math.abs(toNumber(monto)),
+                estado: paymentStatus,
+                createdBy: user.email,
+                source: 'saldo'
+            }, ...(state.config?.bankPayments || [])];
+        }
+
+        updateConfig(nextConfig);
 
         setTicket('');
         setDetalle('');
         setMonto('');
+        setPaymentMethod(PAYMENT_METHODS[0]);
+        setPaymentStatus('pagado');
     };
 
     const deleteMovement = (movementId) => {
@@ -483,9 +518,27 @@ export default function SaldoPage() {
                     </button>
                 </div>
 
-                {!canRegisterPayments && (
+                {movementType === 'pago' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 220px) minmax(180px, 220px)', gap: 12 }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">Medio</label>
+                            <select className="form-select" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
+                                {PAYMENT_METHODS.map((item) => <option key={item} value={item}>{item}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label">Estado</label>
+                            <select className="form-select" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)}>
+                                <option value="pagado">Pagado</option>
+                                <option value="pendiente">Pendiente</option>
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                {user.role === 'encargada' && (
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        Nadia solo puede cargar deuda/tickets y seguir el historial. Los pagos quedan reservados para administrador.
+                        Nadia puede seguir saldos y registrar deudas o pagos de clientes para despacho y seguimiento.
                     </div>
                 )}
 
@@ -637,7 +690,38 @@ export default function SaldoPage() {
                                             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.lastPurchaseAmount}</div>
                                             <strong>{salesSummary.lastSale ? formatMoney(salesSummary.lastSale.totalFinal || salesSummary.lastSale.total) : '-'}</strong>
                                         </div>
+                                        <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)' }}>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Pagos Banco/MP</div>
+                                            <strong>{selectedClientBankPayments.length}</strong>
+                                        </div>
                                     </div>
+                                </div>
+                            </div>
+
+                            <div className="glass-panel" style={{ padding: 'var(--sp-4)', background: 'rgba(255,255,255,0.02)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 'var(--fw-semibold)' }}>
+                                    <Landmark size={16} /> Banco y Mercado Pago del cliente
+                                </div>
+                                <div style={{ display: 'grid', gap: 8 }}>
+                                    {selectedClientBankPayments.length === 0 ? (
+                                        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                                            No hay pagos de Banco o MP vinculados a este cliente.
+                                        </div>
+                                    ) : selectedClientBankPayments.map((entry) => (
+                                        <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto auto', gap: 12, padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)', alignItems: 'center' }}>
+                                            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{getDateLabel(entry.fecha, pageText.noDate)}</div>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ fontWeight: 'var(--fw-semibold)' }}>{entry.metodo}</div>
+                                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                                    {(entry.estado || 'pagado') === 'pagado' ? 'Pagado' : 'Pendiente'}
+                                                </div>
+                                            </div>
+                                            <div style={{ fontWeight: 'var(--fw-bold)' }}>{formatMoney(entry.monto)}</div>
+                                            <div style={{ fontSize: 12, color: (entry.estado || 'pagado') === 'pagado' ? 'var(--success)' : 'var(--warning)', fontWeight: 'var(--fw-semibold)' }}>
+                                                {(entry.estado || 'pagado') === 'pagado' ? 'Pagado' : 'Pendiente'}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
 

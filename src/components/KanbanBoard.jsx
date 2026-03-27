@@ -24,6 +24,8 @@ export default function KanbanBoard({ tareas, onOpenTarea, onAddTarea }) {
     const { user } = useAuth();
     const { config } = state;
     const [activeTarea, setActiveTarea] = useState(null);
+    const [newReminderName, setNewReminderName] = useState('');
+    const [newReminderCategory, setNewReminderCategory] = useState('');
     const monthKey = getCurrentMonthKey();
     const reminders = config.monthlyPaymentReminders || [];
     const reminderStatus = config.monthlyReminderStatus || {};
@@ -128,6 +130,22 @@ export default function KanbanBoard({ tareas, onOpenTarea, onAddTarea }) {
         });
     };
 
+    const addReminder = () => {
+        const nombre = newReminderName.trim();
+        if (!nombre || user?.role !== 'admin') return;
+        const nextReminder = {
+            id: `${Date.now()}`,
+            nombre,
+            categoria: newReminderCategory.trim() || 'General',
+            soloAdmin: true
+        };
+        updateConfig({
+            monthlyPaymentReminders: [...reminders, nextReminder]
+        });
+        setNewReminderName('');
+        setNewReminderCategory('');
+    };
+
     return (
         <div style={{ display: 'grid', gap: 16 }}>
             {visibleReminders.length > 0 && (
@@ -142,6 +160,23 @@ export default function KanbanBoard({ tareas, onOpenTarea, onAddTarea }) {
                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                             {monthKey}
                         </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.4fr) minmax(160px,1fr) auto', gap: 10, marginBottom: 12 }}>
+                        <input
+                            className="form-input"
+                            value={newReminderName}
+                            onChange={(event) => setNewReminderName(event.target.value)}
+                            placeholder="Agregar recordatorio mensual"
+                        />
+                        <input
+                            className="form-input"
+                            value={newReminderCategory}
+                            onChange={(event) => setNewReminderCategory(event.target.value)}
+                            placeholder="Categoria"
+                        />
+                        <button className="btn btn-primary" onClick={addReminder}>
+                            Agregar
+                        </button>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
                         {visibleReminders.map((item) => {

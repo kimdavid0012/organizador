@@ -16,7 +16,7 @@ const KNOWN_USERS = {
 
 const KNOWN_USER_SECTIONS = {
     'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb'],
-    'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo'],
+    'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'banking'],
     'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia'],
     'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia'],
     'rocio@celavie.com': ['fotos']
@@ -28,7 +28,7 @@ const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clien
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
     admin: [...ALL_SECTIONS],
-    encargada: ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo'],
+    encargada: ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'banking'],
     deposito: ['kanban', 'talleres', 'conteomercaderia'],
     pedidos: ['kanban', 'pedidos', 'conteomercaderia'],
     marketing: ['pedidos', 'marketing', 'paginaweb'],
