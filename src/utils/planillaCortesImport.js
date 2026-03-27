@@ -5,6 +5,76 @@ const normalizeComparable = (value) => normalizeText(value)
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^A-Z0-9]/g, '');
 
+const TELA_ALIAS_GROUPS = [
+    ['LANILLAMELOW', 'MELLOW', 'MELOW', 'LANILLAMELLOW'],
+    ['LANILLASWETER', 'LANILLASWEATER', 'SWETER', 'SWEATER'],
+    ['FRIZADO', 'FRISADO'],
+    ['MODALGAMUSADO', 'MODALGAMUSA', 'GAMUSADO'],
+    ['MODALSOFT', 'MODALSOFT '],
+    ['SUPERSOFT', 'SUPERSOFT '],
+    ['KERRYBRUSH', 'KERYBRUSH'],
+];
+
+const COLOR_ALIAS_GROUPS = [
+    ['OFF', 'OFFWHITE', 'OFFWHITE ', 'OFFWHITEE'],
+    ['VISON', 'VISON'],
+    ['TOSTADO', 'TOASTADO'],
+    ['CHOCO', 'CHOCOLATE'],
+    ['BEIGE', 'BEISH'],
+    ['BORDO', 'BORDEAUX'],
+    ['BLANCO', 'WHITE'],
+    ['NEGRO', 'BLACK'],
+    ['GRIS', 'GRAY', 'GREY'],
+];
+
+const expandAliases = (comparableValue, groups) => {
+    const values = new Set([comparableValue]);
+    groups.forEach((group) => {
+        const normalizedGroup = group.map((item) => normalizeComparable(item));
+        if (normalizedGroup.includes(comparableValue)) {
+            normalizedGroup.forEach((item) => values.add(item));
+        }
+    });
+    return Array.from(values).filter(Boolean);
+};
+
+const getTelaComparableKeys = (tela = {}) => {
+    const candidates = [
+        tela.nombre,
+        tela.tipoTela,
+        tela.descripcion,
+        tela.detalle,
+        tela.alias,
+        tela.aliases
+    ].flatMap((value) => Array.isArray(value) ? value : [value]);
+
+    const keys = new Set();
+    candidates.forEach((value) => {
+        const comparable = normalizeComparable(value);
+        if (!comparable) return;
+        expandAliases(comparable, TELA_ALIAS_GROUPS).forEach((item) => keys.add(item));
+    });
+    return Array.from(keys);
+};
+
+const getColorComparableKeys = (color = {}) => {
+    const candidates = [
+        color.nombre,
+        color.color,
+        color.alias,
+        color.aliases,
+        color.hex
+    ].flatMap((value) => Array.isArray(value) ? value : [value]);
+
+    const keys = new Set();
+    candidates.forEach((value) => {
+        const comparable = normalizeComparable(value);
+        if (!comparable) return;
+        expandAliases(comparable, COLOR_ALIAS_GROUPS).forEach((item) => keys.add(item));
+    });
+    return Array.from(keys);
+};
+
 const parseNumber = (value) => {
     if (typeof value === 'number') return value;
     const normalized = normalizeText(value);
@@ -298,21 +368,26 @@ export const parsePlanillaCortesWorkbook = (workbook, xlsxUtils, fileName = 'PLA
 
 const matchTelaByName = (telas = [], comparableTela = '') => {
     if (!comparableTela) return null;
-    const exact = telas.find((tela) => normalizeComparable(tela.nombre) === comparableTela);
+    const requestedKeys = expandAliases(comparableTela, TELA_ALIAS_GROUPS);
+    const exact = telas.find((tela) => {
+        const telaKeys = getTelaComparableKeys(tela);
+        return requestedKeys.some((key) => telaKeys.includes(key));
+    });
     if (exact) return exact;
 
     return telas.find((tela) => {
-        const key = normalizeComparable(tela.nombre);
-        return key && (key.includes(comparableTela) || comparableTela.includes(key));
+        const telaKeys = getTelaComparableKeys(tela);
+        return telaKeys.some((key) => requestedKeys.some((requested) => key.includes(requested) || requested.includes(key)));
     }) || null;
 };
 
 const matchColor = (tela = {}, colorName = '') => {
     const comparableColor = normalizeComparable(colorName);
     if (!comparableColor) return null;
+    const requestedKeys = expandAliases(comparableColor, COLOR_ALIAS_GROUPS);
     return (tela.coloresStock || []).find((item) => {
-        const key = normalizeComparable(item.nombre);
-        return key && (key === comparableColor || key.includes(comparableColor) || comparableColor.includes(key));
+        const itemKeys = getColorComparableKeys(item);
+        return itemKeys.some((key) => requestedKeys.some((requested) => key === requested || key.includes(requested) || requested.includes(key)));
     }) || null;
 };
 

@@ -83,6 +83,12 @@ export default function CortesPage() {
             });
         });
 
+        (corte?.consumos || []).forEach((consumo) => {
+            const tela = telas.find((item) => item.id === consumo.telaId);
+            if (tela?.nombre) telaNames.add(tela.nombre);
+            if (consumo?.telaNombreImportado) telaNames.add(consumo.telaNombreImportado);
+        });
+
         const names = Array.from(telaNames).filter(Boolean);
         if (names.length === 0) return 'Sin tela';
         if (names.length <= 2) return names.join(' · ');
@@ -248,6 +254,17 @@ export default function CortesPage() {
         });
         return Array.from(tIds).map(id => telas.find(t => t.id === id)).filter(Boolean);
     }, [corteMoldes, telas]);
+
+    const consumoTelaOptions = useMemo(() => {
+        const ordered = [];
+        const seen = new Set();
+        [...telasInCorte, ...telas].forEach((tela) => {
+            if (!tela?.id || seen.has(tela.id)) return;
+            seen.add(tela.id);
+            ordered.push(tela);
+        });
+        return ordered;
+    }, [telasInCorte, telas]);
 
     // Consumos management
     const addConsumo = () => {
@@ -535,15 +552,20 @@ export default function CortesPage() {
                                         {(selectedCorte.consumos || []).map(cons => {
                                             const telaSelected = telas.find(t => t.id === cons.telaId);
                                             const colores = telaSelected?.coloresStock || [];
+                                            const importedTelaLabel = cons.telaNombreImportado || '';
+                                            const importedColorLabel = cons.colorNombre || '';
+                                            const colorMatched = colores.find((c) => c.hex === cons.colorHex);
+                                            const showImportedTelaFallback = !telaSelected && importedTelaLabel;
+                                            const showImportedColorFallback = !colorMatched && importedColorLabel;
                                             return (
                                                 <div key={cons.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 100px 70px 70px 32px', gap: 10, alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255,255,255,0.05)' }}>
                                                     <select className="form-select" value={cons.telaId || ''} onChange={(e) => updateConsumo(cons.id, 'telaId', e.target.value)} style={{ fontSize: '11px', padding: '6px' }}>
-                                                        <option value="">Seleccionar Tela...</option>
-                                                        {telasInCorte.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                                                        <option value="">{showImportedTelaFallback ? `Importado: ${importedTelaLabel}` : 'Seleccionar Tela...'}</option>
+                                                        {consumoTelaOptions.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                                                     </select>
 
                                                     <select className="form-select" value={cons.colorHex || ''} onChange={(e) => updateConsumo(cons.id, 'colorHex', e.target.value)} style={{ fontSize: '11px', padding: '6px' }}>
-                                                        <option value="">Color...</option>
+                                                        <option value="">{showImportedColorFallback ? `Importado: ${importedColorLabel}` : 'Color...'}</option>
                                                         {colores.map((c, i) => <option key={i} value={c.hex}>{c.nombre || c.hex}</option>)}
                                                     </select>
 
