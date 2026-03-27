@@ -60,15 +60,19 @@ const getCriticalCounts = (data) => ({
     cortes: countEntries(data?.config?.cortes),
     talleres: countEntries(data?.config?.talleres),
     cortadores: countEntries(data?.config?.cortadores),
+    empleados: countEntries(data?.config?.empleados),
+    asistencia: countEntries(data?.config?.asistencia),
     pedidosOnline: countEntries(data?.config?.pedidosOnline),
     mercaderiaConteos: countEntries(data?.config?.mercaderiaConteos),
+    fotoTasks: countEntries(data?.config?.fotoTasks),
     posProductos: countEntries(data?.config?.posProductos),
     posVentas: countEntries(data?.config?.posVentas),
     posHistorialTickets: countEntries(data?.config?.posHistorialTickets),
     bankPayments: countEntries(data?.config?.bankPayments),
     fabricPayments: countEntries(data?.config?.fabricPayments),
     clientes: countEntries(data?.config?.clientes),
-    planillasCortes: countEntries(data?.config?.planillasCortes)
+    planillasCortes: countEntries(data?.config?.planillasCortes),
+    saldoMovimientos: countEntries(data?.config?.saldoMovimientos)
 });
 
 const hasRicherLocalData = (localData, remoteData) => {

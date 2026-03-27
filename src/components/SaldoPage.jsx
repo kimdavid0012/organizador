@@ -165,6 +165,10 @@ export default function SaldoPage() {
     const [detalle, setDetalle] = useState('');
     const [monto, setMonto] = useState('');
     const pageText = PAGE_TEXT[lang] || PAGE_TEXT.es;
+    const canRegisterPayments = user.role === 'admin';
+    const movementTypes = canRegisterPayments
+        ? MOVEMENT_TYPES
+        : MOVEMENT_TYPES.filter((item) => item.value !== 'pago');
 
     if (!['admin', 'encargada'].includes(user.role)) {
         return <div style={{ padding: 'var(--sp-4)' }}>{pageText.adminOnly}</div>;
@@ -341,6 +345,7 @@ export default function SaldoPage() {
     const addMovement = () => {
         const client = clientes.find((item) => String(item.id) === String(selectedClientId));
         if (!client || !monto) return;
+        if (!canRegisterPayments && movementType === 'pago') return;
 
         updateConfig({
             saldoMovimientos: [
@@ -453,8 +458,12 @@ export default function SaldoPage() {
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">{pageText.type}</label>
-                        <select className="form-select" value={movementType} onChange={(event) => setMovementType(event.target.value)}>
-                            {MOVEMENT_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                        <select
+                            className="form-select"
+                            value={movementType}
+                            onChange={(event) => setMovementType(event.target.value)}
+                        >
+                            {movementTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                         </select>
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
@@ -473,6 +482,12 @@ export default function SaldoPage() {
                         <PlusCircle size={16} /> {pageText.add}
                     </button>
                 </div>
+
+                {!canRegisterPayments && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        Nadia solo puede cargar deuda/tickets y seguir el historial. Los pagos quedan reservados para administrador.
+                    </div>
+                )}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13 }}>

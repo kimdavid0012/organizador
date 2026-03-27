@@ -126,18 +126,61 @@ const extractTelaNombre = (row = []) => {
     return candidates[0];
 };
 
-const detectColumnIndexes = (row = []) => {
+const detectColumnIndexes = (row = [], sampleRows = []) => {
     const headers = row.map((cell) => normalizeComparable(cell));
-    const colorIndex = headers.findIndex((value) => value === 'COLORES' || value.startsWith('COLUMN1'));
-    const kiloIndex = headers.findIndex((value) => value.includes('KILO') || value === 'KG');
-    const cantidadIndex = headers.findIndex((value) => value.includes('CANTIDAD'));
-    const rolloIndex = headers.findIndex((value) => value.includes('ROLLO'));
+    const colorIndex = headers.findIndex((value) => value === 'COLORES' || value.startsWith('COLUMN1') || value === 'COLOR' || value === 'COLORES');
+    const kiloIndex = headers.findIndex((value) => value.includes('KILO') || value === 'KG' || value === 'KILOS');
+    const capaIndex = headers.findIndex((value) => value === 'CAPA' || value === 'CAPAS' || value === 'CARA' || value === 'CARA1');
+    const activeIndexes = row
+        .map((_, index) => index)
+        .filter((index) => sampleRows.some((sampleRow) => normalizeText(sampleRow[index]) !== ''));
+    const explicitCantidadIndexes = headers
+        .map((value, index) => ({ value, index }))
+        .filter(({ value }) => value.includes('CANTIDAD'))
+        .map(({ index }) => index);
+    const articleCantidadIndexes = headers
+        .map((value, index) => ({ value, index }))
+        .filter(({ value, index }) => /^\d{3,5}$/.test(value) && index !== colorIndex && index !== kiloIndex)
+        .map(({ index }) => index);
+    let rolloIndex = headers.findIndex((value) => value.includes('ROLLO'));
+    const numericIndexes = activeIndexes.filter((index) => index !== colorIndex && index !== kiloIndex);
+
+    let cantidadIndexes = (explicitCantidadIndexes.length > 0 ? explicitCantidadIndexes : articleCantidadIndexes)
+        .filter((index) => activeIndexes.includes(index));
+
+    if (rolloIndex >= 0 && !activeIndexes.includes(rolloIndex)) {
+        rolloIndex = -1;
+    }
+
+    if (cantidadIndexes.length > 0 && rolloIndex < 0) {
+        const trailingIndexes = numericIndexes.filter((index) => index > Math.max(...cantidadIndexes) && index !== capaIndex);
+        if (trailingIndexes.length === 1) {
+            rolloIndex = trailingIndexes[0];
+        }
+    }
+
+    if (cantidadIndexes.length === 0) {
+        if (rolloIndex >= 0) {
+            cantidadIndexes = numericIndexes.filter((index) => index !== rolloIndex && index !== capaIndex);
+            if (cantidadIndexes.length > 1) cantidadIndexes = [cantidadIndexes[cantidadIndexes.length - 1]];
+        } else {
+            const fallbackIndexes = numericIndexes.filter((index) => index !== capaIndex);
+            if (fallbackIndexes.length >= 2) {
+                rolloIndex = fallbackIndexes[fallbackIndexes.length - 1];
+                cantidadIndexes = [fallbackIndexes[fallbackIndexes.length - 2]];
+            } else if (fallbackIndexes.length === 1) {
+                cantidadIndexes = [fallbackIndexes[0]];
+                rolloIndex = -1;
+            }
+        }
+    }
 
     return {
         colorIndex: colorIndex >= 0 ? colorIndex : 0,
         kiloIndex: kiloIndex >= 0 ? kiloIndex : 1,
-        cantidadIndex: cantidadIndex >= 0 ? cantidadIndex : 2,
-        rolloIndex: rolloIndex >= 0 ? rolloIndex : Math.max(cantidadIndex >= 0 ? cantidadIndex + 1 : 3, 3)
+        capaIndex,
+        cantidadIndexes,
+        rolloIndex
     };
 };
 
@@ -168,7 +211,18 @@ export const parsePlanillaCortesWorkbook = (workbook, xlsxUtils, fileName = 'PLA
             const telaNombre = extractTelaNombre(row) || 'Sin tela';
             const corteNumero = extractCorteNumber(row);
             const fecha = row.map((cell) => parseDate(cell, { preferMonthFirst: true })).find(Boolean) || '';
-            const { colorIndex, kiloIndex, cantidadIndex, rolloIndex } = detectColumnIndexes(nextRow);
+            const sampleRows = [];
+            let previewCursor = rowIndex + 2;
+            while (previewCursor < rows.length && sampleRows.length < 4) {
+                const sampleRow = rows[previewCursor] || [];
+                if (!sampleRow.some((cell) => normalizeText(cell))) break;
+                if (normalizeComparable(sampleRow[0]) === 'TOTAL') break;
+                if (isHeaderRow(sampleRow, rows[previewCursor + 1] || [])) break;
+                sampleRows.push(sampleRow);
+                previewCursor += 1;
+            }
+
+            const { colorIndex, kiloIndex, cantidadIndexes, rolloIndex } = detectColumnIndexes(nextRow, sampleRows);
 
             const detalles = [];
             let cursor = rowIndex + 2;
@@ -190,8 +244,12 @@ export const parsePlanillaCortesWorkbook = (workbook, xlsxUtils, fileName = 'PLA
 
                 const color = normalizeText(detailRow[colorIndex] ?? detailRow[0]);
                 const kilos = parseNumber(detailRow[kiloIndex] ?? detailRow[1]);
-                const cantidadPrendas = parseNumber(detailRow[cantidadIndex] ?? detailRow[2]);
-                const rollos = Math.max(1, parseNumber(detailRow[rolloIndex] ?? detailRow[3]) || 1);
+                const cantidadPrendas = (cantidadIndexes || [])
+                    .reduce((acc, index) => acc + parseNumber(detailRow[index]), 0);
+                const rawRollo = rolloIndex >= 0 ? parseNumber(detailRow[rolloIndex]) : 0;
+                const rollos = rolloIndex >= 0
+                    ? Math.max(0, rawRollo)
+                    : (color && (kilos || cantidadPrendas) ? 1 : 0);
 
                 if (color && (kilos || cantidadPrendas || rollos)) {
                     detalles.push({
