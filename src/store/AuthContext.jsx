@@ -19,11 +19,11 @@ const KNOWN_USER_SECTIONS = {
     'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'banking'],
     'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia'],
     'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia'],
-    'rocio@celavie.com': ['fotos']
+    'rocio@celavie.com': ['fotos', 'instagramplanner']
 };
 
 // All available sections in the app
-const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'paginaweb', 'conteomercaderia', 'fotos', 'mesan', 'banking', 'settings', 'informes', 'saldo'];
+const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'paginaweb', 'conteomercaderia', 'fotos', 'instagramplanner', 'mesan', 'banking', 'settings', 'informes', 'saldo'];
 
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
@@ -32,7 +32,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
     deposito: ['kanban', 'talleres', 'conteomercaderia'],
     pedidos: ['kanban', 'pedidos', 'conteomercaderia'],
     marketing: ['pedidos', 'marketing', 'paginaweb'],
-    fotos: ['fotos'],
+    fotos: ['fotos', 'instagramplanner'],
     pendiente: [] // New users get no access until admin assigns a role
 };
 
@@ -53,6 +53,7 @@ const SECTION_LABELS = {
     paginaweb: 'Pagina Web',
     conteomercaderia: 'Conteo Mercaderia',
     fotos: 'Fotos',
+    instagramplanner: 'Instagram Post',
     mesan: 'Mesan',
     banking: 'Banco y MP',
     settings: 'Configuración',

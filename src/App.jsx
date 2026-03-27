@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet
+    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet, Instagram
 } from 'lucide-react';
 import { DataProvider, useData } from './store/DataContext';
 import { I18nProvider, useI18n } from './store/I18nContext';
@@ -21,6 +21,7 @@ import MarketingSection from './components/MarketingSection.jsx';
 import PaginaWebSection from './components/PaginaWebSection.jsx';
 import ConteoMercaderiaPage from './components/ConteoMercaderiaPage.jsx';
 import FotosPage from './components/FotosPage.jsx';
+import InstagramPlannerPage from './components/InstagramPlannerPage.jsx';
 import MesanPage from './components/MesanPage.jsx';
 import BankPaymentsPage from './components/BankPaymentsPage.jsx';
 import InformesPage from './components/InformesPage.jsx';
@@ -401,6 +402,7 @@ function AppContent() {
         { id: 'paginaweb', icon: Globe, label: 'Página Web' },
         { id: 'conteomercaderia', icon: Boxes, label: 'Conteo Mercadería' },
         { id: 'fotos', icon: Camera, label: 'Fotos' },
+        { id: 'instagramplanner', icon: Instagram, label: t('navInstagramPlanner') },
         { id: 'mesan', icon: BarChart3, label: 'Mesan' },
         { id: 'banking', icon: Landmark, label: 'Banco y MP' },
         { id: 'settings', icon: SettingsIcon, label: t('navConfiguracion') },
@@ -591,6 +593,7 @@ function AppContent() {
                     {view === 'paginaweb' && <PaginaWebSection />}
                     {view === 'conteomercaderia' && <ConteoMercaderiaPage />}
                     {view === 'fotos' && <FotosPage />}
+                    {view === 'instagramplanner' && <InstagramPlannerPage />}
                     {view === 'mesan' && <MesanPage />}
                     {view === 'banking' && <BankPaymentsPage />}
                     {view === 'articulos' && <PosProductos />}

@@ -13,6 +13,7 @@ const translations = {
         navConfiguracion: 'Configuración',
         navInformes: 'Informes',
         navSaldo: 'Saldo',
+        navInstagramPlanner: 'Instagram Post',
 
         // Header
         searchPlaceholder: 'Buscar molde por nombre, código, categoría...',
@@ -224,6 +225,7 @@ const translations = {
         navConfiguracion: 'Настройки',
         navInformes: 'Отчеты',
         navSaldo: 'Баланс',
+        navInstagramPlanner: 'Instagram посты',
         searchPlaceholder: 'Поиск лекала по названию, коду, категории...',
         filterPrioridad: 'Приоритет',
         filterEstado: 'Статус',
@@ -409,6 +411,7 @@ const translations = {
         navConfiguracion: '설정',
         navInformes: '보고서',
         navSaldo: '잔액',
+        navInstagramPlanner: '인스타그램 포스트',
         searchPlaceholder: '이름, 코드, 카테고리로 패턴 검색...',
         filterPrioridad: '우선순위',
         filterEstado: '상태',
