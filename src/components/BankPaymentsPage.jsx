@@ -22,6 +22,8 @@ const normalizeComparable = (value) => normalizeText(value)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^A-Z0-9]/g, '');
+const looksLikeHeader = (value, expected) => normalizeComparable(value) === normalizeComparable(expected);
+const cleanClientName = (value) => normalizeText((value || '').toString().replace(/\u00a0/g, ' '));
 
 const getMonthKey = (value) => (value || '').slice(0, 7);
 const getMonthLabel = (monthKey) => {
@@ -53,6 +55,12 @@ const excelDateToISO = (value) => {
     return null;
 };
 
+const inferMethodFromWorkbook = (fileName = '', sheetName = '', headerValues = []) => {
+    const haystack = normalizeComparable([fileName, sheetName, ...headerValues].join(' '));
+    if (haystack.includes('MERCADOPAGO') || haystack.includes('MP')) return 'Mercado Pago';
+    return 'Banco';
+};
+
 const parseExcelFile = (file) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -65,6 +73,23 @@ const parseExcelFile = (file) => {
 
                 const entries = [];
                 let currentSection = null;
+                let detectedHeader = null;
+                let inferredMethod = inferMethodFromWorkbook(file.name, workbook.SheetNames[0], rows[0] || []);
+
+                rows.forEach((row) => {
+                    const normalizedRow = row.map((cell) => normalizeComparable(cell));
+                    const fechaIndex = normalizedRow.findIndex((cell) => cell === 'FECHA');
+                    const totalIndex = normalizedRow.findIndex((cell) => cell === 'TOTAL');
+                    const clienteIndex = normalizedRow.findIndex((cell) => cell === 'CLIENTE');
+
+                    if (fechaIndex >= 0 && totalIndex >= 0) {
+                        detectedHeader = {
+                            fechaIndex,
+                            totalIndex,
+                            clienteIndex
+                        };
+                    }
+                });
 
                 rows.forEach((row) => {
                     const cell0 = row[0];
@@ -72,8 +97,21 @@ const parseExcelFile = (file) => {
 
                     if (cell0str === 'BANCO') { currentSection = 'banco'; return; }
                     if (cell0str === 'MERCADO PAGO') { currentSection = 'mp'; return; }
-                    if (cell0str === 'FECHA') return;
+                    if (looksLikeHeader(cell0, 'FECHA')) return;
                     if (cell0str === 'TOTAL' || (typeof cell0 === 'string' && cell0.startsWith('Total'))) return;
+                    if (detectedHeader) {
+                        const fecha = excelDateToISO(row[detectedHeader.fechaIndex]);
+                        if (!fecha) return;
+
+                        const montoRaw = row[detectedHeader.totalIndex];
+                        const monto = Number(montoRaw || 0);
+                        if (!monto || typeof montoRaw === 'string') return;
+
+                        const cliente = cleanClientName(detectedHeader.clienteIndex >= 0 ? row[detectedHeader.clienteIndex] : '');
+                        entries.push({ fecha, monto, cliente, metodo: inferredMethod, estado: 'pagado' });
+                        return;
+                    }
+
                     if (!currentSection || !cell0) return;
 
                     const fecha = excelDateToISO(cell0);
@@ -83,10 +121,10 @@ const parseExcelFile = (file) => {
                     if (!monto || typeof row[1] === 'string') return;
 
                     if (currentSection === 'banco') {
-                        const cliente = normalizeText(row[2]);
+                        const cliente = cleanClientName(row[2]);
                         entries.push({ fecha, monto, cliente, metodo: 'Banco', estado: 'pagado' });
                     } else if (currentSection === 'mp') {
-                        entries.push({ fecha, monto, cliente: '', metodo: 'Mercado Pago', estado: 'pagado' });
+                        entries.push({ fecha, monto, cliente: cleanClientName(row[2]), metodo: 'Mercado Pago', estado: 'pagado' });
                     }
                 });
 
@@ -137,6 +175,8 @@ export default function BankPaymentsPage() {
     const fileInputRef = useRef(null);
 
     const entries = state.config.bankPayments || [];
+    const saldoMovimientos = state.config.saldoMovimientos || [];
+    const clientes = state.config.clientes || [];
     const canSeeTotals = user.role === 'admin';
     const cashToday = (state.config.posVentas || [])
         .filter((sale) => sale.fecha?.slice(0, 10) === fecha)
@@ -234,19 +274,72 @@ export default function BankPaymentsPage() {
             });
     }, [filteredEntries]);
 
+    const findLinkedClient = (rawName) => {
+        const normalizedName = normalizeComparable(rawName);
+        if (!normalizedName) return null;
+
+        return clientes.find((client) => {
+            const clientName = normalizeComparable(client.nombre);
+            if (!clientName) return false;
+            return (
+                clientName === normalizedName ||
+                clientName.includes(normalizedName) ||
+                normalizedName.includes(clientName)
+            );
+        }) || null;
+    };
+
+    const buildSaldoMovementsFromBankEntries = (bankEntries, currentSaldoMovimientos) => {
+        const existingKeys = new Set(
+            (currentSaldoMovimientos || []).map((movement) => movement.sourceBankPaymentId || `${movement.fecha}|${normalizeComparable(movement.clienteNombre)}|${Number(movement.monto || 0)}|${movement.tipo}`)
+        );
+
+        return (bankEntries || []).flatMap((entry) => {
+            const linkedClient = findLinkedClient(entry.cliente);
+            const key = entry.id || `${entry.fecha}|${normalizeComparable(entry.cliente)}|${Number(entry.monto || 0)}|pago`;
+            if (!entry.cliente || existingKeys.has(key)) return [];
+            existingKeys.add(key);
+
+            return [{
+                id: `saldo-bank-${entry.id || Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                clienteId: linkedClient?.id || '',
+                clienteNombre: linkedClient?.nombre || entry.cliente,
+                cuit: linkedClient?.cuit || '',
+                telefono: linkedClient?.telefono || entry.telefono || '',
+                email: linkedClient?.email || '',
+                tipo: 'pago',
+                fecha: entry.fecha,
+                ticket: '',
+                detalle: `${entry.metodo} importado desde banco`,
+                monto: Math.abs(Number(entry.monto || 0)),
+                medio: entry.metodo,
+                createdBy: entry.createdBy || user?.email || '',
+                createdAt: entry.importedAt || entry.createdAt || new Date().toISOString(),
+                source: 'bankPayments',
+                sourceBankPaymentId: entry.id || ''
+            }];
+        });
+    };
+
+    const syncBankEntries = (incomingEntries) => {
+        const saldoFromBank = buildSaldoMovementsFromBankEntries(incomingEntries, saldoMovimientos);
+        updateConfig({
+            bankPayments: incomingEntries,
+            ...(saldoFromBank.length ? { saldoMovimientos: [...saldoFromBank, ...saldoMovimientos] } : {})
+        });
+    };
+
     const addEntry = () => {
         if (!monto || !normalizeText(cliente)) return;
-        updateConfig({
-            bankPayments: [{
-                id: `${Date.now()}`,
-                fecha,
-                cliente: normalizeText(cliente),
-                metodo,
-                monto: Number(monto),
-                estado,
-                createdBy: user.email
-            }, ...entries]
-        });
+        syncBankEntries([{
+            id: `${Date.now()}`,
+            fecha,
+            cliente: cleanClientName(cliente),
+            metodo,
+            monto: Number(monto),
+            estado,
+            createdBy: user.email
+        }, ...entries]);
         setCliente('');
         setMonto('');
         setEstado('pagado');
@@ -265,7 +358,7 @@ export default function BankPaymentsPage() {
         const existingKeys = new Set(entries.map((entry) => `${entry.fecha}|${entry.metodo}|${entry.cliente || ''}|${Number(entry.monto || 0)}`));
         const fresh = batch.entries.filter((entry) => !existingKeys.has(`${entry.fecha}|${entry.metodo}|${entry.cliente || ''}|${Number(entry.monto || 0)}`));
         if (!fresh.length) return;
-        updateConfig({ bankPayments: [...fresh, ...entries] });
+        syncBankEntries([...fresh, ...entries]);
     };
 
     const handleXlsxUpload = async (e) => {
@@ -280,7 +373,7 @@ export default function BankPaymentsPage() {
                 setXlsxStatus({ error: true, message: 'Todos los movimientos ya estaban cargados.' });
                 return;
             }
-            updateConfig({ bankPayments: [...fresh, ...entries] });
+            syncBankEntries([...fresh, ...entries]);
             setXlsxStatus({
                 success: true,
                 message: `✅ ${fresh.length} movimientos importados de ${batch.monthLabel} (Banco $${batch.totals.banco.toLocaleString('es-AR')} + MP $${batch.totals.mercadoPago.toLocaleString('es-AR')})`
