@@ -12,6 +12,33 @@ const APP_STORAGE_DB_VERSION = 1;
 const APP_STORAGE_STORE = 'snapshots';
 const APP_MAIN_SNAPSHOT_KEY = 'main';
 const APP_RECOVERY_SNAPSHOT_KEY = 'recovery';
+const RICH_TOP_LEVEL_KEYS = ['moldes', 'telas', 'tareas'];
+const RICH_CONFIG_ARRAY_KEYS = [
+    'cortes',
+    'talleres',
+    'cortadores',
+    'empleados',
+    'asistencia',
+    'clientes',
+    'pedidosOnline',
+    'mercaderiaConteos',
+    'fotoTasks',
+    'instagramPlanner',
+    'imageLibrary',
+    'planillasCortes',
+    'mesanMovimientos',
+    'mesanVentasDiarias',
+    'mesanEmbeddedImports',
+    'saldoMovimientos',
+    'bankPayments',
+    'fabricPayments',
+    'posCerradoZ',
+    'posGastos',
+    'posHistorialTickets',
+    'posProductos',
+    'posVentas'
+];
+const RICH_CONFIG_OBJECT_KEYS = ['saldoClienteFotos'];
 
 const DEFAULT_COLUMNAS = [
     { id: 'por-hacer', nombre: 'Por hacer', orden: 0, color: '#6366f1' },
@@ -218,6 +245,59 @@ export function normalizeData(parsed) {
         }
     };
 }
+
+const getCollectionSize = (value) => {
+    if (Array.isArray(value)) return value.length;
+    if (value && typeof value === 'object') return Object.keys(value).length;
+    return 0;
+};
+
+const pickRicherCollection = (preferredValue, candidateValue) => (
+    getCollectionSize(candidateValue) > getCollectionSize(preferredValue)
+        ? candidateValue
+        : preferredValue
+);
+
+export const mergeDataPreservingRicherSections = (...sources) => {
+    const normalizedSources = sources
+        .filter(Boolean)
+        .map((source) => normalizeData(source));
+
+    if (!normalizedSources.length) return null;
+
+    return normalizedSources.reduce((merged, candidate) => {
+        const nextConfig = {
+            ...(candidate.config || {}),
+            ...(merged.config || {})
+        };
+
+        RICH_CONFIG_ARRAY_KEYS.forEach((key) => {
+            nextConfig[key] = pickRicherCollection(merged.config?.[key], candidate.config?.[key]) || [];
+        });
+
+        RICH_CONFIG_OBJECT_KEYS.forEach((key) => {
+            nextConfig[key] = pickRicherCollection(merged.config?.[key], candidate.config?.[key]) || {};
+        });
+
+        const mergedSyncRevision = Number(merged.config?.syncMeta?.revision || 0);
+        const candidateSyncRevision = Number(candidate.config?.syncMeta?.revision || 0);
+        nextConfig.syncMeta = candidateSyncRevision > mergedSyncRevision
+            ? candidate.config?.syncMeta || merged.config?.syncMeta || DEFAULT_DATA.config.syncMeta
+            : merged.config?.syncMeta || candidate.config?.syncMeta || DEFAULT_DATA.config.syncMeta;
+
+        const nextData = {
+            ...candidate,
+            ...merged,
+            config: nextConfig
+        };
+
+        RICH_TOP_LEVEL_KEYS.forEach((key) => {
+            nextData[key] = pickRicherCollection(merged[key], candidate[key]) || [];
+        });
+
+        return normalizeData(nextData);
+    });
+};
 
 const stripInlineImagePayload = (items = []) => (
     (Array.isArray(items) ? items : []).map((item) => {

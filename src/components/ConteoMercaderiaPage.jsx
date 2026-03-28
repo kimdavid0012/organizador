@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Boxes, Plus, Trash2, Download, Upload, CheckCircle2, CircleAlert, Factory, ShoppingBag } from 'lucide-react';
+import { Boxes, Plus, Trash2, Download, Upload, CheckCircle2, CircleAlert, Factory, ShoppingBag, Search, X } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
 import { generateId, getProductThumb } from '../utils/helpers';
@@ -479,8 +479,8 @@ export default function ConteoMercaderiaPage() {
     };
 
     return (
-        <div className="view-container" style={{ maxWidth: 1380, margin: '0 auto', padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 20 }}>
+        <div className="view-container conteo-page" style={{ maxWidth: 1380, margin: '0 auto', padding: 20 }}>
+            <div className="conteo-toolbar" style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 20 }}>
                 <div>
                     <h2 style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                         <Boxes /> Conteo de Mercaderia
@@ -489,7 +489,27 @@ export default function ConteoMercaderiaPage() {
                         Ahora separamos articulo de fabrica y articulo de venta. Tambien guardamos numero de corte, taller y fecha de ingreso para que el dashboard pueda seguir la trazabilidad productiva.
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <div className="conteo-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div className="conteo-top-search" style={{ position: 'relative', flex: '1 1 320px', minWidth: 260 }}>
+                        <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                        <input
+                            className="form-input"
+                            style={{ paddingLeft: 38, paddingRight: search ? 42 : 12 }}
+                            placeholder="Buscar rapido por articulo, descripcion, tela, color, taller o corte..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                onClick={() => setSearch('')}
+                                aria-label="Limpiar busqueda"
+                                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 0, background: 'transparent', color: 'var(--text-muted)', display: 'grid', placeItems: 'center', padding: 0, cursor: 'pointer' }}
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
+                    </div>
                     <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
                     <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={!canEditInventoryRows}>
                         <Upload size={16} /> Importar Excel
@@ -501,7 +521,7 @@ export default function ConteoMercaderiaPage() {
             </div>
 
             <div className="glass-panel" style={{ padding: 20, marginBottom: 20 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+                <div className="conteo-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo fabrica</span><input className="form-input" list="conteo-articulos-fabrica" placeholder="Codigo de fabrica" value={formData.articuloFabrica} onChange={(e) => setFormData((prev) => syncArticleFields('articuloFabrica', e.target.value, prev))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo venta</span><input className="form-input" list="conteo-articulos-venta" placeholder="Codigo de venta" value={formData.articuloVenta} onChange={(e) => setFormData((prev) => syncArticleFields('articuloVenta', e.target.value, prev))} disabled={!canEditInventoryRows} /></label>
                     <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Descripcion</span><input className="form-input" value={formData.descripcion} onChange={(e) => setFormData((prev) => ({ ...prev, descripcion: e.target.value }))} disabled={!canEditInventoryRows} /></label>
@@ -525,7 +545,9 @@ export default function ConteoMercaderiaPage() {
                 <datalist id="conteo-talleres">{talleres.map((taller) => <option key={taller} value={taller} />)}</datalist>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
-                    <input className="form-input" style={{ maxWidth: 420 }} placeholder="Buscar por articulo, tela, descripcion, color, taller o corte..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                        {search ? `${filteredConteos.length} resultados para "${search}"` : `${conteos.length} conteos cargados`}
+                    </div>
                     <button className="btn btn-primary" onClick={handleAdd} disabled={!canEditInventoryRows}><Plus size={16} /> Agregar conteo</button>
                 </div>
                 {!canEditInventoryRows && <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)' }}>Nadia solo controla: puede marcar chequeado y comentar, sin editar cantidades ni articulos.</div>}
@@ -538,7 +560,7 @@ export default function ConteoMercaderiaPage() {
                     return (
                         <section key={item.id} style={getFormCardStyle(checked)}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-                                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div className="conteo-chip-row" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                                     {(() => {
                                         const thumb = getProductThumb(item.articuloVenta || item.articuloFabrica, productos);
                                         return thumb
@@ -552,7 +574,7 @@ export default function ConteoMercaderiaPage() {
                                 <button className="btn btn-ghost btn-danger" onClick={() => handleDelete(item.id)} disabled={!canEditInventoryRows}><Trash2 size={14} /></button>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                            <div className="conteo-item-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo fabrica</span><input className="form-input" list="conteo-articulos-fabrica" value={item.articuloFabrica || ''} onChange={(e) => handleCellChange(item.id, 'articuloFabrica', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Articulo venta</span><input className="form-input" list="conteo-articulos-venta" value={item.articuloVenta || ''} onChange={(e) => handleCellChange(item.id, 'articuloVenta', e.target.value)} disabled={!canEditInventoryRows} /></label>
                                 <label style={{ display: 'grid', gap: 6, gridColumn: 'span 2' }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Descripcion</span><input className="form-input" value={item.descripcion || ''} onChange={(e) => handleCellChange(item.id, 'descripcion', e.target.value)} disabled={!canEditInventoryRows} /></label>
@@ -570,7 +592,7 @@ export default function ConteoMercaderiaPage() {
                                 <div style={{ display: 'grid', gap: 6 }}><span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Diferencia</span><div className="form-input" style={{ display: 'flex', alignItems: 'center', fontWeight: 700, color: diferencia < 0 ? '#ff7a7a' : 'var(--success)' }}>{diferencia}</div></div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr', gap: 12, marginTop: 14 }}>
+                            <div className="conteo-control-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr', gap: 12, marginTop: 14 }}>
                                 <div style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.05)' }}>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: checked ? 'var(--success)' : '#ff7a7a' }}>
                                         <input type="checkbox" checked={checked} onChange={(e) => handleControlChange(item.id, 'chequeado', e.target.checked)} disabled={!canMarkConteoChecked} />

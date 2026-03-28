@@ -13,7 +13,8 @@ import {
     saveProtectedSessionSnapshot,
     setPendingLocalChangesFlag,
     normalizeData,
-    downloadBackupJSON
+    downloadBackupJSON,
+    mergeDataPreservingRicherSections
 } from './storage';
 import { generateId } from '../utils/helpers';
 import { wooService } from '../utils/wooService';
@@ -1316,7 +1317,11 @@ export function DataProvider({ children }) {
     const [state, dispatch] = useReducer(
         dataReducer,
         null,
-        () => loadProtectedSessionSnapshot() || loadDataFromLocal() || loadLatestBackupFromLocal() || DEFAULT_DATA
+        () => mergeDataPreservingRicherSections(
+            loadProtectedSessionSnapshot(),
+            loadDataFromLocal(),
+            loadLatestBackupFromLocal()
+        ) || DEFAULT_DATA
     );
     const [syncStatus, setSyncStatus] = useState({
         online: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -1336,6 +1341,7 @@ export function DataProvider({ children }) {
     const stateRef = useRef(state);
     const currentRevisionRef = useRef(getSyncRevision(state));
     const justSaved = useRef(false);
+    const lastKnownCloudState = useRef(null);
     const localChangeTimestamp = useRef(0); // timestamp of last local change
     const pendingCloudSave = useRef(loadPendingLocalChangesFlag());
     const pendingChangesCount = useRef(loadPendingLocalChangesFlag() ? 1 : 0);
@@ -1363,11 +1369,28 @@ export function DataProvider({ children }) {
         });
     }, []);
 
+    const mergeBestLocalState = useCallback((...extraSources) => (
+        mergeDataPreservingRicherSections(
+            ...extraSources,
+            loadProtectedSessionSnapshot(),
+            loadDataFromLocal(),
+            loadLatestBackupFromLocal()
+        )
+    ), []);
+
+    const mergeProtectedState = useCallback((...sources) => (
+        mergeDataPreservingRicherSections(...sources.filter(Boolean)) || DEFAULT_DATA
+    ), []);
+
     useEffect(() => {
         let cancelled = false;
 
         const hydrateFromIndexedDb = async () => {
-            const indexedState = await loadProtectedSessionSnapshotFromIndexedDb() || await loadDataFromIndexedDb();
+            const indexedState = mergeProtectedState(
+                await loadProtectedSessionSnapshotFromIndexedDb(),
+                await loadDataFromIndexedDb(),
+                stateRef.current
+            );
             if (cancelled || !indexedState) return;
 
             const indexedRevision = getSyncRevision(indexedState);
@@ -1389,7 +1412,7 @@ export function DataProvider({ children }) {
         return () => {
             cancelled = true;
         };
-    }, [updateSyncStatus]);
+    }, [mergeProtectedState, updateSyncStatus]);
 
     useEffect(() => {
         const handleOnline = () => updateSyncStatus({ online: true, lastError: null });
@@ -1402,13 +1425,13 @@ export function DataProvider({ children }) {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [updateSyncStatus]);
+    }, [mergeBestLocalState, mergeProtectedState, updateSyncStatus]);
 
     useEffect(() => {
         const persistRecoverySnapshot = () => {
             if (!stateRef.current) return;
             const stampedState = stampStateForPersistence(
-                stateRef.current,
+                mergeProtectedState(stateRef.current, lastKnownCloudState.current),
                 Math.max(currentRevisionRef.current, getSyncRevision(stateRef.current)),
                 pendingCloudSave.current ? 'local-pending' : 'local'
             );
@@ -1446,7 +1469,7 @@ export function DataProvider({ children }) {
     // Listen for real-time updates from Firestore (watch the config doc as primary)
     useEffect(() => {
         if (!db) {
-            const localData = loadProtectedSessionSnapshot() || loadDataFromLocal() || loadLatestBackupFromLocal();
+            const localData = mergeBestLocalState();
             if (localData) {
                 currentRevisionRef.current = getSyncRevision(localData);
                 dispatch({ type: ACTION_TYPES.SET_DATA, payload: localData });
@@ -1460,7 +1483,7 @@ export function DataProvider({ children }) {
             return undefined;
         }
 
-        const startupLocalData = loadProtectedSessionSnapshot() || loadDataFromLocal() || loadLatestBackupFromLocal();
+        const startupLocalData = mergeBestLocalState();
         if (startupLocalData) {
             currentRevisionRef.current = getSyncRevision(startupLocalData);
             localChangeTimestamp.current = Date.now();
@@ -1517,7 +1540,8 @@ export function DataProvider({ children }) {
                     // Load all 4 docs
                     const { loadDataFromFirestore } = await import('./storage');
                     const fullData = await loadDataFromFirestore();
-                    const localRecoveryData = loadProtectedSessionSnapshot() || loadDataFromLocal() || loadLatestBackupFromLocal();
+                    lastKnownCloudState.current = fullData;
+                    const localRecoveryData = mergeBestLocalState(stateRef.current);
                     const remoteRevision = getSyncRevision(fullData);
                     const localRevision = getSyncRevision(localRecoveryData);
 
@@ -1533,7 +1557,7 @@ export function DataProvider({ children }) {
                     }
 
                     isFromFirestore.current = true;
-                    dispatch({ type: ACTION_TYPES.SET_DATA, payload: fullData });
+                    dispatch({ type: ACTION_TYPES.SET_DATA, payload: mergeProtectedState(fullData, localRecoveryData) });
                     currentRevisionRef.current = remoteRevision;
                     initialized.current = true;
                 } catch (err) {
@@ -1544,9 +1568,10 @@ export function DataProvider({ children }) {
                 try {
                     const { loadDataFromFirestore } = await import('./storage');
                     const data = await loadDataFromFirestore();
-                    dispatch({ type: ACTION_TYPES.SET_DATA, payload: data });
+                    lastKnownCloudState.current = data;
+                    dispatch({ type: ACTION_TYPES.SET_DATA, payload: mergeProtectedState(data, mergeBestLocalState()) });
                 } catch (e) {
-                    const localData = loadDataFromLocal() || loadLatestBackupFromLocal();
+                    const localData = mergeBestLocalState();
                     if (localData) dispatch({ type: ACTION_TYPES.SET_DATA, payload: localData });
                 }
                 initialized.current = true;
@@ -1554,7 +1579,7 @@ export function DataProvider({ children }) {
         }, (error) => {
             console.error('Firestore listener error:', error);
             updateSyncStatus({ lastError: error.message || 'Error de conexion con Firestore' });
-            const localData = loadDataFromLocal() || loadLatestBackupFromLocal();
+            const localData = mergeBestLocalState();
             if (localData) dispatch({ type: ACTION_TYPES.SET_DATA, payload: localData });
             initialized.current = true;
         });
@@ -1574,7 +1599,11 @@ export function DataProvider({ children }) {
         // SIEMPRE guardar a localStorage inmediatamente como backup
         const nextRevision = currentRevisionRef.current + 1;
         currentRevisionRef.current = nextRevision;
-        const persistableState = stampStateForPersistence(state, nextRevision, 'local');
+        const persistableState = stampStateForPersistence(
+            mergeProtectedState(state, lastKnownCloudState.current),
+            nextRevision,
+            'local'
+        );
         saveDataToLocal(persistableState);
         saveProtectedSessionSnapshot(persistableState);
         localChangeTimestamp.current = Date.now();
@@ -1591,10 +1620,15 @@ export function DataProvider({ children }) {
         if (saveTimeout.current) clearTimeout(saveTimeout.current);
         saveTimeout.current = setTimeout(async () => {
             try {
-                const currentState = stampStateForPersistence(stateRef.current, currentRevisionRef.current, 'cloud');
+                const currentState = stampStateForPersistence(
+                    mergeProtectedState(stateRef.current, lastKnownCloudState.current),
+                    currentRevisionRef.current,
+                    'cloud'
+                );
                 const { saveDataToFirestore } = await import('./storage');
                 justSaved.current = true;
                 await saveDataToFirestore(currentState);
+                lastKnownCloudState.current = currentState;
                 if (!navigator.onLine) {
                     updateSyncStatus({
                         pendingChanges: pendingChangesCount.current,
@@ -1633,7 +1667,13 @@ export function DataProvider({ children }) {
         const retryTimer = setTimeout(async () => {
             try {
                 const { saveDataToFirestore } = await import('./storage');
-                await saveDataToFirestore(stampStateForPersistence(stateRef.current, currentRevisionRef.current, 'cloud'));
+                const retryState = stampStateForPersistence(
+                    mergeProtectedState(stateRef.current, lastKnownCloudState.current),
+                    currentRevisionRef.current,
+                    'cloud'
+                );
+                await saveDataToFirestore(retryState);
+                lastKnownCloudState.current = retryState;
                 pendingCloudSave.current = false;
                 pendingChangesCount.current = 0;
                 justSaved.current = true;
@@ -1864,8 +1904,30 @@ export function DataProvider({ children }) {
         deleteReservation: (id) => dispatch({ type: ACTION_TYPES.DELETE_RESERVATION, payload: id }),
 
         exportBackupNow: () => downloadBackupJSON(stateRef.current),
+        recoverRicherLocalData: async () => {
+            const beforeCounts = getCriticalCounts(stateRef.current);
+            const recoveredState = mergeProtectedState(
+                stateRef.current,
+                await loadProtectedSessionSnapshotFromIndexedDb(),
+                await loadDataFromIndexedDb(),
+                mergeBestLocalState(),
+                lastKnownCloudState.current
+            );
+            const afterCounts = getCriticalCounts(recoveredState);
+            const recovered = hasRicherLocalData(recoveredState, stateRef.current)
+                || getSyncRevision(recoveredState) > getSyncRevision(stateRef.current);
+
+            if (recovered) {
+                currentRevisionRef.current = Math.max(currentRevisionRef.current, getSyncRevision(recoveredState));
+                localChangeTimestamp.current = Date.now();
+                initialized.current = true;
+                dispatch({ type: ACTION_TYPES.SET_DATA, payload: recoveredState });
+            }
+
+            return { recovered, beforeCounts, afterCounts };
+        },
         setData: (data) => dispatch({ type: ACTION_TYPES.SET_DATA, payload: data }),
-    }), []);
+    }), [mergeBestLocalState, mergeProtectedState]);
 
     if (!state) return null;
 

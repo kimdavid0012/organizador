@@ -812,6 +812,43 @@
         gap: 12px !important;
     }
 
+    .saldo-entry-form,
+    .saldo-payment-grid,
+    .saldo-profile-grid,
+    .conteo-control-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .saldo-bank-row {
+        grid-template-columns: 1fr !important;
+        justify-items: start;
+    }
+
+    .saldo-recovery-banner,
+    .conteo-toolbar,
+    .conteo-actions {
+        align-items: stretch !important;
+    }
+
+    .conteo-top-search {
+        width: 100%;
+        min-width: 0 !important;
+    }
+
+    .conteo-form-grid,
+    .conteo-item-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .conteo-page {
+        padding: 12px !important;
+    }
+
+    .conteo-chip-row > span {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+
     /* ---- Buttons ---- */
     .btn {
         padding: 8px 12px;
@@ -1061,6 +1098,10 @@
     }
 
     .saldo-page {
+        padding: 8px !important;
+    }
+
+    .conteo-page {
         padding: 8px !important;
     }
 

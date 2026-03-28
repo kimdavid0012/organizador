@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Camera, Landmark, PlusCircle, Receipt, Search, Trash2, Wallet } from 'lucide-react';
+import { Camera, Download, Landmark, PlusCircle, Receipt, Search, Trash2, Wallet } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
 import { useI18n } from '../store/I18nContext';
@@ -154,7 +154,7 @@ const getDateLabel = (value, emptyLabel = 'Sin fecha') => {
 };
 
 export default function SaldoPage() {
-    const { state, updateConfig } = useData();
+    const { state, updateConfig, recoverRicherLocalData } = useData();
     const { user } = useAuth();
     const { lang } = useI18n();
     const [selectedClientId, setSelectedClientId] = useState('');
@@ -167,6 +167,7 @@ export default function SaldoPage() {
     const [monto, setMonto] = useState('');
     const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0]);
     const [paymentStatus, setPaymentStatus] = useState('pagado');
+    const [recoveringSaldo, setRecoveringSaldo] = useState(false);
     const pageText = PAGE_TEXT[lang] || PAGE_TEXT.es;
     const canRegisterPayments = ['admin', 'encargada'].includes(user.role);
     const movementTypes = MOVEMENT_TYPES;
@@ -360,6 +361,23 @@ export default function SaldoPage() {
     const totalPaid = groupedClients.reduce((acc, item) => acc + item.totalPagado, 0);
     const clientsWithDebt = groupedClients.filter((item) => item.saldo > 0).length;
 
+    const handleRecoverSaldo = async () => {
+        setRecoveringSaldo(true);
+        try {
+            const result = await recoverRicherLocalData();
+            if (result.afterCounts?.saldoMovimientos > result.beforeCounts?.saldoMovimientos) {
+                alert(`Se recuperaron ${result.afterCounts.saldoMovimientos - result.beforeCounts.saldoMovimientos} movimientos de saldo desde backups del navegador.`);
+                return;
+            }
+
+            alert('No encontre movimientos de saldo mas completos en los backups locales de este navegador. Si tenes un JSON exportado, se puede importar desde Configuracion.');
+        } catch (error) {
+            alert(`No pude revisar los backups locales: ${error.message}`);
+        } finally {
+            setRecoveringSaldo(false);
+        }
+    };
+
     const addMovement = () => {
         const client = clientes.find((item) => String(item.id) === String(selectedClientId));
         if (!client || !monto) return;
@@ -454,6 +472,19 @@ export default function SaldoPage() {
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
                     {pageText.subtitle}
                 </p>
+                {saldoMovimientos.length === 0 && (
+                    <div className="saldo-recovery-banner" style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', padding: 14, borderRadius: 14, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.18)' }}>
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 'var(--fw-semibold)' }}>No hay movimientos de saldo cargados en esta sesion.</div>
+                            <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
+                                Puedo intentar recuperarlos desde snapshots guardados en este navegador antes de que se hayan perdido.
+                            </div>
+                        </div>
+                        <button className="btn btn-secondary" onClick={handleRecoverSaldo} disabled={recoveringSaldo}>
+                            <Download size={16} /> {recoveringSaldo ? 'Buscando backup...' : 'Recuperar saldos'}
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="saldo-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
@@ -476,7 +507,7 @@ export default function SaldoPage() {
             </div>
 
             <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 12 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1.4fr) repeat(4, minmax(140px, 1fr)) auto', gap: 12, alignItems: 'end' }}>
+                <div className="saldo-entry-form" style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1.4fr) repeat(4, minmax(140px, 1fr)) auto', gap: 12, alignItems: 'end' }}>
                     <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">{pageText.client}</label>
                         <select className="form-select" value={selectedClientId} onChange={(event) => setSelectedClientId(event.target.value)}>
@@ -519,7 +550,7 @@ export default function SaldoPage() {
                 </div>
 
                 {movementType === 'pago' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 220px) minmax(180px, 220px)', gap: 12 }}>
+                    <div className="saldo-payment-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 220px) minmax(180px, 220px)', gap: 12 }}>
                         <div className="form-group" style={{ margin: 0 }}>
                             <label className="form-label">Medio</label>
                             <select className="form-select" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
@@ -708,7 +739,7 @@ export default function SaldoPage() {
                                             No hay pagos de Banco o MP vinculados a este cliente.
                                         </div>
                                     ) : selectedClientBankPayments.map((entry) => (
-                                        <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto auto', gap: 12, padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)', alignItems: 'center' }}>
+                                        <div key={entry.id} className="saldo-bank-row" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto auto', gap: 12, padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.03)', alignItems: 'center' }}>
                                             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{getDateLabel(entry.fecha, pageText.noDate)}</div>
                                             <div style={{ minWidth: 0 }}>
                                                 <div style={{ fontWeight: 'var(--fw-semibold)' }}>{entry.metodo}</div>
