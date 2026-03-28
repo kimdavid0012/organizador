@@ -294,16 +294,16 @@ export default function BankPaymentsPage() {
         return (bankEntries || []).flatMap((entry) => {
             const linkedClient = findLinkedClient(entry.cliente);
             const key = entry.id || `${entry.fecha}|${normalizeComparable(entry.cliente)}|${Number(entry.monto || 0)}|pago`;
-            if (!entry.cliente || existingKeys.has(key)) return [];
+            if (!entry.cliente || !linkedClient || existingKeys.has(key)) return [];
             existingKeys.add(key);
 
             return [{
                 id: `saldo-bank-${entry.id || Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                clienteId: linkedClient?.id || '',
-                clienteNombre: linkedClient?.nombre || entry.cliente,
-                cuit: linkedClient?.cuit || '',
-                telefono: linkedClient?.telefono || entry.telefono || '',
-                email: linkedClient?.email || '',
+                clienteId: linkedClient.id,
+                clienteNombre: linkedClient.nombre || entry.cliente,
+                cuit: linkedClient.cuit || '',
+                telefono: linkedClient.telefono || entry.telefono || '',
+                email: linkedClient.email || '',
                 tipo: 'pago',
                 fecha: entry.fecha,
                 ticket: '',

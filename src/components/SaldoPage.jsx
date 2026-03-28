@@ -139,6 +139,23 @@ const normalizeComparable = (value) => normalizeText(value)
 const normalizePhone = (value) => normalizeText(value).replace(/\D/g, '');
 const toNumber = (value) => Number.parseFloat(value || 0) || 0;
 const formatMoney = (value) => `$${Math.round(Number(value || 0)).toLocaleString('es-AR')}`;
+const findLinkedClientRecord = (clientes, movement = {}) => {
+    const movementClientId = normalizeText(movement.clienteId);
+    const movementName = normalizeComparable(movement.clienteNombre || movement.cliente || '');
+    const movementPhone = normalizePhone(movement.telefono || '');
+
+    return clientes.find((client) => {
+        const clientId = normalizeText(client.id);
+        const clientName = normalizeComparable(client.nombre);
+        const clientPhone = normalizePhone(client.telefono || '');
+
+        return (
+            (movementClientId && clientId && movementClientId === clientId) ||
+            (movementName && clientName && (movementName === clientName || movementName.includes(clientName) || clientName.includes(movementName))) ||
+            (movementPhone && clientPhone && movementPhone === clientPhone)
+        );
+    }) || null;
+};
 const getTodayLocalDate = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -188,8 +205,11 @@ export default function SaldoPage() {
         const map = new Map();
 
         saldoMovimientos.forEach((movement) => {
-            const clientId = normalizeText(movement.clienteId);
-            const clientName = normalizeText(movement.clienteNombre) || 'Cliente sin nombre';
+            const linkedClient = findLinkedClientRecord(clientes, movement);
+            if (!linkedClient && movement.source === 'bankPayments') return;
+
+            const clientId = normalizeText(linkedClient?.id || movement.clienteId);
+            const clientName = normalizeText(linkedClient?.nombre || movement.clienteNombre) || 'Cliente sin nombre';
             const signedAmount = movement.tipo === 'pago'
                 ? -Math.abs(toNumber(movement.monto))
                 : Math.abs(toNumber(movement.monto));
@@ -221,7 +241,8 @@ export default function SaldoPage() {
 
         return Array.from(map.values())
             .map((group) => {
-                const linkedClient = clientes.find((cliente) => String(cliente.id) === String(group.clienteId));
+                const linkedClient = clientes.find((cliente) => String(cliente.id) === String(group.clienteId))
+                    || findLinkedClientRecord(clientes, group);
                 return {
                     ...group,
                     clienteId: linkedClient?.id || group.clienteId,
@@ -372,11 +393,11 @@ export default function SaldoPage() {
             const clienteNombre = normalizeText(entry.cliente);
             if (!clienteNombre) return [];
 
-            const linkedClient = clientes.find((client) => {
-                const clientName = normalizeComparable(client.nombre);
-                const entryName = normalizeComparable(clienteNombre);
-                return clientName && entryName && (clientName === entryName || clientName.includes(entryName) || entryName.includes(clientName));
-            }) || null;
+            const linkedClient = findLinkedClientRecord(clientes, {
+                cliente: clienteNombre,
+                telefono: entry.telefono || ''
+            });
+            if (!linkedClient) return [];
 
             const sourceKey = entry.id || `${entry.fecha}|${normalizeComparable(clienteNombre)}|${Number(entry.monto || 0)}|pago`;
             if (existingKeys.has(sourceKey)) return [];
