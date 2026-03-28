@@ -490,26 +490,6 @@ export default function ConteoMercaderiaPage() {
                     </p>
                 </div>
                 <div className="conteo-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div className="conteo-top-search" style={{ position: 'relative', flex: '1 1 320px', minWidth: 260 }}>
-                        <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                        <input
-                            className="form-input"
-                            style={{ paddingLeft: 38, paddingRight: search ? 42 : 12 }}
-                            placeholder="Buscar rapido por articulo, descripcion, tela, color, taller o corte..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        {search && (
-                            <button
-                                type="button"
-                                onClick={() => setSearch('')}
-                                aria-label="Limpiar busqueda"
-                                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 0, background: 'transparent', color: 'var(--text-muted)', display: 'grid', placeItems: 'center', padding: 0, cursor: 'pointer' }}
-                            >
-                                <X size={16} />
-                            </button>
-                        )}
-                    </div>
                     <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
                     <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={!canEditInventoryRows}>
                         <Upload size={16} /> Importar Excel
@@ -544,16 +524,47 @@ export default function ConteoMercaderiaPage() {
                 <datalist id="conteo-telas">{telasActivas.map((tela) => <option key={tela} value={tela} />)}</datalist>
                 <datalist id="conteo-talleres">{talleres.map((taller) => <option key={taller} value={taller} />)}</datalist>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                        {search ? `${filteredConteos.length} resultados para "${search}"` : `${conteos.length} conteos cargados`}
-                    </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
                     <button className="btn btn-primary" onClick={handleAdd} disabled={!canEditInventoryRows}><Plus size={16} /> Agregar conteo</button>
                 </div>
                 {!canEditInventoryRows && <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)' }}>Nadia solo controla: puede marcar chequeado y comentar, sin editar cantidades ni articulos.</div>}
             </div>
 
             <div style={{ display: 'grid', gap: 14 }}>
+                <div className="glass-panel" style={{ padding: 18, display: 'grid', gap: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div>
+                            <div style={{ fontWeight: 'var(--fw-semibold)' }}>Buscador de articulos cargados</div>
+                            <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
+                                Busca un articulo para ver enseguida si Naara/Nadia lo confirmo, si esta chequeado y su detalle.
+                            </div>
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                            {search ? `${filteredConteos.length} resultados para "${search}"` : `${conteos.length} conteos cargados`}
+                        </div>
+                    </div>
+                    <div className="conteo-top-search" style={{ position: 'relative', width: '100%' }}>
+                        <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                        <input
+                            className="form-input"
+                            style={{ paddingLeft: 38, paddingRight: search ? 42 : 12 }}
+                            placeholder="Buscar articulo para revisar si fue confirmado o chequeado..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                onClick={() => setSearch('')}
+                                aria-label="Limpiar busqueda"
+                                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 0, background: 'transparent', color: 'var(--text-muted)', display: 'grid', placeItems: 'center', padding: 0, cursor: 'pointer' }}
+                            >
+                                <X size={16} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
                 {filteredConteos.map((item) => {
                     const diferencia = toNumber(item.cantidadContada) - toNumber(item.cantidadOriginal);
                     const checked = Boolean(item.chequeado);
