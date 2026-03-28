@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Camera, Download, Landmark, PlusCircle, Receipt, Search, Trash2, Wallet } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
@@ -360,6 +360,53 @@ export default function SaldoPage() {
     const totalDebt = groupedClients.reduce((acc, item) => acc + item.totalDeuda, 0);
     const totalPaid = groupedClients.reduce((acc, item) => acc + item.totalPagado, 0);
     const clientsWithDebt = groupedClients.filter((item) => item.saldo > 0).length;
+
+    useEffect(() => {
+        if (!bankPayments.length) return;
+
+        const existingKeys = new Set(
+            saldoMovimientos.map((movement) => movement.sourceBankPaymentId || `${movement.fecha}|${normalizeComparable(movement.clienteNombre)}|${Number(movement.monto || 0)}|${movement.tipo}`)
+        );
+
+        const pendingSaldoFromBank = bankPayments.flatMap((entry) => {
+            const clienteNombre = normalizeText(entry.cliente);
+            if (!clienteNombre) return [];
+
+            const linkedClient = clientes.find((client) => {
+                const clientName = normalizeComparable(client.nombre);
+                const entryName = normalizeComparable(clienteNombre);
+                return clientName && entryName && (clientName === entryName || clientName.includes(entryName) || entryName.includes(clientName));
+            }) || null;
+
+            const sourceKey = entry.id || `${entry.fecha}|${normalizeComparable(clienteNombre)}|${Number(entry.monto || 0)}|pago`;
+            if (existingKeys.has(sourceKey)) return [];
+            existingKeys.add(sourceKey);
+
+            return [{
+                id: `saldo-bank-${entry.id || Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                clienteId: linkedClient?.id || '',
+                clienteNombre: linkedClient?.nombre || clienteNombre,
+                cuit: linkedClient?.cuit || '',
+                telefono: linkedClient?.telefono || entry.telefono || '',
+                email: linkedClient?.email || '',
+                tipo: 'pago',
+                fecha: entry.fecha,
+                ticket: '',
+                detalle: `${entry.metodo || 'Banco'} importado desde banco`,
+                monto: Math.abs(toNumber(entry.monto)),
+                medio: entry.metodo || 'Banco',
+                createdBy: entry.createdBy || '',
+                createdAt: entry.importedAt || entry.createdAt || new Date().toISOString(),
+                source: 'bankPayments',
+                sourceBankPaymentId: entry.id || ''
+            }];
+        });
+
+        if (!pendingSaldoFromBank.length) return;
+        updateConfig({
+            saldoMovimientos: [...pendingSaldoFromBank, ...saldoMovimientos]
+        });
+    }, [bankPayments, clientes, saldoMovimientos, updateConfig]);
 
     const handleRecoverSaldo = async () => {
         setRecoveringSaldo(true);
