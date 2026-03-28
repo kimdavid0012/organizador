@@ -72,59 +72,56 @@ const parseExcelFile = (file) => {
                 const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
 
                 const entries = [];
-                let currentSection = null;
-                let detectedHeader = null;
-                let inferredMethod = inferMethodFromWorkbook(file.name, workbook.SheetNames[0], rows[0] || []);
+                let currentSection = inferMethodFromWorkbook(file.name, workbook.SheetNames[0], rows[0] || []);
+                let activeHeader = null;
+                let hasExplicitSections = false;
+
+                const parseSectionRow = (row, header, metodo) => {
+                    if (!header) return;
+                    const fecha = excelDateToISO(row[header.fechaIndex]);
+                    if (!fecha) return;
+
+                    const montoRaw = row[header.totalIndex];
+                    const monto = Number(montoRaw || 0);
+                    if (!monto || typeof montoRaw === 'string') return;
+
+                    const cliente = cleanClientName(header.clienteIndex >= 0 ? row[header.clienteIndex] : '');
+                    entries.push({ fecha, monto, cliente, metodo, estado: 'pagado' });
+                };
 
                 rows.forEach((row) => {
+                    const cell0 = row[0];
+                    const cell0str = typeof cell0 === 'string' ? cell0.toUpperCase().trim() : '';
                     const normalizedRow = row.map((cell) => normalizeComparable(cell));
                     const fechaIndex = normalizedRow.findIndex((cell) => cell === 'FECHA');
                     const totalIndex = normalizedRow.findIndex((cell) => cell === 'TOTAL');
                     const clienteIndex = normalizedRow.findIndex((cell) => cell === 'CLIENTE');
 
-                    if (fechaIndex >= 0 && totalIndex >= 0) {
-                        detectedHeader = {
-                            fechaIndex,
-                            totalIndex,
-                            clienteIndex
-                        };
+                    if (cell0str === 'BANCO') {
+                        currentSection = 'Banco';
+                        activeHeader = null;
+                        hasExplicitSections = true;
+                        return;
                     }
-                });
-
-                rows.forEach((row) => {
-                    const cell0 = row[0];
-                    const cell0str = typeof cell0 === 'string' ? cell0.toUpperCase().trim() : '';
-
-                    if (cell0str === 'BANCO') { currentSection = 'banco'; return; }
-                    if (cell0str === 'MERCADO PAGO') { currentSection = 'mp'; return; }
-                    if (looksLikeHeader(cell0, 'FECHA')) return;
-                    if (cell0str === 'TOTAL' || (typeof cell0 === 'string' && cell0.startsWith('Total'))) return;
-                    if (detectedHeader) {
-                        const fecha = excelDateToISO(row[detectedHeader.fechaIndex]);
-                        if (!fecha) return;
-
-                        const montoRaw = row[detectedHeader.totalIndex];
-                        const monto = Number(montoRaw || 0);
-                        if (!monto || typeof montoRaw === 'string') return;
-
-                        const cliente = cleanClientName(detectedHeader.clienteIndex >= 0 ? row[detectedHeader.clienteIndex] : '');
-                        entries.push({ fecha, monto, cliente, metodo: inferredMethod, estado: 'pagado' });
+                    if (cell0str === 'MERCADO PAGO') {
+                        currentSection = 'Mercado Pago';
+                        activeHeader = null;
+                        hasExplicitSections = true;
+                        return;
+                    }
+                    if (fechaIndex >= 0 && totalIndex >= 0) {
+                        activeHeader = { fechaIndex, totalIndex, clienteIndex };
+                        return;
+                    }
+                    if (cell0str === 'TOTAL' || (typeof cell0 === 'string' && cell0.startsWith('Total'))) {
+                        if (hasExplicitSections) {
+                            activeHeader = null;
+                        }
                         return;
                     }
 
-                    if (!currentSection || !cell0) return;
-
-                    const fecha = excelDateToISO(cell0);
-                    if (!fecha) return;
-
-                    const monto = Number(row[1] || 0);
-                    if (!monto || typeof row[1] === 'string') return;
-
-                    if (currentSection === 'banco') {
-                        const cliente = cleanClientName(row[2]);
-                        entries.push({ fecha, monto, cliente, metodo: 'Banco', estado: 'pagado' });
-                    } else if (currentSection === 'mp') {
-                        entries.push({ fecha, monto, cliente: cleanClientName(row[2]), metodo: 'Mercado Pago', estado: 'pagado' });
+                    if (activeHeader) {
+                        parseSectionRow(row, activeHeader, currentSection || 'Banco');
                     }
                 });
 
