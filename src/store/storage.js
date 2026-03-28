@@ -12,6 +12,24 @@ const APP_STORAGE_DB_VERSION = 1;
 const APP_STORAGE_STORE = 'snapshots';
 const APP_MAIN_SNAPSHOT_KEY = 'main';
 const APP_RECOVERY_SNAPSHOT_KEY = 'recovery';
+const CONFIG_SPLIT_DOCS = {
+    mercaderiaConteos: 'mercaderia',
+    bankPayments: 'bank-payments',
+    saldoMovimientos: 'saldo-movimientos',
+    posProductos: 'pos-productos',
+    clientes: 'clientes',
+    mesanMovimientos: 'mesan-movimientos',
+    mesanVentasDiarias: 'mesan-ventas-diarias',
+    pedidosOnline: 'pedidos-online',
+    posVentas: 'pos-ventas',
+    posCerradoZ: 'pos-cerrado-z',
+    posGastos: 'pos-gastos',
+    planillasCortes: 'planillas-cortes',
+    fabricPayments: 'fabric-payments',
+    fotoTasks: 'foto-tasks',
+    instagramPlanner: 'instagram-planner'
+};
+const CONFIG_SPLIT_KEYS = Object.keys(CONFIG_SPLIT_DOCS);
 const RICH_TOP_LEVEL_KEYS = ['moldes', 'telas', 'tareas'];
 const RICH_CONFIG_ARRAY_KEYS = [
     'cortes',
@@ -421,6 +439,15 @@ const readAppSnapshotFromIndexedDb = async (key) => {
     }
 };
 
+const getFirestoreSplitDocPayload = (key, value) => ({ [key]: Array.isArray(value) ? value : [] });
+
+const buildConfigWithoutSplitDocs = (config = {}) => (
+    CONFIG_SPLIT_KEYS.reduce((nextConfig, key) => {
+        nextConfig[key] = [];
+        return nextConfig;
+    }, { ...config })
+);
+
 // ============ FIRESTORE (SPLIT INTO MULTIPLE DOCS) ============
 // Firestore limit = 1MB per document
 // We split data into multiple docs to stay under the 1MB Firestore limit:
@@ -432,25 +459,29 @@ const readAppSnapshotFromIndexedDb = async (key) => {
 
 export const loadDataFromFirestore = async () => {
     try {
-        const [configSnap, mercaderiaSnap, moldesSnap, telasSnap, tareasSnap, legacySnap] = await Promise.all([
+        const splitDocEntries = Object.entries(CONFIG_SPLIT_DOCS);
+        const splitDocReads = splitDocEntries.map(([, docId]) => getDoc(doc(db, 'app-data', docId)));
+        const [configSnap, moldesSnap, telasSnap, tareasSnap, legacySnap, ...splitDocSnaps] = await Promise.all([
             getDoc(doc(db, 'app-data', 'config')),
-            getDoc(doc(db, 'app-data', 'mercaderia')),
             getDoc(doc(db, 'app-data', 'moldes')),
             getDoc(doc(db, 'app-data', 'telas')),
             getDoc(doc(db, 'app-data', 'tareas')),
             getDoc(doc(db, 'app-data', 'main')),  // legacy single-doc format
+            ...splitDocReads
         ]);
 
         // If new split format exists, use it
         if (configSnap.exists()) {
             const configBase = configSnap.data()?.config || configSnap.data() || {};
-            const mercaderiaConteos = mercaderiaSnap.exists()
-                ? (mercaderiaSnap.data()?.mercaderiaConteos || [])
-                : (configBase.mercaderiaConteos || []);
             const config = {
-                ...configBase,
-                mercaderiaConteos
+                ...configBase
             };
+            splitDocEntries.forEach(([key], index) => {
+                const splitSnap = splitDocSnaps[index];
+                config[key] = splitSnap?.exists()
+                    ? (splitSnap.data()?.[key] || [])
+                    : (configBase[key] || []);
+            });
             const moldes = moldesSnap.exists() ? (moldesSnap.data()?.moldes || []) : [];
             const telas = telasSnap.exists() ? (telasSnap.data()?.telas || []) : [];
             const tareas = tareasSnap.exists() ? (tareasSnap.data()?.tareas || []) : [];
@@ -488,17 +519,20 @@ export const saveDataToFirestore = async (data) => {
             return m;
         });
 
-        const configWithoutMercaderia = {
-            ...(data.config || {}),
-            mercaderiaConteos: []
-        };
+        const configWithoutSplitDocs = buildConfigWithoutSplitDocs(data.config || {});
+        const splitDocWrites = Object.entries(CONFIG_SPLIT_DOCS).map(([key, docId]) => (
+            setDoc(
+                doc(db, 'app-data', docId),
+                getFirestoreSplitDocPayload(key, data.config?.[key] || [])
+            )
+        ));
 
         await Promise.all([
-            setDoc(doc(db, 'app-data', 'config'), { config: configWithoutMercaderia }),
-            setDoc(doc(db, 'app-data', 'mercaderia'), { mercaderiaConteos: data.config?.mercaderiaConteos || [] }),
+            setDoc(doc(db, 'app-data', 'config'), { config: configWithoutSplitDocs }),
             setDoc(doc(db, 'app-data', 'moldes'), { moldes: moldesClean }),
             setDoc(doc(db, 'app-data', 'telas'), { telas: data.telas || [] }),
             setDoc(doc(db, 'app-data', 'tareas'), { tareas: data.tareas || [] }),
+            ...splitDocWrites
         ]);
         console.log('✅ Datos guardados en Firestore (5 documentos)');
     } catch (err) {
