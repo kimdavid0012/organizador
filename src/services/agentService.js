@@ -528,3 +528,188 @@ Generá un **REPORTE ESTRATÉGICO** con:
   const { text, tokens } = await callOpenAI(apiKey, STRATEGIST_SYSTEM, prompt, { maxTokens: 4500, temperature: 0.4 });
   return { type: 'strategist', content: text, timestamp: agentTimestamp(), tokens };
 }
+
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 5 — GROWTH HACKER (Experimentation & Viral Growth)
+// ═══════════════════════════════════════════════════════════════
+const GROWTH_SYSTEM = `Sos un growth hacker con experiencia en e-commerce de moda y DTC brands.
+${BRAND_CONTEXT}
+Tu especialidad es diseñar experimentos de crecimiento, identificar viral loops, optimizar funnels de conversión y encontrar canales de adquisición no explotados.
+Pensás en frameworks: AARRR (Acquisition, Activation, Revenue, Retention, Referral), ICE scoring, North Star Metrics.
+Respondé en español rioplatense. Formato: markdown con headers ## y bullets con datos.`;
+
+export async function runGrowthAgent(config, analystData, trendData, onProgress) {
+  const apiKey = config.marketing?.openaiKey;
+  if (!apiKey) throw new Error('Falta OpenAI API Key');
+
+  const productIntel = analystData?.data?.productIntel;
+  const audienceIntel = analystData?.data?.audienceIntel;
+
+  onProgress?.('Diseñando experimentos de crecimiento...');
+
+  const prompt = `Fecha: ${todayLabel()}
+
+📊 DATOS DEL ANALISTA:
+${safeContentTruncate(analystData, 2000)}
+
+🌍 TENDENCIAS:
+${safeContentTruncate(trendData, 1500)}
+
+🔬 INTELIGENCIA DE PRODUCTO:
+${safeTruncate(productIntel, 1000)}
+
+👥 AUDIENCIA:
+${safeTruncate(audienceIntel, 1000)}
+
+${BRAND_CONTEXT}
+
+───────────────────────
+Generá un **PLAN DE GROWTH HACKING SEMANAL** para ${BRAND.handle}:
+
+## 🧪 EXPERIMENTOS ACTIVOS (3-5)
+Para cada experimento:
+- **Hipótesis**: "Si hacemos X, esperamos Y porque Z"
+- **Métrica clave**: qué medimos
+- **ICE Score**: Impact (1-10) × Confidence (1-10) × Ease (1-10)
+- **Duración**: días para validar
+- **Implementación**: pasos concretos
+
+## 🔄 VIRAL LOOPS
+- Loop 1: Referral program para revendedoras (descuento por referida)
+- Loop 2: UGC loop (clientas publican → reposteo → más clientas)
+- Loop 3: WhatsApp viral (catálogo compartible)
+- Para cada uno: estado actual, próximo paso, métrica
+
+## 📊 FUNNEL ANALYSIS
+- Awareness → Consideration → Purchase → Retention → Referral
+- Dónde está el mayor drop-off según datos
+- 3 optimizaciones específicas para el peor paso del funnel
+
+## 🎯 CANALES NO EXPLOTADOS
+- 3 canales que ${BRAND.handle} no está usando y debería probar
+- Esfuerzo estimado, potencial de retorno
+- Quick win vs long-term play
+
+## 💡 HACK DE LA SEMANA
+- 1 táctica creativa de bajo costo y alto impacto
+- Paso a paso para implementar esta semana
+
+## 📈 NORTH STAR METRIC
+- Cuál debería ser la métrica principal de ${BRAND.name} este mes
+- Target numérico basado en datos actuales
+- Cómo cada experimento impacta esta métrica`;
+
+  const { text, tokens } = await callOpenAI(apiKey, GROWTH_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.7 });
+  return { type: 'growth', content: text, timestamp: agentTimestamp(), tokens };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 6 — PAID MEDIA OPTIMIZER (Deep Meta Ads Analysis)
+// ═══════════════════════════════════════════════════════════════
+const PAID_MEDIA_SYSTEM = `Sos un paid media specialist con 10 años en Meta Ads (Facebook/Instagram) para e-commerce de moda.
+${BRAND_CONTEXT}
+Dominás: campaign structure, audience targeting, creative testing, budget allocation, bid strategies, ROAS optimization, attribution models, y creative fatigue detection.
+Analizás datos granulares de campañas, ad sets y ads para dar recomendaciones accionables con números específicos.
+Respondé en español rioplatense. Formato: markdown con headers ## y tablas/bullets con datos.`;
+
+export async function runPaidMediaAgent(config, analystData, onProgress) {
+  const apiKey = config.marketing?.openaiKey;
+  if (!apiKey) throw new Error('Falta OpenAI API Key');
+
+  onProgress?.('Analizando campañas de Meta Ads en profundidad...');
+
+  // Get detailed campaign data
+  let campaignDetails = [];
+  try {
+    const campaigns = await metaService.fetchCampaigns(config);
+    const active = campaigns.filter(c => c.status === 'ACTIVE');
+    campaignDetails = await Promise.all(
+      active.slice(0, 8).map(async (c) => {
+        try {
+          const [report, adSets, daily] = await Promise.allSettled([
+            metaService.fetchCampaignReportData(config, c.id),
+            metaService.fetchAdSets(config, c.id),
+            metaService.fetchCampaignDailyInsights(config, c.id),
+          ]);
+          return {
+            name: c.name, id: c.id, objective: c.objective, status: c.status,
+            daily_budget: c.daily_budget, lifetime_budget: c.lifetime_budget,
+            today: report.status === 'fulfilled' ? report.value.today : {},
+            last7d: report.status === 'fulfilled' ? report.value.last7d : {},
+            last30d: report.status === 'fulfilled' ? report.value.last30d : {},
+            adSets: adSets.status === 'fulfilled' ? adSets.value.slice(0, 5).map(as => ({
+              name: as.name, status: as.status, daily_budget: as.daily_budget,
+              targeting: as.targeting, insights: as.insights?.data?.[0] || {},
+            })) : [],
+            dailyTrend: daily.status === 'fulfilled' ? daily.value.slice(-7) : [],
+          };
+        } catch { return { name: c.name, objective: c.objective }; }
+      })
+    );
+  } catch (e) { console.warn('PaidMedia: campaigns unavailable', e.message); }
+
+  let accountInsights = null;
+  try { accountInsights = await metaService.fetchAdInsights(config); } catch {}
+
+  onProgress?.('Generando recomendaciones de optimización...');
+
+  const prompt = `Fecha: ${todayLabel()}
+
+📊 ACCOUNT-LEVEL INSIGHTS (30 días):
+${safeTruncate(accountInsights)}
+
+📌 CAMPAÑAS ACTIVAS CON DETALLE COMPLETO:
+${safeTruncate(campaignDetails, 4000)}
+
+📈 CONTEXTO DEL ANALISTA:
+${safeContentTruncate(analystData, 1500)}
+
+${BRAND_CONTEXT}
+Budget mensual estimado: calcular desde los daily budgets de las campañas
+
+───────────────────────
+Generá un **REPORTE DE PAID MEDIA** detallado:
+
+## 💰 RESUMEN DE INVERSIÓN
+- Spend total hoy / 7d / 30d
+- ROAS por período
+- CPA (Costo por Adquisición) si hay datos de conversión
+- Budget utilizado vs disponible
+
+## 📊 ANÁLISIS POR CAMPAÑA
+Para cada campaña activa:
+| Campaña | Spend 7d | CTR | CPC | ROAS | Tendencia | Acción |
+- Identificar: mejores performers, peores performers, fatigadas
+
+## 🎯 TARGETING ANALYSIS
+- Qué audiencias están funcionando (por ad set)
+- Audiencias saturadas (frequency alta)
+- Oportunidades de targeting no exploradas
+- Lookalike recommendations
+
+## 🎨 CREATIVE ANALYSIS
+- Señales de creative fatigue (CTR bajando, frequency subiendo)
+- Qué tipo de creativo funciona mejor
+- 3 nuevos creativos a testear esta semana
+- A/B test plan para creativos
+
+## 💡 OPTIMIZACIÓN DE BUDGET
+- Redistribución óptima del budget actual
+- Campañas a escalar (ROAS alto + room to grow)
+- Campañas a pausar o reducir
+- Budget incremental recomendado y expected return
+
+## 🔧 ACCIONES TÉCNICAS (para el equipo de marketing)
+| Acción | Campaña | Urgencia | Expected Impact |
+(máximo 7 acciones concretas)
+
+## 📈 FORECAST
+- ROAS proyectado si se implementan las optimizaciones
+- Revenue estimado próximos 7 días
+- Break-even budget point`;
+
+  const { text, tokens } = await callOpenAI(apiKey, PAID_MEDIA_SYSTEM, prompt, { maxTokens: 4500, temperature: 0.4 });
+  return { type: 'paidMedia', content: text, timestamp: agentTimestamp(), tokens, data: { campaignDetails } };
+}
+
