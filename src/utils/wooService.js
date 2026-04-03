@@ -148,4 +148,46 @@ export const wooService = {
         }
         return allCustomers;
     }
+,
+    /**
+     * Fetch product categories from WooCommerce
+     */
+    async fetchCategories(config) {
+        const { wooUrl, wooKey, wooSecret } = config.marketing || {};
+        if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
+        const baseUrl = wooUrl.endsWith('/') ? wooUrl : `${wooUrl}/`;
+        const url = `${baseUrl}wp-json/wc/v3/products/categories?consumer_key=${wooKey}&consumer_secret=${wooSecret}&per_page=100`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Error al traer categorías');
+        return await response.json();
+    },
+
+    /**
+     * Fetch revenue stats (last 30 days, daily intervals)
+     */
+    async fetchRevenueStats(config) {
+        const { wooUrl, wooKey, wooSecret } = config.marketing || {};
+        if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
+        const baseUrl = wooUrl.endsWith('/') ? wooUrl : `${wooUrl}/`;
+        const after = new Date();
+        after.setDate(after.getDate() - 30);
+        const afterStr = after.toISOString().slice(0, 10) + 'T00:00:00';
+        const url = `${baseUrl}wp-json/wc-analytics/reports/revenue/stats?interval=day&after=${afterStr}&consumer_key=${wooKey}&consumer_secret=${wooSecret}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Error al traer revenue stats');
+        return await response.json();
+    },
+
+    /**
+     * Fetch orders with more detail (last 50, for agent analysis)
+     */
+    async fetchRecentOrders(config, perPage = 50) {
+        const { wooUrl, wooKey, wooSecret } = config.marketing || {};
+        if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
+        const baseUrl = wooUrl.endsWith('/') ? wooUrl : `${wooUrl}/`;
+        const url = `${baseUrl}wp-json/wc/v3/orders?consumer_key=${wooKey}&consumer_secret=${wooSecret}&per_page=${perPage}&orderby=date&order=desc`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Error al traer pedidos recientes');
+        return await response.json();
+    }
 };
