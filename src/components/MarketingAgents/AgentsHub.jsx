@@ -90,6 +90,7 @@ export default function AgentsHub() {
   const [brands, setBrands] = useState(agentsCache.trendScoutBrands || DEFAULT_BRANDS);
   const [newBrand, setNewBrand] = useState('');
   const [history, setHistory] = useState(agentsCache.history || []);
+  const [progressMsg, setProgressMsg] = useState('');
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
 
