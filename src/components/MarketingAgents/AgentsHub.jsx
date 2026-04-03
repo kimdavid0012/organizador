@@ -149,6 +149,7 @@ export default function AgentsHub() {
     setError(null);
     setCompletedSteps([]);
     try {
+      const onProgress = (msg) => setProgressMsg(msg);
       setActiveTab('analyst');
       const analyst = await runAnalystAgent(config, state, onProgress);
       setResults(prev => ({ ...prev, analyst }));
