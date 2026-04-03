@@ -554,6 +554,38 @@ export default function Settings() {
                             Obtené tu key en <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>platform.openai.com/api-keys</a>. Usa modelo gpt-4o-mini (barato y rápido).
                         </p>
                     </div>
+
+                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 16, marginTop: 16 }}>
+                        <h4 style={{ fontSize: 13, marginBottom: 8 }}>🧠 Agentes AI — Proveedor de LLM</h4>
+                        <div style={{ marginBottom: 12 }}>
+                            <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Motor de IA para agentes</label>
+                            <select
+                                className="form-input"
+                                value={config.marketing?.llmProvider || 'openai'}
+                                onChange={(e) => updateConfig({ marketing: { ...(config.marketing || {}), llmProvider: e.target.value } })}
+                                style={{ marginTop: 4 }}
+                            >
+                                <option value="openai">OpenAI (GPT-4o-mini) — Rápido y barato</option>
+                                <option value="claude">Claude (Sonnet) — Más inteligente para análisis</option>
+                            </select>
+                        </div>
+
+                        {(config.marketing?.llmProvider === 'claude') && (
+                            <div>
+                                <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Claude API Key (Anthropic)</label>
+                                <input
+                                    type="password"
+                                    className="form-input"
+                                    value={config.marketing?.claudeKey || ''}
+                                    placeholder="sk-ant-..."
+                                    onChange={(e) => updateConfig({ marketing: { ...(config.marketing || {}), claudeKey: e.target.value } })}
+                                />
+                                <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                                    Obtené tu key en <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>console.anthropic.com</a>. Claude Sonnet: más profundo en análisis estratégico.
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
