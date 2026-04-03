@@ -23,46 +23,102 @@ const BRAND_CONTEXT = `MARCA: ${BRAND.name} (${BRAND.handle} en ${BRAND.platform
 Web: ${BRAND.web} | ${BRAND.desc}
 Producción: ${BRAND.production} | Canales: ${BRAND.channels}`;
 
-// ─── OpenAI helper with retry + timeout ──────────────────────
-async function callOpenAI(apiKey, systemPrompt, userPrompt, options = {}) {
-  const { model = 'gpt-4o-mini', temperature = 0.5, maxTokens = 4000, retries = 2 } = options;
+// ─── LLM helper: supports Claude (Anthropic) and OpenAI with retry + timeout ──
+async function callLLM(config, systemPrompt, userPrompt, options = {}) {
+  const provider = config.marketing?.llmProvider || 'openai';
+  const { temperature = 0.5, maxTokens = 4000, retries = 2 } = options;
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model, temperature, max_tokens: maxTokens,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-        }),
-      });
-      clearTimeout(timeoutId);
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 429 && attempt < retries) {
-          await new Promise(r => setTimeout(r, (attempt + 1) * 3000));
-          continue;
+      let response, data, text, usage;
+
+      if (provider === 'claude') {
+        // ─── Anthropic Claude API ───
+        const claudeKey = config.marketing?.claudeKey;
+        if (!claudeKey) throw new Error('Falta Claude API Key en Configuración → Marketing');
+        response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': claudeKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: options.model || 'claude-sonnet-4-20250514',
+            max_tokens: maxTokens,
+            temperature,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userPrompt }],
+          }),
+        });
+        clearTimeout(timeoutId);
+        data = await response.json();
+        if (!response.ok) {
+          if (response.status === 429 && attempt < retries) {
+            await new Promise(r => setTimeout(r, (attempt + 1) * 3000));
+            continue;
+          }
+          throw new Error(data.error?.message || `Claude error ${response.status}`);
         }
-        throw new Error(data.error?.message || `OpenAI error ${response.status}`);
+        text = data.content?.[0]?.text || '';
+        usage = data.usage || {};
+        return {
+          text,
+          tokens: { prompt: usage.input_tokens || 0, completion: usage.output_tokens || 0, total: (usage.input_tokens || 0) + (usage.output_tokens || 0) },
+          provider: 'claude',
+        };
+
+      } else {
+        // ─── OpenAI API (default fallback) ───
+        const openaiKey = config.marketing?.openaiKey;
+        if (!openaiKey) throw new Error('Falta OpenAI API Key en Configuración → Marketing');
+        response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: options.model || 'gpt-4o-mini',
+            temperature, max_tokens: maxTokens,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+          }),
+        });
+        clearTimeout(timeoutId);
+        data = await response.json();
+        if (!response.ok) {
+          if (response.status === 429 && attempt < retries) {
+            await new Promise(r => setTimeout(r, (attempt + 1) * 3000));
+            continue;
+          }
+          throw new Error(data.error?.message || `OpenAI error ${response.status}`);
+        }
+        usage = data.usage || {};
+        return {
+          text: data.choices?.[0]?.message?.content || '',
+          tokens: { prompt: usage.prompt_tokens || 0, completion: usage.completion_tokens || 0, total: usage.total_tokens || 0 },
+          provider: 'openai',
+        };
       }
-      const usage = data.usage || {};
-      return {
-        text: data.choices?.[0]?.message?.content || '',
-        tokens: { prompt: usage.prompt_tokens || 0, completion: usage.completion_tokens || 0, total: usage.total_tokens || 0 },
-      };
     } catch (err) {
       clearTimeout(timeoutId);
-      if (err.name === 'AbortError') throw new Error('OpenAI timeout — la respuesta tardó más de 60s');
+      if (err.name === 'AbortError') throw new Error('LLM timeout — la respuesta tardó más de 90s');
       if (attempt === retries) throw err;
       await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
     }
   }
+}
+
+// Legacy wrapper for backward compatibility
+async function callOpenAI(apiKey, systemPrompt, userPrompt, options = {}) {
+  // Build a minimal config object for callLLM
+  const config = { marketing: { openaiKey: apiKey, llmProvider: 'openai' } };
+  return callLLM(config, systemPrompt, userPrompt, options);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -84,6 +140,25 @@ function safeContentTruncate(result, maxChars = 2000) {
   return result.content.length > maxChars
     ? result.content.substring(0, maxChars) + '\n... [truncado]'
     : result.content;
+}
+
+// ─── History tracking: compare with previous runs ────────────
+function getAgentHistory(config, agentType, maxEntries = 3) {
+  const history = config.agentsCache?.history || [];
+  return history
+    .filter(h => h.type === agentType)
+    .slice(0, maxEntries)
+    .map(h => ({
+      date: new Date(h.timestamp).toLocaleDateString('es-AR'),
+      summary: (h.content || '').substring(0, 300),
+    }));
+}
+
+function buildHistoryContext(history) {
+  if (!history.length) return '';
+  return '\n📜 HISTORIAL DE EJECUCIONES ANTERIORES:\n' +
+    history.map(h => `[${h.date}]: ${h.summary}`).join('\n') +
+    '\nCompará con los datos actuales y mencioná tendencias/cambios.\n';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -221,7 +296,7 @@ Respondé SOLO con un JSON (sin markdown) con esta estructura:
   "developmentOpportunities": ["gaps en el catálogo, productos a desarrollar"]
 }`;
 
-  const { text } = await callOpenAI(apiKey, system, prompt, { temperature: 0.3, maxTokens: 2000 });
+  const { text } = await callLLM(config, system, prompt, { temperature: 0.3, maxTokens: 2000 });
   try { return JSON.parse(text.replace(/```json|```/g, '').trim()); }
   catch { return { raw: text }; }
 }
@@ -256,7 +331,7 @@ Respondé SOLO con un JSON (sin markdown):
   "lookalikeStrategy": "estrategia sugerida para lookalike audiences"
 }`;
 
-  const { text } = await callOpenAI(apiKey, system, prompt, { temperature: 0.3, maxTokens: 2000 });
+  const { text } = await callLLM(config, system, prompt, { temperature: 0.3, maxTokens: 2000 });
   try { return JSON.parse(text.replace(/```json|```/g, '').trim()); }
   catch { return { raw: text }; }
 }
@@ -272,8 +347,8 @@ Formato: markdown con headers ##, bullets concretos con números, y un score gen
 Si algún dato no está disponible, indicalo claramente y no inventes números.`;
 
 export async function runAnalystAgent(config, state, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key en Configuración → Marketing');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
 
   const bd = await gatherBusinessData(config, state, onProgress);
 
@@ -288,8 +363,11 @@ export async function runAnalystAgent(config, state, onProgress) {
 
   onProgress?.('Generando análisis ejecutivo...');
 
-  const prompt = `Fecha: ${todayLabel()}
+  const prevHistory = getAgentHistory(config, 'analyst');
+  const historyCtx = buildHistoryContext(prevHistory);
 
+  const prompt = `Fecha: ${todayLabel()}
+${historyCtx}
 📊 META ADS (últimos 30 días account-level):
 ${safeTruncate(bd.meta)}
 
@@ -332,7 +410,7 @@ Generá un BRIEF EJECUTIVO DEL DÍA con:
 8. **✅ TOP 5 ACCIONES PARA HOY** (concretas, con responsable: David/Marketing/Rocío/Nadia)
 9. **📈 PROYECCIÓN SEMANAL** (revenue estimado, metas)`;
 
-  const { text, tokens } = await callOpenAI(apiKey, ANALYST_SYSTEM, prompt, { maxTokens: 4000 });
+  const { text, tokens } = await callLLM(config, ANALYST_SYSTEM, prompt, { maxTokens: 4000 });
   return { type: 'analyst', content: text, timestamp: agentTimestamp(), tokens, data: { meta: bd.meta, woo: bd.woo, pos: bd.pos, productIntel: pi, audienceIntel: ai } };
 }
 
@@ -346,8 +424,8 @@ Respondé en español rioplatense. Sé concreto: colores Pantone, telas, silueta
 Formato: markdown con headers ##, bullets con datos específicos.`;
 
 export async function runTrendScoutAgent(config, brands = [], onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
 
   const targetBrands = brands.length > 0 ? brands : ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
 
@@ -382,7 +460,7 @@ Basándote en tu conocimiento actualizado:
 5. 🎯 **PREDICCIÓN** — Tendencias próximos 2-3 meses
 6. 🏷️ **HASHTAGS TENDENCIA** — 15 hashtags relevantes para ${BRAND.handle} ahora mismo`;
 
-  const { text, tokens } = await callOpenAI(apiKey, SCOUT_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.7 });
+  const { text, tokens } = await callLLM(config, SCOUT_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.7 });
   return { type: 'trendScout', content: text, timestamp: agentTimestamp(), tokens, brands: targetBrands };
 }
 
@@ -407,8 +485,8 @@ Tono: moderno, cercano, profesional. Español rioplatense natural.
 Formato: markdown con headers ## para cada día, bullets para detalles.`;
 
 export async function runContentAgent(config, analystData, trendData, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
 
   // Get product intel from analyst data if available
   const productIntel = analystData?.data?.productIntel;
@@ -454,7 +532,7 @@ Además incluí:
 - 💬 **COMMUNITY MANAGEMENT** — 3 ideas para interactuar con la comunidad (encuestas, Q&A, behind the scenes)
 - 📊 **KPIs OBJETIVO** — engagement >3.5%, story completion >80%, saves, UGC posts esperados`;
 
-  const { text, tokens } = await callOpenAI(apiKey, CONTENT_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.7 });
+  const { text, tokens } = await callLLM(config, CONTENT_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.7 });
   return { type: 'contentCreator', content: text, timestamp: agentTimestamp(), tokens };
 }
 
@@ -468,8 +546,8 @@ Pensás en ROI, unit economics, ciclos de producto, LTV, CAC. Sos directo y no t
 Español rioplatense, ejecutivo, con números concretos. Formato: markdown con headers ## y bullets.`;
 
 export async function runStrategistAgent(config, analystData, trendData, contentData, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
 
   const productIntel = analystData?.data?.productIntel;
   const audienceIntel = analystData?.data?.audienceIntel;
@@ -537,7 +615,7 @@ Generá un **REPORTE ESTRATÉGICO** con:
 - Meta de conversiones
 - CAC objetivo`;
 
-  const { text, tokens } = await callOpenAI(apiKey, STRATEGIST_SYSTEM, prompt, { maxTokens: 4500, temperature: 0.4 });
+  const { text, tokens } = await callLLM(config, STRATEGIST_SYSTEM, prompt, { maxTokens: 4500, temperature: 0.4 });
   return { type: 'strategist', content: text, timestamp: agentTimestamp(), tokens };
 }
 
@@ -552,8 +630,8 @@ Pensás en frameworks: AARRR (Acquisition, Activation, Revenue, Retention, Refer
 Respondé en español rioplatense. Formato: markdown con headers ## y bullets con datos.`;
 
 export async function runGrowthAgent(config, analystData, trendData, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
 
   const productIntel = analystData?.data?.productIntel;
   const audienceIntel = analystData?.data?.audienceIntel;
@@ -612,7 +690,7 @@ Para cada experimento:
 - Target numérico basado en datos actuales
 - Cómo cada experimento impacta esta métrica`;
 
-  const { text, tokens } = await callOpenAI(apiKey, GROWTH_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.7 });
+  const { text, tokens } = await callLLM(config, GROWTH_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.7 });
   return { type: 'growth', content: text, timestamp: agentTimestamp(), tokens };
 }
 
@@ -626,8 +704,8 @@ Analizás datos granulares de campañas, ad sets y ads para dar recomendaciones 
 Respondé en español rioplatense. Formato: markdown con headers ## y tablas/bullets con datos.`;
 
 export async function runPaidMediaAgent(config, analystData, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
 
   onProgress?.('Analizando campañas de Meta Ads en profundidad...');
 
@@ -721,7 +799,7 @@ Para cada campaña activa:
 - Revenue estimado próximos 7 días
 - Break-even budget point`;
 
-  const { text, tokens } = await callOpenAI(apiKey, PAID_MEDIA_SYSTEM, prompt, { maxTokens: 4500, temperature: 0.4 });
+  const { text, tokens } = await callLLM(config, PAID_MEDIA_SYSTEM, prompt, { maxTokens: 4500, temperature: 0.4 });
   return { type: 'paidMedia', content: text, timestamp: agentTimestamp(), tokens, data: { campaignDetails } };
 }
 
@@ -736,8 +814,8 @@ Entendés la dinámica mayorista: listas de precio L1-L5, descuentos por volumen
 Español rioplatense, con números concretos y tablas. Formato: markdown.`;
 
 export async function runPricingAgent(config, analystData, trendData, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
   onProgress?.('Analizando pricing y márgenes...');
 
   let products = [], categories = [];
@@ -796,7 +874,7 @@ Generá un **REPORTE DE PRICING**:
 - Revenue incremental estimado si se implementan los cambios
 - Margen promedio esperado post-ajuste`;
 
-  const { text, tokens } = await callOpenAI(apiKey, PRICING_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.4 });
+  const { text, tokens } = await callLLM(config, PRICING_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.4 });
   return { type: 'pricing', content: text, timestamp: agentTimestamp(), tokens };
 }
 
@@ -810,8 +888,8 @@ Entendés ciclos de producción (corte → taller → producto terminado tarda ~
 Español rioplatense, datos concretos. Formato: markdown con tablas.`;
 
 export async function runInventoryAgent(config, state, analystData, trendData, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
   onProgress?.('Analizando inventario y proyectando demanda...');
 
   let topProducts = [], revenueStats = null;
@@ -872,7 +950,7 @@ Generá un **FORECAST DE INVENTARIO**:
 - Productos con demanda creciente: producir más
 - Productos con demanda decreciente: frenar producción`;
 
-  const { text, tokens } = await callOpenAI(apiKey, INVENTORY_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.3 });
+  const { text, tokens } = await callLLM(config, INVENTORY_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.3 });
   return { type: 'inventory', content: text, timestamp: agentTimestamp(), tokens };
 }
 
@@ -886,8 +964,8 @@ WhatsApp tiene límite de ~4000 chars por mensaje. Los catálogos van con emojis
 Español rioplatense natural. Formato: markdown con cada mensaje listo para copiar.`;
 
 export async function runWhatsAppAgent(config, analystData, trendData, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
   onProgress?.('Generando mensajes de venta para WhatsApp...');
 
   let products = [];
@@ -936,7 +1014,7 @@ Texto corto para estado de WhatsApp (máx 139 chars) con gancho visual.
 - Frecuencia recomendada (no saturar)
 - Cómo segmentar la lista de contactos`;
 
-  const { text, tokens } = await callOpenAI(apiKey, WHATSAPP_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.7 });
+  const { text, tokens } = await callLLM(config, WHATSAPP_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.7 });
   return { type: 'whatsapp', content: text, timestamp: agentTimestamp(), tokens };
 }
 
@@ -950,8 +1028,8 @@ Conocés SEO para e-commerce: long-tail keywords, schema markup, Google Shopping
 Español argentino. Formato: markdown con tablas y ejemplos concretos.`;
 
 export async function runSEOAgent(config, analystData, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
   onProgress?.('Analizando SEO de celavie.com.ar...');
 
   let products = [], categories = [];
@@ -1000,7 +1078,7 @@ Generá un **REPORTE SEO**:
 - Títulos optimizados para Shopping feed
 - Categorías Google Product Category sugeridas`;
 
-  const { text, tokens } = await callOpenAI(apiKey, SEO_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.5 });
+  const { text, tokens } = await callLLM(config, SEO_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.5 });
   return { type: 'seo', content: text, timestamp: agentTimestamp(), tokens };
 }
 
@@ -1013,8 +1091,8 @@ Monitoreás competidores directos e indirectos, analizás su estrategia de produ
 Respondé en español rioplatense. Formato: markdown con tablas comparativas.`;
 
 export async function runCompetitorAgent(config, brands = [], onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
   const competitors = brands.length > 0 ? brands : ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
   onProgress?.(`Analizando competidores: ${competitors.slice(0, 3).join(', ')}...`);
 
@@ -1056,7 +1134,7 @@ Para cada marca:
 - 3 acciones para diferenciarse esta semana
 - Messaging vs cada competidor`;
 
-  const { text, tokens } = await callOpenAI(apiKey, COMPETITOR_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.6 });
+  const { text, tokens } = await callLLM(config, COMPETITOR_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.6 });
   return { type: 'competitor', content: text, timestamp: agentTimestamp(), tokens, brands: competitors };
 }
 
@@ -1070,8 +1148,8 @@ Pensás en: gross margin, operating margin, break-even, cash conversion cycle.
 Español rioplatense, ejecutivo. Formato: markdown con tablas de números.`;
 
 export async function runFinancialAgent(config, state, analystData, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
   onProgress?.('Consolidando datos financieros...');
 
   let revenueStats = null;
@@ -1138,7 +1216,7 @@ Revenue Web + POS, Costo estimado, Gross Margin, Gastos Meta Ads, Net estimado
 ## ✅ ACCIONES
 | Acción | Impacto Financiero | Urgencia |`;
 
-  const { text, tokens } = await callOpenAI(apiKey, FINANCIAL_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.3 });
+  const { text, tokens } = await callLLM(config, FINANCIAL_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.3 });
   return { type: 'financial', content: text, timestamp: agentTimestamp(), tokens };
 }
 
@@ -1151,8 +1229,8 @@ Diseñás comunicaciones personalizadas para diferentes segmentos de clientes: m
 Tono: profesional pero cercano, español rioplatense. Formato: markdown con templates listos para usar.`;
 
 export async function runCRMAgent(config, analystData, onProgress) {
-  const apiKey = config.marketing?.openaiKey;
-  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  // API key handled by callLLM
+  // Key validation handled by callLLM
   onProgress?.('Generando estrategia CRM y templates...');
 
   let customers = [];
@@ -1211,7 +1289,7 @@ Asunto + cuerpo pidiendo opinión
 ## 📊 KPIs CRM
 - Open rate objetivo, Click rate, Recompra rate`;
 
-  const { text, tokens } = await callOpenAI(apiKey, CRM_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.6 });
+  const { text, tokens } = await callLLM(config, CRM_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.6 });
   return { type: 'crm', content: text, timestamp: agentTimestamp(), tokens };
 }
 
