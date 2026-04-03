@@ -115,7 +115,7 @@ async function callLLM(config, systemPrompt, userPrompt, options = {}) {
 }
 
 // Legacy wrapper for backward compatibility
-async function callOpenAI(apiKey, systemPrompt, userPrompt, options = {}) {
+async function callLLM(config, systemPrompt, userPrompt, options = {}) {
   // Build a minimal config object for callLLM
   const config = { marketing: { openaiKey: apiKey, llmProvider: 'openai' } };
   return callLLM(config, systemPrompt, userPrompt, options);
