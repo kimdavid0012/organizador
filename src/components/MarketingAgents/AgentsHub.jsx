@@ -2,14 +2,16 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Zap, BarChart3, Globe, Instagram, Brain, Play, Loader2, Clock,
   ChevronDown, ChevronRight, Plus, X, Trash2, RefreshCw, Copy, Check,
-  AlertCircle
+  AlertCircle, Rocket, Target
 } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import {
   runAnalystAgent,
   runTrendScoutAgent,
   runContentAgent,
-  runStrategistAgent
+  runStrategistAgent,
+  runGrowthAgent,
+  runPaidMediaAgent
 } from '../../services/agentService';
 
 const TABS = [
@@ -17,6 +19,8 @@ const TABS = [
   { id: 'trendScout', label: 'Trend Scout', icon: Globe, color: '#8b5cf6', desc: 'Tendencias de moda' },
   { id: 'contentCreator', label: 'Content', icon: Instagram, color: '#ec4899', desc: 'Plan de contenido IG' },
   { id: 'strategist', label: 'Estratega', icon: Brain, color: '#f59e0b', desc: 'Recomendaciones estratégicas' },
+  { id: 'growth', label: 'Growth', icon: Rocket, color: '#10b981', desc: 'Experimentos y crecimiento' },
+  { id: 'paidMedia', label: 'Paid Media', icon: Target, color: '#ef4444', desc: 'Optimización de Meta Ads' },
 ];
 
 const DEFAULT_BRANDS = ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
@@ -104,6 +108,8 @@ export default function AgentsHub() {
     if (c.trendScout) setResults(prev => ({ ...prev, trendScout: c.trendScout }));
     if (c.contentCreator) setResults(prev => ({ ...prev, contentCreator: c.contentCreator }));
     if (c.strategist) setResults(prev => ({ ...prev, strategist: c.strategist }));
+    if (c.growth) setResults(prev => ({ ...prev, growth: c.growth }));
+    if (c.paidMedia) setResults(prev => ({ ...prev, paidMedia: c.paidMedia }));
     if (c.history) setHistory(c.history);
     if (c.trendScoutBrands) setBrands(c.trendScoutBrands);
   }, [config.agentsCache]);
@@ -128,6 +134,8 @@ export default function AgentsHub() {
         case 'trendScout': result = await runTrendScoutAgent(config, brands, onProgress); break;
         case 'contentCreator': result = await runContentAgent(config, results.analyst, results.trendScout, onProgress); break;
         case 'strategist': result = await runStrategistAgent(config, results.analyst, results.trendScout, results.contentCreator, onProgress); break;
+        case 'growth': result = await runGrowthAgent(config, results.analyst, results.trendScout, onProgress); break;
+        case 'paidMedia': result = await runPaidMediaAgent(config, results.analyst, onProgress); break;
         default: return;
       }
       const nextResults = { ...results, [agentId]: result };
@@ -169,11 +177,25 @@ export default function AgentsHub() {
 
       setActiveTab('strategist');
       const strategist = await runStrategistAgent(config, analyst, trendScout, content, onProgress);
-      const finalResults = { analyst, trendScout, contentCreator: content, strategist };
-      setResults(finalResults);
-      const nextHistory = addToHistory(strategist);
-      persistCache({ ...finalResults, history: nextHistory });
+      setResults(prev => ({ ...prev, strategist }));
+      addToHistory(strategist);
       setCompletedSteps(['analyst', 'trendScout', 'contentCreator', 'strategist']);
+
+      // 5. Growth Hacker
+      setActiveTab('growth');
+      const growth = await runGrowthAgent(config, analyst, trendScout, onProgress);
+      setResults(prev => ({ ...prev, growth }));
+      addToHistory(growth);
+      setCompletedSteps(['analyst', 'trendScout', 'contentCreator', 'strategist', 'growth']);
+
+      // 6. Paid Media
+      setActiveTab('paidMedia');
+      const paidMedia = await runPaidMediaAgent(config, analyst, onProgress);
+      const finalResults = { analyst, trendScout, contentCreator: content, strategist, growth, paidMedia };
+      setResults(finalResults);
+      const nextHistory = addToHistory(paidMedia);
+      persistCache({ ...finalResults, history: nextHistory });
+      setCompletedSteps(['analyst', 'trendScout', 'contentCreator', 'strategist', 'growth', 'paidMedia']);
     } catch (err) {
       setError({ agent: 'all', message: err.message });
     } finally {
