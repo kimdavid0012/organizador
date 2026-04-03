@@ -368,29 +368,11 @@ export async function runAnalystAgent(config, state, onProgress) {
 
   const prompt = `Fecha: ${todayLabel()}
 ${historyCtx}
-📊 META ADS (últimos 30 días account-level):
-${safeTruncate(bd.meta)}
+📊 ANÁLISIS PROFUNDO META ADS (paso 1):
+${step1.text}
 
-📌 CAMPAÑAS ACTIVAS (con ad sets y targeting):
-${safeTruncate(bd.campaigns, 3000)}
-
-🛒 WOOCOMMERCE — Top Sellers:
-${safeTruncate(bd.woo?.topProducts, 1500)}
-
-📉 WOOCOMMERCE — Peor Performance:
-${safeTruncate(bd.woo?.bottomProducts, 800)}
-
-💰 REVENUE STATS (30 días):
-${safeTruncate(bd.revenueStats?.totals, 800)}
-
-🧾 PEDIDOS RECIENTES:
-${JSON.stringify(bd.recentOrders)}
-
-🏪 PUNTO DE VENTA (POS) HOY:
-${JSON.stringify(bd.pos)}
-
-📦 INVENTARIO INTERNO:
-${JSON.stringify(bd.internal)}
+🛒 ANÁLISIS PROFUNDO VENTAS (paso 2):
+${step2.text}
 
 🔬 SUB-AGENTE — INTELIGENCIA DE PRODUCTO:
 ${safeTruncate(pi, 1500)}
@@ -411,7 +393,8 @@ Generá un BRIEF EJECUTIVO DEL DÍA con:
 9. **📈 PROYECCIÓN SEMANAL** (revenue estimado, metas)`;
 
   const { text, tokens } = await callLLM(config, ANALYST_SYSTEM, prompt, { maxTokens: 4000 });
-  return { type: 'analyst', content: text, timestamp: agentTimestamp(), tokens, data: { meta: bd.meta, woo: bd.woo, pos: bd.pos, productIntel: pi, audienceIntel: ai } };
+  const totalTokens = { prompt: (step1.tokens?.prompt || 0) + (step2.tokens?.prompt || 0) + (tokens?.prompt || 0), completion: (step1.tokens?.completion || 0) + (step2.tokens?.completion || 0) + (tokens?.completion || 0), total: (step1.tokens?.total || 0) + (step2.tokens?.total || 0) + (tokens?.total || 0) };
+  return { type: 'analyst', content: text, timestamp: agentTimestamp(), tokens: totalTokens, data: { meta: bd.meta, woo: bd.woo, pos: bd.pos, productIntel: pi, audienceIntel: ai }, multiStep: true };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -554,7 +537,11 @@ export async function runStrategistAgent(config, analystData, trendData, content
 
   onProgress?.('Sintetizando toda la información...');
 
+  const stratHistory = getAgentHistory(config, 'strategist');
+  const stratHistoryCtx = buildHistoryContext(stratHistory);
+
   const prompt = `Fecha: ${todayLabel()}
+${stratHistoryCtx}
 
 📊 REPORTE DEL ANALISTA:
 ${safeContentTruncate(analystData, 2500)}
@@ -615,7 +602,7 @@ Generá un **REPORTE ESTRATÉGICO** con:
 - Meta de conversiones
 - CAC objetivo`;
 
-  const { text, tokens } = await callLLM(config, STRATEGIST_SYSTEM, prompt, { maxTokens: 4500, temperature: 0.4 });
+  const { text, tokens } = await callLLM(config, STRATEGIST_SYSTEM, prompt, { maxTokens: 4500, temperature: 0.4, model: config.marketing?.llmProvider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-4o' });
   return { type: 'strategist', content: text, timestamp: agentTimestamp(), tokens };
 }
 
@@ -1151,6 +1138,8 @@ export async function runFinancialAgent(config, state, analystData, onProgress) 
   // API key handled by callLLM
   // Key validation handled by callLLM
   onProgress?.('Consolidando datos financieros...');
+  const finHistory = getAgentHistory(config, 'financial');
+  const finHistoryCtx = buildHistoryContext(finHistory);
 
   let revenueStats = null;
   try { revenueStats = await wooService.fetchRevenueStats(config); } catch {}
@@ -1216,7 +1205,7 @@ Revenue Web + POS, Costo estimado, Gross Margin, Gastos Meta Ads, Net estimado
 ## ✅ ACCIONES
 | Acción | Impacto Financiero | Urgencia |`;
 
-  const { text, tokens } = await callLLM(config, FINANCIAL_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.3 });
+  const { text, tokens } = await callLLM(config, FINANCIAL_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.3, model: config.marketing?.llmProvider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-4o' });
   return { type: 'financial', content: text, timestamp: agentTimestamp(), tokens };
 }
 
