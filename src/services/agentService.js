@@ -1,19 +1,34 @@
 /**
- * Agent Service — Central engine for AI Marketing Agents
- * Handles: prompt building, OpenAI calls, retry logic, agent orchestration
+ * Agent Service v2 — Enhanced AI Marketing Agents with Sub-Agents
+ * Now uses: full WooCommerce catalog, customers, categories, revenue stats,
+ * Meta Ads campaigns + ad sets + targeting, internal Firestore data (articulos, telas, cortes)
+ * Sub-agents: Product Intelligence, Audience Analyst
  */
 
 import { metaService } from '../utils/metaService';
 import { wooService } from '../utils/wooService';
 
+// ─── Brand constants ─────────────────────────────────────────
+const BRAND = {
+  name: 'CELAVIE',
+  handle: '@celavieindumentaria',
+  platforms: 'Instagram, TikTok y Facebook',
+  web: 'celavie.com.ar',
+  desc: 'Marca mayorista argentina de basics en modal y algodón',
+  production: '~18,750 prendas/mes, ~15 modelos',
+  channels: 'mayoristas (70%) + web celavie.com.ar (30%)',
+};
+
+const BRAND_CONTEXT = `MARCA: ${BRAND.name} (${BRAND.handle} en ${BRAND.platforms})
+Web: ${BRAND.web} | ${BRAND.desc}
+Producción: ${BRAND.production} | Canales: ${BRAND.channels}`;
+
 // ─── OpenAI helper with retry + timeout ──────────────────────
 async function callOpenAI(apiKey, systemPrompt, userPrompt, options = {}) {
   const { model = 'gpt-4o-mini', temperature = 0.5, maxTokens = 4000, retries = 2 } = options;
-
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
-
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -60,8 +75,7 @@ function safeTruncate(obj, maxChars = 2500) {
   if (!obj) return 'No disponible';
   try {
     const str = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
-    if (str.length <= maxChars) return str;
-    return str.substring(0, maxChars) + '\n... [datos truncados]';
+    return str.length <= maxChars ? str : str.substring(0, maxChars) + '\n... [truncado]';
   } catch { return 'Error al serializar datos'; }
 }
 
@@ -73,12 +87,187 @@ function safeContentTruncate(result, maxChars = 2000) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  AGENT 1 — ANALISTA (Daily Business Intelligence)
+//  MASTER DATA COLLECTOR — gathers all available business data
+// ═══════════════════════════════════════════════════════════════
+async function gatherBusinessData(config, state, onProgress) {
+  const data = { meta: null, campaigns: [], adSets: [], woo: null, products: [], categories: [], customers: [], revenueStats: null, recentOrders: [], pos: null, internal: {} };
+
+  // ── Meta Ads ──
+  onProgress?.('Recopilando Meta Ads...');
+  try {
+    const [insights, campaigns] = await Promise.all([
+      metaService.fetchAdInsights(config),
+      metaService.fetchCampaigns(config),
+    ]);
+    data.meta = insights;
+    const activeCampaigns = campaigns.filter(c => c.status === 'ACTIVE');
+    data.campaigns = await Promise.all(
+      activeCampaigns.slice(0, 8).map(async (c) => {
+        try {
+          const report = await metaService.fetchCampaignReportData(config, c.id);
+          let adSets = [];
+          try { adSets = await metaService.fetchAdSets(config, c.id); } catch {}
+          return { name: c.name, id: c.id, objective: c.objective, status: c.status, daily_budget: c.daily_budget, today: report.today, last7d: report.last7d, last30d: report.last30d, adSets: adSets.slice(0, 3).map(as => ({ name: as.name, status: as.status, targeting: as.targeting, daily_budget: as.daily_budget })) };
+        } catch { return { name: c.name, objective: c.objective, today: {}, last7d: {}, adSets: [] }; }
+      })
+    );
+  } catch (e) { console.warn('Data collector: Meta unavailable', e.message); }
+
+  // ── WooCommerce ──
+  onProgress?.('Recopilando WooCommerce...');
+  try {
+    const [topProducts, allAnalytics, products, categories, customers, revenueStats, recentOrders] = await Promise.allSettled([
+      wooService.fetchTopProducts(config),
+      wooService.fetchAllProductsAnalytics(config),
+      wooService.fetchProducts(config),
+      wooService.fetchCategories(config),
+      wooService.fetchCustomers(config),
+      wooService.fetchRevenueStats(config),
+      wooService.fetchRecentOrders(config, 50),
+    ]);
+
+    const val = (r) => r.status === 'fulfilled' ? r.value : null;
+
+    data.woo = {
+      topProducts: (val(topProducts) || []).slice(0, 15).map(p => ({
+        name: p.extended_info?.name || p.name, itemsSold: p.items_sold, netRevenue: p.net_revenue,
+        sku: p.extended_info?.sku, stockStatus: p.extended_info?.stock_status,
+      })),
+      bottomProducts: (val(allAnalytics) || []).slice(-10).map(p => ({
+        name: p.extended_info?.name || p.name, itemsSold: p.items_sold, netRevenue: p.net_revenue,
+      })),
+    };
+
+    data.products = (val(products) || []).map(p => ({
+      name: p.name, sku: p.sku, price: p.price, regular_price: p.regular_price, sale_price: p.sale_price,
+      stock_status: p.stock_status, stock_quantity: p.stock_quantity, categories: (p.categories || []).map(c => c.name),
+      status: p.status, total_sales: p.total_sales,
+    }));
+
+    data.categories = (val(categories) || []).map(c => ({ name: c.name, count: c.count })).filter(c => c.count > 0);
+
+    data.customers = (val(customers) || []).map(c => ({
+      name: `${c.first_name} ${c.last_name}`.trim(), orders_count: c.orders_count, total_spent: c.total_spent,
+      city: c.billing?.city, state: c.billing?.state,
+    }));
+
+    data.revenueStats = val(revenueStats);
+
+    const orders = val(recentOrders) || [];
+    const todayOrders = orders.filter(o => new Date(o.date_created).toDateString() === new Date().toDateString());
+    data.recentOrders = {
+      total50: orders.length,
+      ordersToday: todayOrders.length,
+      revenueToday: todayOrders.reduce((s, o) => s + parseFloat(o.total || 0), 0),
+      avgOrderValue: orders.length > 0 ? orders.reduce((s, o) => s + parseFloat(o.total || 0), 0) / orders.length : 0,
+      topCities: [...new Set(orders.map(o => o.billing?.city).filter(Boolean))].slice(0, 5),
+    };
+  } catch (e) { console.warn('Data collector: WooCommerce unavailable', e.message); }
+
+  // ── POS data from Firestore state ──
+  const posVentas = (state.posVentas || []).filter(v => {
+    const d = new Date(v.fecha || v.createdAt);
+    return d.toDateString() === new Date().toDateString();
+  });
+  data.pos = {
+    ventasHoy: posVentas.length,
+    totalHoy: posVentas.reduce((s, v) => s + (v.total || 0), 0),
+    ticketPromedio: posVentas.length > 0 ? posVentas.reduce((s, v) => s + (v.total || 0), 0) / posVentas.length : 0,
+  };
+
+  // ── Internal Firestore data ──
+  onProgress?.('Procesando datos internos...');
+  const articulos = state.articulos || [];
+  data.internal = {
+    totalArticulos: articulos.length,
+    articulosConStock: articulos.filter(a => (a.stock || 0) > 0).length,
+    articulosSinStock: articulos.filter(a => (a.stock || 0) <= 0).length,
+    telas: (state.telas || []).map(t => ({ nombre: t.nombre, stock: t.stock })).slice(0, 20),
+    cortesActivos: (state.cortes || []).filter(c => c.estado !== 'finalizado').length,
+    pedidosOnlinePendientes: (state.pedidosOnline || []).filter(p => p.estado !== 'entregado' && p.estado !== 'cancelado').length,
+    clientes: (state.clientes || []).length,
+  };
+
+  return data;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SUB-AGENT: PRODUCT INTELLIGENCE
+// ═══════════════════════════════════════════════════════════════
+async function runProductIntelligence(apiKey, businessData) {
+  const system = `Sos un analista de producto especializado en e-commerce de moda. ${BRAND_CONTEXT}
+Analizás catálogo, stock, pricing, y performance de ventas para dar recomendaciones concretas.
+Respondé en español rioplatense, con datos específicos. Formato: JSON parseable.`;
+
+  const prompt = `CATÁLOGO COMPLETO (${businessData.products.length} productos):
+${safeTruncate(businessData.products, 3000)}
+
+CATEGORÍAS: ${JSON.stringify(businessData.categories)}
+
+TOP SELLERS: ${safeTruncate(businessData.woo?.topProducts, 1500)}
+WORST SELLERS: ${safeTruncate(businessData.woo?.bottomProducts, 1000)}
+
+STOCK INTERNO: ${JSON.stringify(businessData.internal)}
+
+Respondé SOLO con un JSON (sin markdown) con esta estructura:
+{
+  "stockAlerts": ["productos sin stock o stock crítico"],
+  "topPerformers": ["top 5 productos por venta"],
+  "underperformers": ["5 productos que no se venden"],
+  "pricingIssues": ["problemas de pricing detectados"],
+  "categoryAnalysis": "resumen de qué categorías performan mejor",
+  "recommendations": ["3 recomendaciones concretas de producto"],
+  "discontinueCandidates": ["productos candidatos a discontinuar"],
+  "developmentOpportunities": ["gaps en el catálogo, productos a desarrollar"]
+}`;
+
+  const { text } = await callOpenAI(apiKey, system, prompt, { temperature: 0.3, maxTokens: 2000 });
+  try { return JSON.parse(text.replace(/```json|```/g, '').trim()); }
+  catch { return { raw: text }; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SUB-AGENT: AUDIENCE ANALYST
+// ═══════════════════════════════════════════════════════════════
+async function runAudienceAnalyst(apiKey, businessData) {
+  const system = `Sos un analista de audiencia y targeting especializado en Meta Ads para e-commerce de moda. ${BRAND_CONTEXT}
+Analizás clientes, targeting de ad sets, y comportamiento de compra.
+Respondé en español rioplatense. Formato: JSON parseable.`;
+
+  const prompt = `CLIENTES WOOCOMMERCE (${businessData.customers.length} total):
+${safeTruncate(businessData.customers.slice(0, 30), 2000)}
+
+PEDIDOS RECIENTES: ${JSON.stringify(businessData.recentOrders)}
+
+CAMPAÑAS CON AD SETS Y TARGETING:
+${safeTruncate(businessData.campaigns.map(c => ({
+    name: c.name, objective: c.objective, adSets: c.adSets
+  })), 2500)}
+
+Respondé SOLO con un JSON (sin markdown):
+{
+  "customerSegments": [{"segment": "nombre", "size": N, "avgSpent": N, "behavior": "desc"}],
+  "topCities": ["ciudades con más compras"],
+  "buyerProfile": "perfil del comprador típico",
+  "targetingAnalysis": "qué targeting funciona y cuál no en Meta Ads",
+  "audienceGaps": ["audiencias que no estamos alcanzando"],
+  "recommendations": ["3 recomendaciones de audiencia/targeting"],
+  "retargetingOpportunities": ["oportunidades de retargeting"],
+  "lookalikeStrategy": "estrategia sugerida para lookalike audiences"
+}`;
+
+  const { text } = await callOpenAI(apiKey, system, prompt, { temperature: 0.3, maxTokens: 2000 });
+  try { return JSON.parse(text.replace(/```json|```/g, '').trim()); }
+  catch { return { raw: text }; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 1 — ANALISTA (Enhanced Daily Business Intelligence)
 // ═══════════════════════════════════════════════════════════════
 const ANALYST_SYSTEM = `Sos un analista de business intelligence especializado en e-commerce de moda argentino.
-Tu trabajo es consolidar datos de Meta Ads + WooCommerce + ventas del día y producir un brief ejecutivo.
-La marca es CELAVIE (@celavieindumentaria en Instagram, TikTok y Facebook). Basics de modal/algodón, mayorista argentino.
-Respondé siempre en español rioplatense, profesional pero directo. Usá emojis con moderación para marcar secciones.
+${BRAND_CONTEXT}
+Tu trabajo es consolidar TODOS los datos disponibles (Meta Ads, WooCommerce, POS, inventario, clientes, sub-agentes) y producir un brief ejecutivo completo.
+Respondé en español rioplatense, profesional pero directo. Usá emojis con moderación.
 Formato: markdown con headers ##, bullets concretos con números, y un score general del día (0-100).
 Si algún dato no está disponible, indicalo claramente y no inventes números.`;
 
@@ -86,106 +275,75 @@ export async function runAnalystAgent(config, state, onProgress) {
   const apiKey = config.marketing?.openaiKey;
   if (!apiKey) throw new Error('Falta OpenAI API Key en Configuración → Marketing');
 
-  onProgress?.('Recopilando datos de Meta Ads...');
+  const bd = await gatherBusinessData(config, state, onProgress);
 
-  // Gather Meta Ads data
-  let metaData = null;
-  let campaignsData = [];
-  try {
-    const [insights, campaigns] = await Promise.all([
-      metaService.fetchAdInsights(config),
-      metaService.fetchCampaigns(config),
-    ]);
-    metaData = insights;
-    campaignsData = campaigns.filter(c => c.status === 'ACTIVE');
-    const enriched = await Promise.all(
-      campaignsData.slice(0, 5).map(async (c) => {
-        try {
-          const report = await metaService.fetchCampaignReportData(config, c.id);
-          return { name: c.name, objective: c.objective, today: report.today, last7d: report.last7d };
-        } catch { return { name: c.name, objective: c.objective, today: {}, last7d: {} }; }
-      })
-    );
-    campaignsData = enriched;
-  } catch (e) {
-    console.warn('Analyst: Meta Ads data unavailable', e.message);
-  }
+  // Run sub-agents in parallel
+  onProgress?.('Ejecutando sub-agentes de producto y audiencia...');
+  const [productIntel, audienceIntel] = await Promise.allSettled([
+    runProductIntelligence(apiKey, bd),
+    runAudienceAnalyst(apiKey, bd),
+  ]);
+  const pi = productIntel.status === 'fulfilled' ? productIntel.value : null;
+  const ai = audienceIntel.status === 'fulfilled' ? audienceIntel.value : null;
 
-  onProgress?.('Obteniendo datos de WooCommerce...');
-
-  // Gather WooCommerce data
-  let wooData = null;
-  try {
-    const [topProducts, orders] = await Promise.all([
-      wooService.fetchTopProducts(config),
-      wooService.fetchOrders(config),
-    ]);
-    const todayOrders = (orders || []).filter(o => {
-      const d = new Date(o.date_created);
-      return d.toDateString() === new Date().toDateString();
-    });
-    wooData = {
-      topProducts: (topProducts || []).slice(0, 10).map(p => ({
-        name: p.extended_info?.name || p.name,
-        itemsSold: p.items_sold,
-        netRevenue: p.net_revenue,
-      })),
-      ordersToday: todayOrders.length,
-      revenueToday: todayOrders.reduce((sum, o) => sum + parseFloat(o.total || 0), 0),
-      totalOrders30d: (orders || []).length,
-    };
-  } catch (e) {
-    console.warn('Analyst: WooCommerce data unavailable', e.message);
-  }
-
-  // POS data from state
-  const posVentas = (state.posVentas || []).filter(v => {
-    const d = new Date(v.fecha || v.createdAt);
-    return d.toDateString() === new Date().toDateString();
-  });
-  const posData = {
-    ventasHoy: posVentas.length,
-    totalHoy: posVentas.reduce((s, v) => s + (v.total || 0), 0),
-  };
-
-  onProgress?.('Generando análisis con IA...');
+  onProgress?.('Generando análisis ejecutivo...');
 
   const prompt = `Fecha: ${todayLabel()}
 
-📊 DATOS META ADS (últimos 30 días account-level):
-${safeTruncate(metaData)}
+📊 META ADS (últimos 30 días account-level):
+${safeTruncate(bd.meta)}
 
-📌 CAMPAÑAS ACTIVAS (top 5, con datos de hoy y 7 días):
-${safeTruncate(campaignsData)}
+📌 CAMPAÑAS ACTIVAS (con ad sets y targeting):
+${safeTruncate(bd.campaigns, 3000)}
 
-🛒 WOOCOMMERCE:
-${safeTruncate(wooData)}
+🛒 WOOCOMMERCE — Top Sellers:
+${safeTruncate(bd.woo?.topProducts, 1500)}
+
+📉 WOOCOMMERCE — Peor Performance:
+${safeTruncate(bd.woo?.bottomProducts, 800)}
+
+💰 REVENUE STATS (30 días):
+${safeTruncate(bd.revenueStats?.totals, 800)}
+
+🧾 PEDIDOS RECIENTES:
+${JSON.stringify(bd.recentOrders)}
 
 🏪 PUNTO DE VENTA (POS) HOY:
-${JSON.stringify(posData)}
+${JSON.stringify(bd.pos)}
+
+📦 INVENTARIO INTERNO:
+${JSON.stringify(bd.internal)}
+
+🔬 SUB-AGENTE — INTELIGENCIA DE PRODUCTO:
+${safeTruncate(pi, 1500)}
+
+👥 SUB-AGENTE — ANÁLISIS DE AUDIENCIA:
+${safeTruncate(ai, 1500)}
 
 ───────────────────────
 Generá un BRIEF EJECUTIVO DEL DÍA con:
 1. **SCORE DEL DÍA (0-100)** con justificación en 1 línea
-2. **RESUMEN EJECUTIVO** (3-4 líneas max)
-3. **VENTAS**: consolidado web + POS, ticket promedio, comparación
-4. **META ADS**: estado general, mejor y peor campaña, alertas
-5. **TOP PRODUCTOS**: qué se vende y qué no
-6. **🔴 ALERTAS URGENTES** (si hay)
-7. **✅ TOP 3 ACCIONES PARA HOY** (concretas, con responsable sugerido)`;
+2. **RESUMEN EJECUTIVO** (3-4 líneas)
+3. **💰 VENTAS**: consolidado web + POS, ticket promedio, comparación, revenue trend
+4. **📢 META ADS**: estado general, mejor/peor campaña, targeting insights, budget efficiency
+5. **📦 PRODUCTOS**: top sellers, alertas de stock, productos a pushear/pausar
+6. **👥 CLIENTES**: segmentos clave, ciudades top, oportunidades de retargeting
+7. **🔴 ALERTAS URGENTES** (stock, budget, performance)
+8. **✅ TOP 5 ACCIONES PARA HOY** (concretas, con responsable: David/Marketing/Rocío/Nadia)
+9. **📈 PROYECCIÓN SEMANAL** (revenue estimado, metas)`;
 
-  const { text, tokens } = await callOpenAI(apiKey, ANALYST_SYSTEM, prompt, { maxTokens: 3000 });
-  return { type: 'analyst', content: text, timestamp: agentTimestamp(), tokens, data: { metaData, wooData, posData } };
+  const { text, tokens } = await callOpenAI(apiKey, ANALYST_SYSTEM, prompt, { maxTokens: 4000 });
+  return { type: 'analyst', content: text, timestamp: agentTimestamp(), tokens, data: { meta: bd.meta, woo: bd.woo, pos: bd.pos, productIntel: pi, audienceIntel: ai } };
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  AGENT 2 — TREND SCOUT (Fashion Intelligence)
+//  AGENT 2 — TREND SCOUT (Enhanced Fashion Intelligence)
 // ═══════════════════════════════════════════════════════════════
 const SCOUT_SYSTEM = `Sos un trend scout de moda internacional especializado en basics, modal, y ropa casual/urbana.
-Conocés muy bien el mercado argentino mayorista y sabés traducir tendencias globales a oportunidades locales.
-La marca es CELAVIE (@celavieindumentaria en Instagram, TikTok y Facebook).
-Respondé en español rioplatense. Sé concreto: nombra colores Pantone, tipos de tela, siluetas, referencias de marcas.
-Formato: markdown con headers ##, bullets con datos específicos. No divagues.`;
+${BRAND_CONTEXT}
+Conocés muy bien el mercado argentino mayorista y sabés traducir tendencias globales a oportunidades para ${BRAND.handle}.
+Respondé en español rioplatense. Sé concreto: colores Pantone, telas, siluetas, referencias.
+Formato: markdown con headers ##, bullets con datos específicos.`;
 
 export async function runTrendScoutAgent(config, brands = [], onProgress) {
   const apiKey = config.marketing?.openaiKey;
@@ -193,42 +351,61 @@ export async function runTrendScoutAgent(config, brands = [], onProgress) {
 
   const targetBrands = brands.length > 0 ? brands : ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
 
+  // Fetch current catalog for context
+  let catalogContext = '';
+  try {
+    onProgress?.('Cargando catálogo actual...');
+    const products = await wooService.fetchProducts(config);
+    const categories = await wooService.fetchCategories(config);
+    const productNames = products.slice(0, 30).map(p => `${p.name} ($${p.price})`);
+    const catNames = categories.filter(c => c.count > 0).map(c => `${c.name} (${c.count})`);
+    catalogContext = `\nCATÁLOGO ACTUAL DE ${BRAND.name} (${products.length} productos):\n${productNames.join(', ')}\nCATEGORÍAS: ${catNames.join(', ')}`;
+  } catch {}
+
   onProgress?.(`Investigando tendencias de ${targetBrands.slice(0, 3).join(', ')}...`);
 
   const prompt = `Fecha: ${todayLabel()}
 
 MARCAS A ANALIZAR: ${targetBrands.join(', ')}
+${catalogContext}
 
-CONTEXTO: CELAVIE es una marca argentina mayorista de basics en modal y algodón. Vendemos remeras, musculosas, calzas, bodies, conjuntos. Nuestro público son revendedoras y tiendas multimarca.
+${BRAND_CONTEXT}
+Productos: remeras, musculosas, calzas, bodies, conjuntos. Público: revendedoras y tiendas multimarca.
 
 ───────────────────────
-Basándote en tu conocimiento actualizado de estas marcas y del mercado de moda:
+Basándote en tu conocimiento actualizado:
 
-1. 🌍 **TENDENCIAS GLOBALES EN BASICS** — Colores Pantone, siluetas, texturas, estampados
-2. 📌 **POR MARCA ANALIZADA** — Qué están lanzando ahora en basics/essentials, qué podemos adaptar
-3. 💡 **OPORTUNIDADES PARA CELAVIE** — 3 productos específicos a agregar/modificar, colores a incorporar, qué dejar de producir
-4. 📸 **IDEAS DE CONTENIDO** — 3 conceptos de sesión de fotos, estilo de comunicación
-5. 🎯 **PREDICCIÓN** — Qué va a ser tendencia en los próximos 2-3 meses`;
+1. 🌍 **TENDENCIAS GLOBALES EN BASICS** — Colores Pantone, siluetas, texturas, estampados para la temporada actual
+2. 📌 **POR MARCA ANALIZADA** — Qué están lanzando en basics/essentials, qué puede adaptar ${BRAND.handle}
+3. 💡 **OPORTUNIDADES PARA ${BRAND.name}** — 3 productos a agregar/modificar, colores a incorporar, qué dejar de producir. Basate en nuestro catálogo actual.
+4. 📸 **IDEAS DE CONTENIDO PARA ${BRAND.handle}** — 3 conceptos de sesión de fotos/reels para IG y TikTok
+5. 🎯 **PREDICCIÓN** — Tendencias próximos 2-3 meses
+6. 🏷️ **HASHTAGS TENDENCIA** — 15 hashtags relevantes para ${BRAND.handle} ahora mismo`;
 
-  const { text, tokens } = await callOpenAI(apiKey, SCOUT_SYSTEM, prompt, { maxTokens: 3000, temperature: 0.7 });
+  const { text, tokens } = await callOpenAI(apiKey, SCOUT_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.7 });
   return { type: 'trendScout', content: text, timestamp: agentTimestamp(), tokens, brands: targetBrands };
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  AGENT 3 — CONTENT CREATOR (Instagram Content)
+//  AGENT 3 — CONTENT CREATOR (Enhanced, multi-platform)
 // ═══════════════════════════════════════════════════════════════
 const CONTENT_SYSTEM = `Sos un content strategist y copywriter especializado en Instagram, TikTok y Facebook para marcas de moda mayorista argentina.
-La cuenta es @celavieindumentaria (Instagram, TikTok y Facebook). Siempre usá ese handle en los captions y CTAs.
-Creás contenido que combina tendencias con datos de ventas reales para maximizar engagement y conversiones.
-Tono: moderno, cercano, profesional. Usás español rioplatense natural (no forzado).
-Conocés las mejores prácticas de IG: Reels > carruseles > estáticos, hooks en los primeros 3 segundos, CTAs claros.
+La cuenta es ${BRAND.handle} en las 3 plataformas. SIEMPRE usá ese handle en captions y CTAs.
+${BRAND_CONTEXT}
+Creás contenido que combina tendencias + datos de ventas reales + inteligencia de producto para maximizar engagement y conversiones.
+Tono: moderno, cercano, profesional. Español rioplatense natural.
+Mejores prácticas: Reels > carruseles > estáticos, hooks en primeros 3 segundos, CTAs claros.
 Formato: markdown con headers ## para cada día, bullets para detalles.`;
 
 export async function runContentAgent(config, analystData, trendData, onProgress) {
   const apiKey = config.marketing?.openaiKey;
   if (!apiKey) throw new Error('Falta OpenAI API Key');
 
-  onProgress?.('Generando plan de contenido semanal...');
+  // Get product intel from analyst data if available
+  const productIntel = analystData?.data?.productIntel;
+  const audienceIntel = analystData?.data?.audienceIntel;
+
+  onProgress?.('Generando plan de contenido multiplataforma...');
 
   const prompt = `Fecha: ${todayLabel()}
 
@@ -238,43 +415,54 @@ ${safeContentTruncate(analystData)}
 🌍 TENDENCIAS DEL SCOUT:
 ${safeContentTruncate(trendData)}
 
+🔬 INTELIGENCIA DE PRODUCTO:
+${safeTruncate(productIntel, 1000)}
+
+👥 PERFIL DE AUDIENCIA:
+${safeTruncate(audienceIntel, 1000)}
+
 ───────────────────────
-Generá un **PLAN DE CONTENIDO SEMANAL** para @celavieindumentaria (Instagram + TikTok + Facebook):
+Generá un **PLAN DE CONTENIDO SEMANAL** para ${BRAND.handle}:
 
 PARA CADA DÍA (Lunes a Sábado):
 ## 📅 [DÍA]
-- **Formato**: Reel / Carrusel / Story / Estático
-- **Concepto**: qué mostrar
+- **Plataforma principal**: IG Reel / TikTok / Carrusel IG / Story / FB Post
+- **Concepto**: qué mostrar, qué producto destacar (basado en datos de ventas)
 - **Hook**: primera línea/segundo del contenido
-- **Caption**: texto completo con emojis y hashtags (max 2200 chars)
-- **CTA**: llamado a la acción específico
+- **Caption**: texto completo con emojis, mencionando ${BRAND.handle}
+- **CTA**: llamado a acción específico (link en bio, WhatsApp, etc)
 - **Hashtags**: 15-20 relevantes
-- **Horario**: hora sugerida
+- **Horario**: hora sugerida por plataforma
+- **Cross-post**: cómo adaptar para las otras plataformas
 
 Además incluí:
-- 🎯 **ESTRATEGIA DE LA SEMANA** (2 líneas)
-- 📌 **PRODUCTO ESTRELLA** (basado en datos)
-- 🎨 **PALETA DE COLORES** (basada en tendencias)
-- 💡 **IDEA DE REEL VIRAL** adaptada a CELAVIE`;
+- 🎯 **ESTRATEGIA DE LA SEMANA** — objetivo principal basado en datos
+- 📌 **PRODUCTO ESTRELLA** — basado en datos de ventas + stock disponible
+- 🎨 **PALETA VISUAL** — colores y estética basada en tendencias
+- 🎬 **3 IDEAS DE REEL/TIKTOK VIRAL** adaptadas a ${BRAND.handle}
+- 📊 **KPIs OBJETIVO** — engagement rate, reach, clicks a web que esperamos`;
 
   const { text, tokens } = await callOpenAI(apiKey, CONTENT_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.7 });
   return { type: 'contentCreator', content: text, timestamp: agentTimestamp(), tokens };
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  AGENT 4 — ESTRATEGA (The Brain)
+//  AGENT 4 — ESTRATEGA (Enhanced, with full sub-agent data)
 // ═══════════════════════════════════════════════════════════════
 const STRATEGIST_SYSTEM = `Sos un director de marketing y estrategia comercial con 15 años de experiencia en e-commerce de moda.
-Tu trabajo es sintetizar TODOS los datos disponibles y dar recomendaciones estratégicas de alto nivel.
-La marca es CELAVIE (@celavieindumentaria en Instagram, TikTok y Facebook). Mayorista argentino de basics modal/algodón.
-Pensás en ROI, en unit economics, en ciclos de producto. Sos directo y no tenés miedo de decir "pará todo y cambiá esto".
+${BRAND_CONTEXT}
+Tu trabajo es sintetizar TODOS los datos disponibles — incluyendo reportes de sub-agentes de producto y audiencia — y dar recomendaciones estratégicas de alto nivel.
+Pensás en ROI, unit economics, ciclos de producto, LTV, CAC. Sos directo y no tenés miedo de decir "pará todo y cambiá esto".
 Español rioplatense, ejecutivo, con números concretos. Formato: markdown con headers ## y bullets.`;
 
 export async function runStrategistAgent(config, analystData, trendData, contentData, onProgress) {
   const apiKey = config.marketing?.openaiKey;
   if (!apiKey) throw new Error('Falta OpenAI API Key');
 
-  onProgress?.('Analizando toda la información...');
+  const productIntel = analystData?.data?.productIntel;
+  const audienceIntel = analystData?.data?.audienceIntel;
+
+  onProgress?.('Sintetizando toda la información...');
 
   const prompt = `Fecha: ${todayLabel()}
 
@@ -287,24 +475,56 @@ ${safeContentTruncate(trendData, 2000)}
 📸 PLAN DE CONTENIDO:
 ${safeContentTruncate(contentData, 1500)}
 
-CONTEXTO CELAVIE:
-- Marca mayorista argentina, modal/algodón basics
-- Redes: @celavieindumentaria en Instagram, TikTok y Facebook
-- Producción: ~18,750 prendas/mes, ~15 modelos
-- Canal: mayoristas (70%) + web (30%)
-- Meta Ads activas para captación web
-- Equipo: dueño + marketing + operaciones
+🔬 INTELIGENCIA DE PRODUCTO (sub-agente):
+${safeTruncate(productIntel, 1500)}
+
+👥 ANÁLISIS DE AUDIENCIA (sub-agente):
+${safeTruncate(audienceIntel, 1500)}
+
+${BRAND_CONTEXT}
+Redes: ${BRAND.handle} en ${BRAND.platforms}
 
 ───────────────────────
 Generá un **REPORTE ESTRATÉGICO** con:
 
 ## 🏆 DIAGNÓSTICO GENERAL (score 0-100)
-## 💰 ESTRATEGIA PUBLICITARIA — Budget óptimo, distribución, escalar/pausar/nuevas
-## 📦 ESTRATEGIA DE PRODUCTO — Pushear, discontinuar, desarrollar, pricing
-## 📈 CRECIMIENTO — Oportunidad esta semana, mediano plazo, riesgo principal
-## 🎯 PLAN DE ACCIÓN SEMANAL — Max 5 acciones (Acción | Responsable | Deadline | Resultado)
-## 📊 PROYECCIÓN — Revenue proyectado, ROAS objetivo, meta de conversiones`;
+## 💰 ESTRATEGIA PUBLICITARIA
+- Budget óptimo diario/semanal
+- Distribución por campaña y plataforma (Meta, TikTok Ads potencial)
+- Qué escalar, pausar, crear
+- Targeting recommendations basadas en data de audiencia
 
-  const { text, tokens } = await callOpenAI(apiKey, STRATEGIST_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.4 });
+## 📦 ESTRATEGIA DE PRODUCTO
+- Pushear (stock + demanda alta)
+- Discontinuar (basado en sub-agente de producto)
+- Desarrollar (gaps detectados)
+- Pricing adjustments
+
+## 👥 ESTRATEGIA DE AUDIENCIA
+- Segmentos a priorizar
+- Retargeting opportunities
+- Lookalike strategy
+- Expansión geográfica
+
+## 📱 ESTRATEGIA DE CONTENIDO ${BRAND.handle}
+- Qué funciona en IG vs TikTok vs FB
+- Frecuencia óptima por plataforma
+- Tipo de contenido que convierte
+
+## 📈 CRECIMIENTO
+- Oportunidad esta semana
+- Plan mediano plazo (30 días)
+- Riesgo principal
+
+## 🎯 PLAN DE ACCIÓN SEMANAL (max 7 acciones)
+| Acción | Responsable | Deadline | Resultado esperado |
+
+## 📊 PROYECCIÓN
+- Revenue proyectado semana/mes
+- ROAS objetivo
+- Meta de conversiones
+- CAC objetivo`;
+
+  const { text, tokens } = await callOpenAI(apiKey, STRATEGIST_SYSTEM, prompt, { maxTokens: 4500, temperature: 0.4 });
   return { type: 'strategist', content: text, timestamp: agentTimestamp(), tokens };
 }
