@@ -725,3 +725,493 @@ Para cada campaña activa:
   return { type: 'paidMedia', content: text, timestamp: agentTimestamp(), tokens, data: { campaignDetails } };
 }
 
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 7 — PRICING OPTIMIZER
+// ═══════════════════════════════════════════════════════════════
+const PRICING_SYSTEM = `Sos un pricing strategist especializado en moda mayorista argentina.
+${BRAND_CONTEXT}
+Analizás precios vs costos vs márgenes vs competencia y sugerís ajustes para maximizar rentabilidad sin perder competitividad.
+Entendés la dinámica mayorista: listas de precio L1-L5, descuentos por volumen, pricing psicológico.
+Español rioplatense, con números concretos y tablas. Formato: markdown.`;
+
+export async function runPricingAgent(config, analystData, trendData, onProgress) {
+  const apiKey = config.marketing?.openaiKey;
+  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  onProgress?.('Analizando pricing y márgenes...');
+
+  let products = [], categories = [];
+  try {
+    products = await wooService.fetchProducts(config);
+    categories = await wooService.fetchCategories(config);
+  } catch {}
+
+  const productIntel = analystData?.data?.productIntel;
+  const catalog = products.slice(0, 50).map(p => ({
+    name: p.name, sku: p.sku, price: p.price, regular_price: p.regular_price,
+    sale_price: p.sale_price, stock_status: p.stock_status, total_sales: p.total_sales,
+    categories: (p.categories || []).map(c => c.name),
+  }));
+
+  const prompt = `Fecha: ${todayLabel()}
+
+📦 CATÁLOGO (${products.length} productos):
+${safeTruncate(catalog, 3000)}
+
+🏷️ CATEGORÍAS: ${JSON.stringify(categories.filter(c => c.count > 0).map(c => ({name: c.name, count: c.count})))}
+
+🔬 INTELIGENCIA DE PRODUCTO:
+${safeTruncate(productIntel, 1500)}
+
+📊 DATOS DEL ANALISTA:
+${safeContentTruncate(analystData, 1500)}
+
+${BRAND_CONTEXT}
+Sistema de precios: Listas L1 (mayorista grande) a L5 (minorista). Web = L5.
+
+Generá un **REPORTE DE PRICING**:
+
+## 💰 ANÁLISIS DE PRICING ACTUAL
+- Precio promedio por categoría
+- Rango de precios (min-max)
+- Distribución: cuántos productos en cada rango
+
+## 🔴 ALERTAS DE PRICING
+- Productos con precio de venta menor al regular sin justificación
+- Productos sin precio definido o precio $0
+- Productos subvaluados (mucha venta, precio bajo)
+- Productos sobrevaluados (pocas ventas, precio alto)
+
+## 📈 RECOMENDACIONES DE AJUSTE
+| Producto | Precio Actual | Precio Sugerido | Razón | Impacto Estimado |
+(máximo 10 productos)
+
+## 🧮 ESTRATEGIA DE PRICING
+- Pricing psicológico: precios terminados en 90/99
+- Bundle opportunities: combos que incentiven ticket más alto
+- Descuentos inteligentes: qué producto bajar para atraer, cuál subir porque es inelástico
+- Temporada: ajustes por cambio de estación
+
+## 📊 IMPACTO PROYECTADO
+- Revenue incremental estimado si se implementan los cambios
+- Margen promedio esperado post-ajuste`;
+
+  const { text, tokens } = await callOpenAI(apiKey, PRICING_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.4 });
+  return { type: 'pricing', content: text, timestamp: agentTimestamp(), tokens };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 8 — INVENTORY FORECASTER
+// ═══════════════════════════════════════════════════════════════
+const INVENTORY_SYSTEM = `Sos un demand planner y inventory forecaster para moda mayorista argentina.
+${BRAND_CONTEXT}
+Predecís demanda futura basándote en ventas históricas, tendencias, y estacionalidad.
+Entendés ciclos de producción (corte → taller → producto terminado tarda ~7-15 días).
+Español rioplatense, datos concretos. Formato: markdown con tablas.`;
+
+export async function runInventoryAgent(config, state, analystData, trendData, onProgress) {
+  const apiKey = config.marketing?.openaiKey;
+  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  onProgress?.('Analizando inventario y proyectando demanda...');
+
+  let topProducts = [], revenueStats = null;
+  try {
+    topProducts = await wooService.fetchTopProducts(config);
+    revenueStats = await wooService.fetchRevenueStats(config);
+  } catch {}
+
+  const internal = {
+    articulos: (state.articulos || []).map(a => ({ nombre: a.nombre, stock: a.stock, codigoInterno: a.codigoInterno })).slice(0, 30),
+    telas: (state.telas || []).map(t => ({ nombre: t.nombre, stock: t.stock })).slice(0, 20),
+    cortesActivos: (state.cortes || []).filter(c => c.estado !== 'finalizado').length,
+    cortesRecientes: (state.cortes || []).slice(0, 5).map(c => ({ articulo: c.articulo, cantidad: c.cantidad, estado: c.estado })),
+  };
+
+  const prompt = `Fecha: ${todayLabel()}
+
+📦 STOCK INTERNO (artículos en sistema):
+${safeTruncate(internal.articulos, 2000)}
+
+🧵 STOCK DE TELAS:
+${safeTruncate(internal.telas, 1000)}
+
+✂️ CORTES ACTIVOS: ${internal.cortesActivos}
+${safeTruncate(internal.cortesRecientes, 500)}
+
+📈 TOP SELLERS (WooCommerce):
+${safeTruncate(topProducts?.slice(0, 15), 1500)}
+
+💰 REVENUE TREND (30 días):
+${safeTruncate(revenueStats?.totals, 800)}
+
+🌍 TENDENCIAS:
+${safeContentTruncate(trendData, 1000)}
+
+${BRAND_CONTEXT}
+Producción: corte a taller tarda 7-15 días.
+
+Generá un **FORECAST DE INVENTARIO**:
+
+## 📊 ESTADO ACTUAL DE STOCK
+- Artículos con stock crítico (<10 unidades)
+- Artículos con sobrestock (>100 unidades sin ventas)
+- Telas con stock bajo para producción
+
+## 🔮 DEMANDA PROYECTADA (próximas 2 semanas)
+| Artículo | Stock Actual | Venta Estimada/Semana | Días de Stock | Acción |
+
+## ✂️ PLAN DE PRODUCCIÓN RECOMENDADO
+| Artículo | Cantidad a Cortar | Tela Necesaria | Prioridad | Fecha Límite Corte |
+
+## ⚠️ ALERTAS
+- Productos que se van a quedar sin stock esta semana
+- Telas insuficientes para cortes planeados
+- Desbalance entre producción y demanda
+
+## 📈 TENDENCIA
+- Productos con demanda creciente: producir más
+- Productos con demanda decreciente: frenar producción`;
+
+  const { text, tokens } = await callOpenAI(apiKey, INVENTORY_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.3 });
+  return { type: 'inventory', content: text, timestamp: agentTimestamp(), tokens };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 9 — WHATSAPP SALES
+// ═══════════════════════════════════════════════════════════════
+const WHATSAPP_SYSTEM = `Sos un copywriter de ventas por WhatsApp para marca de moda mayorista argentina.
+${BRAND_CONTEXT}
+Escribís mensajes que venden sin ser spam. Conocés el tono correcto para revendedoras: directo, cálido, con urgencia sutil.
+WhatsApp tiene límite de ~4000 chars por mensaje. Los catálogos van con emojis y estructura clara.
+Español rioplatense natural. Formato: markdown con cada mensaje listo para copiar.`;
+
+export async function runWhatsAppAgent(config, analystData, trendData, onProgress) {
+  const apiKey = config.marketing?.openaiKey;
+  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  onProgress?.('Generando mensajes de venta para WhatsApp...');
+
+  let products = [];
+  try { products = await wooService.fetchProducts(config); } catch {}
+
+  const topProducts = products.slice(0, 15).map(p => ({
+    name: p.name, price: p.price, stock_status: p.stock_status,
+  }));
+
+  const prompt = `Fecha: ${todayLabel()}
+
+📦 PRODUCTOS DISPONIBLES:
+${safeTruncate(topProducts, 1500)}
+
+📊 CONTEXTO DE VENTAS:
+${safeContentTruncate(analystData, 1500)}
+
+🌍 TENDENCIAS:
+${safeContentTruncate(trendData, 800)}
+
+${BRAND_CONTEXT}
+Público: revendedoras y dueñas de tiendas multimarca.
+
+Generá **MENSAJES DE WHATSAPP** listos para copiar:
+
+## 📱 MENSAJE 1: Catálogo Semanal
+Un mensaje completo mostrando los productos destacados de la semana con precios, emojis, y CTA para hacer pedido.
+
+## 📱 MENSAJE 2: Novedad / Lanzamiento
+Mensaje anunciando un producto nuevo o restock de un producto popular.
+
+## 📱 MENSAJE 3: Oferta Flash / Urgencia
+Mensaje con sentido de urgencia ("últimas unidades", "solo hoy", "pack especial").
+
+## 📱 MENSAJE 4: Follow-up para clientas inactivas
+Mensaje cálido para clientas que no compraron en 30+ días.
+
+## 📱 MENSAJE 5: Agradecimiento post-compra
+Mensaje de gracias que incentive recompra o referido.
+
+## 📱 MENSAJE 6: Estado de Broadcast
+Texto corto para estado de WhatsApp (máx 139 chars) con gancho visual.
+
+## 💡 TIPS DE ENVÍO
+- Mejor horario para enviar cada tipo de mensaje
+- Frecuencia recomendada (no saturar)
+- Cómo segmentar la lista de contactos`;
+
+  const { text, tokens } = await callOpenAI(apiKey, WHATSAPP_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.7 });
+  return { type: 'whatsapp', content: text, timestamp: agentTimestamp(), tokens };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 10 — SEO & WEB OPTIMIZER
+// ═══════════════════════════════════════════════════════════════
+const SEO_SYSTEM = `Sos un SEO specialist para e-commerce de moda en Argentina.
+${BRAND_CONTEXT}
+Web: celavie.com.ar (WooCommerce). Optimizás títulos, descripciones, keywords, meta tags, y estructura de categorías.
+Conocés SEO para e-commerce: long-tail keywords, schema markup, Google Shopping, URL structure.
+Español argentino. Formato: markdown con tablas y ejemplos concretos.`;
+
+export async function runSEOAgent(config, analystData, onProgress) {
+  const apiKey = config.marketing?.openaiKey;
+  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  onProgress?.('Analizando SEO de celavie.com.ar...');
+
+  let products = [], categories = [];
+  try {
+    products = await wooService.fetchProducts(config);
+    categories = await wooService.fetchCategories(config);
+  } catch {}
+
+  const catalog = products.slice(0, 30).map(p => ({
+    name: p.name, slug: p.slug, description: (p.description || '').substring(0, 100),
+    short_description: (p.short_description || '').substring(0, 100),
+    categories: (p.categories || []).map(c => c.name),
+  }));
+
+  const prompt = `Fecha: ${todayLabel()}
+
+🛒 CATÁLOGO WEB (${products.length} productos):
+${safeTruncate(catalog, 2500)}
+
+📂 CATEGORÍAS: ${JSON.stringify(categories.filter(c => c.count > 0).map(c => ({name: c.name, count: c.count, slug: c.slug})))}
+
+${BRAND_CONTEXT}
+
+Generá un **REPORTE SEO**:
+
+## 🔍 KEYWORDS PRINCIPALES
+- 10 keywords principales para ${BRAND.name} (con volumen estimado)
+- 10 long-tail keywords específicas para productos
+- Keywords de competencia a atacar
+
+## 📝 OPTIMIZACIÓN DE PRODUCTOS (top 10)
+| Producto | Título Actual | Título SEO Optimizado | Meta Description Sugerida |
+
+## 📂 ESTRUCTURA DE CATEGORÍAS
+- Categorías actuales vs categorías SEO-optimizadas
+- URLs sugeridas
+- Categorías faltantes que deberían existir
+
+## 📊 QUICK WINS SEO
+- 5 cambios inmediatos que mejoran ranking
+- Productos sin descripción que necesitan contenido
+- Imágenes sin alt text
+
+## 🛍️ GOOGLE SHOPPING
+- Productos ideales para Google Shopping Ads
+- Títulos optimizados para Shopping feed
+- Categorías Google Product Category sugeridas`;
+
+  const { text, tokens } = await callOpenAI(apiKey, SEO_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.5 });
+  return { type: 'seo', content: text, timestamp: agentTimestamp(), tokens };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 11 — COMPETITOR SPY
+// ═══════════════════════════════════════════════════════════════
+const COMPETITOR_SYSTEM = `Sos un competitive intelligence analyst especializado en moda mayorista argentina.
+${BRAND_CONTEXT}
+Monitoreás competidores directos e indirectos, analizás su estrategia de producto, pricing, contenido y posicionamiento.
+Respondé en español rioplatense. Formato: markdown con tablas comparativas.`;
+
+export async function runCompetitorAgent(config, brands = [], onProgress) {
+  const apiKey = config.marketing?.openaiKey;
+  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  const competitors = brands.length > 0 ? brands : ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
+  onProgress?.(`Analizando competidores: ${competitors.slice(0, 3).join(', ')}...`);
+
+  let products = [];
+  try { products = await wooService.fetchProducts(config); } catch {}
+
+  const prompt = `Fecha: ${todayLabel()}
+
+COMPETIDORES A ANALIZAR: ${competitors.join(', ')}
+
+CATÁLOGO ${BRAND.name} (resumen):
+${products.slice(0, 20).map(p => `${p.name} - $${p.price}`).join('\n')}
+
+${BRAND_CONTEXT}
+
+Generá un **REPORTE DE COMPETENCIA**:
+
+## 🏢 ANÁLISIS POR COMPETIDOR
+Para cada marca:
+- Posicionamiento y público objetivo
+- Rango de precios en basics/modal
+- Estrategia de contenido en redes
+- Fortalezas y debilidades vs ${BRAND.name}
+
+## 📊 TABLA COMPARATIVA
+| Aspecto | ${BRAND.name} | Competidor 1 | Competidor 2 | Competidor 3 |
+(Precio promedio, calidad percibida, presencia digital, público)
+
+## 💡 OPORTUNIDADES
+- Gaps que los competidores no cubren
+- Segmentos desatendidos
+- Ventajas competitivas de ${BRAND.name} a explotar
+
+## ⚠️ AMENAZAS
+- Movimientos de competidores a monitorear
+- Tendencias que favorecen a la competencia
+
+## 🎯 PLAN DE DIFERENCIACIÓN
+- 3 acciones para diferenciarse esta semana
+- Messaging vs cada competidor`;
+
+  const { text, tokens } = await callOpenAI(apiKey, COMPETITOR_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.6 });
+  return { type: 'competitor', content: text, timestamp: agentTimestamp(), tokens, brands: competitors };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 12 — FINANCIAL CONTROLLER
+// ═══════════════════════════════════════════════════════════════
+const FINANCIAL_SYSTEM = `Sos un controller financiero especializado en PyMEs de moda argentina.
+${BRAND_CONTEXT}
+Analizás P&L, cash flow, márgenes, y proyectás resultados. Entendés la dinámica mayorista: cobro a 10 días, producción adelantada.
+Pensás en: gross margin, operating margin, break-even, cash conversion cycle.
+Español rioplatense, ejecutivo. Formato: markdown con tablas de números.`;
+
+export async function runFinancialAgent(config, state, analystData, onProgress) {
+  const apiKey = config.marketing?.openaiKey;
+  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  onProgress?.('Consolidando datos financieros...');
+
+  let revenueStats = null;
+  try { revenueStats = await wooService.fetchRevenueStats(config); } catch {}
+
+  const posVentas = state.posVentas || [];
+  const posHoy = posVentas.filter(v => new Date(v.fecha || v.createdAt).toDateString() === new Date().toDateString());
+  const pos7d = posVentas.filter(v => {
+    const d = new Date(v.fecha || v.createdAt);
+    return (Date.now() - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
+  });
+
+  const bankPayments = state.bankPayments || [];
+  const clientes = state.clientes || [];
+
+  const prompt = `Fecha: ${todayLabel()}
+
+💰 REVENUE WEB (30 días):
+${safeTruncate(revenueStats?.totals, 1000)}
+
+🏪 POS:
+- Hoy: ${posHoy.length} ventas, $${posHoy.reduce((s, v) => s + (v.total || 0), 0)}
+- Últimos 7 días: ${pos7d.length} ventas, $${pos7d.reduce((s, v) => s + (v.total || 0), 0)}
+
+🏦 MOVIMIENTOS BANCARIOS: ${bankPayments.length} registros
+Últimos 5: ${safeTruncate(bankPayments.slice(0, 5), 500)}
+
+👥 CLIENTES CON SALDO: ${clientes.filter(c => (c.saldo || 0) !== 0).length}
+Deuda total: $${clientes.reduce((s, c) => s + Math.max(0, c.saldo || 0), 0)}
+
+📊 DATOS DEL ANALISTA:
+${safeContentTruncate(analystData, 1500)}
+
+${BRAND_CONTEXT}
+Regla: no producir más de lo que se puede pagar en 10 días.
+
+Generá un **REPORTE FINANCIERO**:
+
+## 📊 P&L ESTIMADO (últimos 30 días)
+| Concepto | Monto |
+Revenue Web + POS, Costo estimado, Gross Margin, Gastos Meta Ads, Net estimado
+
+## 💸 CASH FLOW
+- Cobros pendientes (saldos de clientes)
+- Pagos pendientes estimados
+- Cash position estimado
+
+## 📈 MÉTRICAS CLAVE
+- Ticket promedio (web vs POS)
+- Revenue por día promedio
+- Costo de adquisición estimado (spend Meta / clientes nuevos)
+- LTV estimado por cliente
+
+## 🔮 PROYECCIÓN MENSUAL
+- Revenue proyectado próximo mes
+- Break-even point
+- Margen objetivo
+
+## ⚠️ ALERTAS FINANCIERAS
+- Deuda de clientes alta
+- Cash flow negativo
+- Gastos fuera de rango
+
+## ✅ ACCIONES
+| Acción | Impacto Financiero | Urgencia |`;
+
+  const { text, tokens } = await callOpenAI(apiKey, FINANCIAL_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.3 });
+  return { type: 'financial', content: text, timestamp: agentTimestamp(), tokens };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 13 — EMAIL/CRM COMMUNICATIONS
+// ═══════════════════════════════════════════════════════════════
+const CRM_SYSTEM = `Sos un CRM strategist y email marketer para moda mayorista argentina.
+${BRAND_CONTEXT}
+Diseñás comunicaciones personalizadas para diferentes segmentos de clientes: mayoristas activos, inactivos, nuevos, y web.
+Tono: profesional pero cercano, español rioplatense. Formato: markdown con templates listos para usar.`;
+
+export async function runCRMAgent(config, analystData, onProgress) {
+  const apiKey = config.marketing?.openaiKey;
+  if (!apiKey) throw new Error('Falta OpenAI API Key');
+  onProgress?.('Generando estrategia CRM y templates...');
+
+  let customers = [];
+  try { customers = await wooService.fetchCustomers(config); } catch {}
+
+  const audienceIntel = analystData?.data?.audienceIntel;
+  const customerSummary = {
+    total: customers.length,
+    active: customers.filter(c => c.orders_count > 0).length,
+    topSpenders: customers.sort((a, b) => parseFloat(b.total_spent || 0) - parseFloat(a.total_spent || 0)).slice(0, 10).map(c => ({
+      name: `${c.first_name} ${c.last_name}`.trim(), orders: c.orders_count, spent: c.total_spent,
+    })),
+    cities: [...new Set(customers.map(c => c.billing?.city).filter(Boolean))].slice(0, 10),
+  };
+
+  const prompt = `Fecha: ${todayLabel()}
+
+👥 CLIENTES (${customerSummary.total} total, ${customerSummary.active} activos):
+Top spenders: ${JSON.stringify(customerSummary.topSpenders)}
+Ciudades: ${customerSummary.cities.join(', ')}
+
+👥 AUDIENCIA:
+${safeTruncate(audienceIntel, 1000)}
+
+📊 CONTEXTO:
+${safeContentTruncate(analystData, 1000)}
+
+${BRAND_CONTEXT}
+
+Generá una **ESTRATEGIA CRM COMPLETA**:
+
+## 👥 SEGMENTACIÓN
+| Segmento | Criterio | Cantidad Est. | Prioridad |
+(VIP, Activos, Durmientes, Nuevos, One-time)
+
+## 📧 TEMPLATE 1: Bienvenida (cliente nuevo)
+Asunto + cuerpo completo listo para enviar
+
+## 📧 TEMPLATE 2: Reactivación (cliente 30+ días inactivo)
+Asunto + cuerpo con incentivo
+
+## 📧 TEMPLATE 3: VIP Exclusivo (top spenders)
+Asunto + cuerpo con preview exclusivo
+
+## 📧 TEMPLATE 4: Post-compra (upsell/cross-sell)
+Asunto + cuerpo sugiriendo productos complementarios
+
+## 📧 TEMPLATE 5: Feedback Request
+Asunto + cuerpo pidiendo opinión
+
+## 📅 CALENDARIO CRM
+- Frecuencia de contacto por segmento
+- Triggers automáticos sugeridos
+- Secuencia de onboarding para nuevos clientes
+
+## 📊 KPIs CRM
+- Open rate objetivo, Click rate, Recompra rate`;
+
+  const { text, tokens } = await callOpenAI(apiKey, CRM_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.6 });
+  return { type: 'crm', content: text, timestamp: agentTimestamp(), tokens };
+}
+
