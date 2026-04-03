@@ -269,7 +269,7 @@ async function gatherBusinessData(config, state, onProgress) {
 // ═══════════════════════════════════════════════════════════════
 //  SUB-AGENT: PRODUCT INTELLIGENCE
 // ═══════════════════════════════════════════════════════════════
-async function runProductIntelligence(apiKey, businessData) {
+async function runProductIntelligence(config, businessData) {
   const system = `Sos un analista de producto especializado en e-commerce de moda. ${BRAND_CONTEXT}
 Analizás catálogo, stock, pricing, y performance de ventas para dar recomendaciones concretas.
 Respondé en español rioplatense, con datos específicos. Formato: JSON parseable.`;
@@ -304,7 +304,7 @@ Respondé SOLO con un JSON (sin markdown) con esta estructura:
 // ═══════════════════════════════════════════════════════════════
 //  SUB-AGENT: AUDIENCE ANALYST
 // ═══════════════════════════════════════════════════════════════
-async function runAudienceAnalyst(apiKey, businessData) {
+async function runAudienceAnalyst(config, businessData) {
   const system = `Sos un analista de audiencia y targeting especializado en Meta Ads para e-commerce de moda. ${BRAND_CONTEXT}
 Analizás clientes, targeting de ad sets, y comportamiento de compra.
 Respondé en español rioplatense. Formato: JSON parseable.`;
@@ -355,13 +355,39 @@ export async function runAnalystAgent(config, state, onProgress) {
   // Run sub-agents in parallel
   onProgress?.('Ejecutando sub-agentes de producto y audiencia...');
   const [productIntel, audienceIntel] = await Promise.allSettled([
-    runProductIntelligence(apiKey, bd),
-    runAudienceAnalyst(apiKey, bd),
+    runProductIntelligence(config, bd),
+    runAudienceAnalyst(config, bd),
   ]);
   const pi = productIntel.status === 'fulfilled' ? productIntel.value : null;
   const ai = audienceIntel.status === 'fulfilled' ? audienceIntel.value : null;
 
-  onProgress?.('Generando análisis ejecutivo...');
+  // ─── MULTI-STEP ANALYSIS (3 passes) ─────────────────────────
+  // Step 1: Deep Meta Ads analysis
+  onProgress?.('Paso 1/3: Analizando Meta Ads...');
+  const step1 = await callLLM(config, 
+    'Sos un analista de Meta Ads. Analizá estos datos y dá un diagnóstico concreto con números. Español rioplatense, bullet points.',
+    `DATOS META ADS (account-level 30d): ${safeTruncate(bd.meta)}
+CAMPAÑAS ACTIVAS: ${safeTruncate(bd.campaigns, 2500)}
+Respondé con: estado general, mejor campaña, peor campaña, alertas de budget, tendencia.`,
+    { maxTokens: 1500, temperature: 0.3 }
+  );
+
+  // Step 2: Deep Sales analysis
+  onProgress?.('Paso 2/3: Analizando ventas...');
+  const step2 = await callLLM(config,
+    'Sos un analista de ventas e-commerce. Analizá estos datos con números concretos. Español rioplatense, bullet points.',
+    `TOP SELLERS: ${safeTruncate(bd.woo?.topProducts, 1200)}
+WORST: ${safeTruncate(bd.woo?.bottomProducts, 600)}
+REVENUE 30d: ${safeTruncate(bd.revenueStats?.totals, 500)}
+PEDIDOS: ${JSON.stringify(bd.recentOrders)}
+POS HOY: ${JSON.stringify(bd.pos)}
+STOCK: ${JSON.stringify(bd.internal)}
+Respondé: ventas hoy vs tendencia, ticket promedio, productos clave, alertas stock.`,
+    { maxTokens: 1500, temperature: 0.3 }
+  );
+
+  // Step 3: Final synthesis
+  onProgress?.('Paso 3/3: Sintetizando brief ejecutivo...');
 
   const prevHistory = getAgentHistory(config, 'analyst');
   const historyCtx = buildHistoryContext(prevHistory);
