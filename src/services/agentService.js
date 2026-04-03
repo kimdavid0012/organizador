@@ -114,12 +114,7 @@ async function callLLM(config, systemPrompt, userPrompt, options = {}) {
   }
 }
 
-// Legacy wrapper for backward compatibility
-async function callLLM(config, systemPrompt, userPrompt, options = {}) {
-  // Build a minimal config object for callLLM
-  const config = { marketing: { openaiKey: apiKey, llmProvider: 'openai' } };
-  return callLLM(config, systemPrompt, userPrompt, options);
-}
+// Legacy callOpenAI removed — all agents now use callLLM directly
 
 // ─── Helpers ─────────────────────────────────────────────────
 function todayLabel() {
