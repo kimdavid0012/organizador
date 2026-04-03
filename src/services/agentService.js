@@ -389,12 +389,21 @@ Basándote en tu conocimiento actualizado:
 // ═══════════════════════════════════════════════════════════════
 //  AGENT 3 — CONTENT CREATOR (Enhanced, multi-platform)
 // ═══════════════════════════════════════════════════════════════
-const CONTENT_SYSTEM = `Sos un content strategist y copywriter especializado en Instagram, TikTok y Facebook para marcas de moda mayorista argentina.
-La cuenta es ${BRAND.handle} en las 3 plataformas. SIEMPRE usá ese handle en captions y CTAs.
+const CONTENT_SYSTEM = `Sos un Instagram Curator y content strategist experto en moda mayorista argentina.
+La cuenta es ${BRAND.handle} en Instagram, TikTok y Facebook. SIEMPRE usá ese handle en captions y CTAs.
 ${BRAND_CONTEXT}
-Creás contenido que combina tendencias + datos de ventas reales + inteligencia de producto para maximizar engagement y conversiones.
+
+METODOLOGÍA QUE SEGUÍS:
+- Regla 1/3: 33% contenido de marca/producto, 33% educativo/valor, 33% comunidad/UGC
+- Grid Planning: pensás en bloques de 9 posts para que el feed se vea cohesivo
+- Brand Aesthetic: mantenés paleta de colores, tipografía y estilo fotográfico consistente
+- Multi-formato: Reels (alcance) > Carruseles (saves) > Stories (engagement) > Estáticos (catálogo)
+- Hooks: primeros 3 segundos son TODO en Reels/TikTok
+- Shopping: siempre incluí CTA con link en bio o WhatsApp
+- UGC: fomentás que clientas/revendedoras suban contenido con el producto
+
+KPIs que buscás: Engagement >3.5%, Story completion >80%, Saves/post crecientes, UGC mensual.
 Tono: moderno, cercano, profesional. Español rioplatense natural.
-Mejores prácticas: Reels > carruseles > estáticos, hooks en primeros 3 segundos, CTAs claros.
 Formato: markdown con headers ## para cada día, bullets para detalles.`;
 
 export async function runContentAgent(config, analystData, trendData, onProgress) {
@@ -437,10 +446,13 @@ PARA CADA DÍA (Lunes a Sábado):
 
 Además incluí:
 - 🎯 **ESTRATEGIA DE LA SEMANA** — objetivo principal basado en datos
-- 📌 **PRODUCTO ESTRELLA** — basado en datos de ventas + stock disponible
-- 🎨 **PALETA VISUAL** — colores y estética basada en tendencias
+- 📌 **PRODUCTO ESTRELLA** — basado en ventas + stock disponible
+- 🎨 **BRAND AESTHETIC GUIDE** — paleta de colores, estilo foto, filtros para esta semana
+- 📐 **GRID PLANNING** — cómo se ven los 9 posts juntos en el feed (cohesión visual)
 - 🎬 **3 IDEAS DE REEL/TIKTOK VIRAL** adaptadas a ${BRAND.handle}
-- 📊 **KPIs OBJETIVO** — engagement rate, reach, clicks a web que esperamos`;
+- 📸 **ESTRATEGIA UGC** — cómo incentivar que clientas/revendedoras publiquen (reposteo, sorteo, hashtag propio)
+- 💬 **COMMUNITY MANAGEMENT** — 3 ideas para interactuar con la comunidad (encuestas, Q&A, behind the scenes)
+- 📊 **KPIs OBJETIVO** — engagement >3.5%, story completion >80%, saves, UGC posts esperados`;
 
   const { text, tokens } = await callOpenAI(apiKey, CONTENT_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.7 });
   return { type: 'contentCreator', content: text, timestamp: agentTimestamp(), tokens };
