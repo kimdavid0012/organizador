@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet, Instagram
+    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet, Instagram, Zap
 } from 'lucide-react';
 import { DataProvider, useData } from './store/DataContext';
 import { I18nProvider, useI18n } from './store/I18nContext';
