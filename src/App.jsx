@@ -25,6 +25,7 @@ import InstagramPlannerPage from './components/InstagramPlannerPage.jsx';
 import MesanPage from './components/MesanPage.jsx';
 import BankPaymentsPage from './components/BankPaymentsPage.jsx';
 import InformesPage from './components/InformesPage.jsx';
+import AgentsHub from './components/MarketingAgents/AgentsHub.jsx';
 import SaldoPage from './components/SaldoPage.jsx';
 import MoldModal from './components/MoldModal';
 import TaskModal from './components/TaskModal';
@@ -399,6 +400,7 @@ function AppContent() {
         { id: 'talleres', icon: Factory, label: t('talleres') },
         { id: 'empleados', icon: Users, label: 'Empleados' },
         { id: 'marketing', icon: Megaphone, label: 'Marketing' },
+        { id: 'agents', icon: Zap, label: 'Agentes AI' },
         { id: 'paginaweb', icon: Globe, label: 'Página Web' },
         { id: 'conteomercaderia', icon: Boxes, label: 'Conteo Mercadería' },
         { id: 'fotos', icon: Camera, label: 'Fotos' },
@@ -590,6 +592,7 @@ function AppContent() {
                     {view === 'settings' && <Settings />}
                     {view === 'pedidos' && <PedidosOnlinePage />}
                     {view === 'marketing' && <MarketingSection />}
+                    {view === 'agents' && <AgentsHub />}
                     {view === 'paginaweb' && <PaginaWebSection />}
                     {view === 'conteomercaderia' && <ConteoMercaderiaPage />}
                     {view === 'fotos' && <FotosPage />}
