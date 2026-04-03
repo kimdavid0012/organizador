@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Zap, BarChart3, Globe, Instagram, Brain, Play, Loader2, Clock,
   ChevronDown, ChevronRight, Plus, X, Trash2, RefreshCw, Copy, Check,
-  AlertCircle, Rocket, Target
+  AlertCircle, Rocket, Target, DollarSign, Package, MessageCircle, Search, Eye, Calculator, Mail
 } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import {
@@ -11,7 +11,14 @@ import {
   runContentAgent,
   runStrategistAgent,
   runGrowthAgent,
-  runPaidMediaAgent
+  runPaidMediaAgent,
+  runPricingAgent,
+  runInventoryAgent,
+  runWhatsAppAgent,
+  runSEOAgent,
+  runCompetitorAgent,
+  runFinancialAgent,
+  runCRMAgent
 } from '../../services/agentService';
 
 const TABS = [
@@ -21,6 +28,13 @@ const TABS = [
   { id: 'strategist', label: 'Estratega', icon: Brain, color: '#f59e0b', desc: 'Recomendaciones estratégicas' },
   { id: 'growth', label: 'Growth', icon: Rocket, color: '#10b981', desc: 'Experimentos y crecimiento' },
   { id: 'paidMedia', label: 'Paid Media', icon: Target, color: '#ef4444', desc: 'Optimización de Meta Ads' },
+  { id: 'pricing', label: 'Pricing', icon: DollarSign, color: '#06b6d4', desc: 'Análisis de precios y márgenes' },
+  { id: 'inventory', label: 'Inventario', icon: Package, color: '#84cc16', desc: 'Forecast de demanda y stock' },
+  { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, color: '#22c55e', desc: 'Mensajes de venta' },
+  { id: 'seo', label: 'SEO', icon: Search, color: '#a855f7', desc: 'Optimización web' },
+  { id: 'competitor', label: 'Competencia', icon: Eye, color: '#f97316', desc: 'Análisis de competidores' },
+  { id: 'financial', label: 'Finanzas', icon: Calculator, color: '#14b8a6', desc: 'Control financiero' },
+  { id: 'crm', label: 'CRM', icon: Mail, color: '#e11d48', desc: 'Comunicación con clientes' },
 ];
 
 const DEFAULT_BRANDS = ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
@@ -110,6 +124,13 @@ export default function AgentsHub() {
     if (c.strategist) setResults(prev => ({ ...prev, strategist: c.strategist }));
     if (c.growth) setResults(prev => ({ ...prev, growth: c.growth }));
     if (c.paidMedia) setResults(prev => ({ ...prev, paidMedia: c.paidMedia }));
+    if (c.pricing) setResults(prev => ({ ...prev, pricing: c.pricing }));
+    if (c.inventory) setResults(prev => ({ ...prev, inventory: c.inventory }));
+    if (c.whatsapp) setResults(prev => ({ ...prev, whatsapp: c.whatsapp }));
+    if (c.seo) setResults(prev => ({ ...prev, seo: c.seo }));
+    if (c.competitor) setResults(prev => ({ ...prev, competitor: c.competitor }));
+    if (c.financial) setResults(prev => ({ ...prev, financial: c.financial }));
+    if (c.crm) setResults(prev => ({ ...prev, crm: c.crm }));
     if (c.history) setHistory(c.history);
     if (c.trendScoutBrands) setBrands(c.trendScoutBrands);
   }, [config.agentsCache]);
@@ -136,6 +157,13 @@ export default function AgentsHub() {
         case 'strategist': result = await runStrategistAgent(config, results.analyst, results.trendScout, results.contentCreator, onProgress); break;
         case 'growth': result = await runGrowthAgent(config, results.analyst, results.trendScout, onProgress); break;
         case 'paidMedia': result = await runPaidMediaAgent(config, results.analyst, onProgress); break;
+        case 'pricing': result = await runPricingAgent(config, results.analyst, results.trendScout, onProgress); break;
+        case 'inventory': result = await runInventoryAgent(config, state, results.analyst, results.trendScout, onProgress); break;
+        case 'whatsapp': result = await runWhatsAppAgent(config, results.analyst, results.trendScout, onProgress); break;
+        case 'seo': result = await runSEOAgent(config, results.analyst, onProgress); break;
+        case 'competitor': result = await runCompetitorAgent(config, brands, onProgress); break;
+        case 'financial': result = await runFinancialAgent(config, state, results.analyst, onProgress); break;
+        case 'crm': result = await runCRMAgent(config, results.analyst, onProgress); break;
         default: return;
       }
       const nextResults = { ...results, [agentId]: result };
