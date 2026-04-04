@@ -373,6 +373,7 @@ const buildLocalStorageSafeData = (data, { keepBackupMeta = false } = {}) => {
                     : [],
                 adSets: {},
                 aiReport: keepBackupMeta ? '' : (normalized.config.marketingCache?.aiReport || '').slice(0, 3000),
+                agentsCache: keepBackupMeta ? { history: (normalized.config.agentsCache?.history || []).slice(0, 5) } : {},
                 lastSyncedAt: normalized.config.marketingCache?.lastSyncedAt || null
             },
             paginaWebCache: {
