@@ -178,6 +178,10 @@ export default function PosCaja({ onOpenCatalog }) {
     };
 
     const handleUpdateItemDiscount = (id, percentStr) => {
+        if (percentStr === '-' || percentStr === '-0' || percentStr === '') {
+            setCart(prev => prev.map(i => i.id === id ? { ...i, descuentoPorcentaje: percentStr } : i));
+            return;
+        }
         const percent = Math.min(100, Math.max(-100, Number(percentStr) || 0));
         setCart(prev => prev.map(i => {
             if (i.id === id) {
