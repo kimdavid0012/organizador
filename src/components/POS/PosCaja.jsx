@@ -494,9 +494,9 @@ export default function PosCaja({ onOpenCatalog }) {
                         <span>Subtotal:</span>
                         <span>${subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="pos-total-row" style={{ color: 'var(--danger)' }}>
-                        <span>Descuentos:</span>
-                        <span>{descuentoGlobalMonto >= 0 ? '-' : '+'}${Math.abs(totalDescuentosItem + descuentoGlobalMonto).toFixed(2)}</span>
+                    <div className="pos-total-row" style={{ color: (totalDescuentosItem + descuentoGlobalMonto) >= 0 ? 'var(--danger)' : '#22c55e' }}>
+                        <span>{(totalDescuentosItem + descuentoGlobalMonto) >= 0 ? 'Descuentos:' : 'Recargo:'}</span>
+                        <span style={{ color: (totalDescuentosItem + descuentoGlobalMonto) >= 0 ? 'var(--danger)' : '#22c55e' }}>{(totalDescuentosItem + descuentoGlobalMonto) >= 0 ? '-' : '+'}${Math.abs(totalDescuentosItem + descuentoGlobalMonto).toFixed(2)}</span>
                     </div>
                     <div className="pos-total-row grand-total">
                         <span>Total Final:</span>
