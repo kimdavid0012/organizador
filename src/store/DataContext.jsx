@@ -1435,7 +1435,7 @@ export function DataProvider({ children }) {
                 Math.max(currentRevisionRef.current, getSyncRevision(stateRef.current)),
                 pendingCloudSave.current ? 'local-pending' : 'local'
             );
-            saveDataToLocal(stampedState);
+            try { saveDataToLocal(stampedState); } catch (e) { console.warn('localStorage save failed:', e.message); }
             saveProtectedSessionSnapshot(stampedState);
             setPendingLocalChangesFlag(Boolean(pendingCloudSave.current || pendingChangesCount.current > 0));
         };
@@ -1604,8 +1604,8 @@ export function DataProvider({ children }) {
             nextRevision,
             'local'
         );
-        saveDataToLocal(persistableState);
-        saveProtectedSessionSnapshot(persistableState);
+        try { saveDataToLocal(persistableState); } catch (localErr) { console.warn('localStorage backup failed (non-critical):', localErr.message); }
+        try { saveProtectedSessionSnapshot(persistableState); } catch (snapErr) { console.warn('Session snapshot failed (non-critical):', snapErr.message); }
         localChangeTimestamp.current = Date.now();
         pendingCloudSave.current = true;
         pendingChangesCount.current += 1;
