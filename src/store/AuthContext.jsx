@@ -110,12 +110,13 @@ export function AuthProvider({ children }) {
                     }
                 } catch (err) {
                     console.error('Error loading user profile:', err);
-                    // Fallback: use basic Firebase user info with restricted role
+                    // Fallback: use KNOWN_USERS if available, otherwise restricted role
+                    const fallbackKnown = KNOWN_USERS[(firebaseUser.email || '').toLowerCase()];
                     setUser({
                         uid: firebaseUser.uid,
                         email: firebaseUser.email,
-                        role: 'pendiente',
-                        name: firebaseUser.email
+                        role: fallbackKnown?.role || 'pendiente',
+                        name: fallbackKnown?.name || firebaseUser.email
                     });
                 }
 
