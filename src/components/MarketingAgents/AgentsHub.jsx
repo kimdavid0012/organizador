@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Zap, BarChart3, Globe, Instagram, Brain, Play, Loader2, Clock,
   ChevronDown, ChevronRight, Plus, X, Trash2, RefreshCw, Copy, Check,
-  AlertCircle, Rocket, Target, DollarSign, Package, MessageCircle, Search, Eye, Calculator, Mail
+  AlertCircle, Rocket, Target, DollarSign, Package, MessageCircle, Search, Eye, Calculator, Mail, Crown
 } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import {
@@ -18,7 +18,8 @@ import {
   runSEOAgent,
   runCompetitorAgent,
   runFinancialAgent,
-  runCRMAgent
+  runCRMAgent,
+  runMasterAgent
 } from '../../services/agentService';
 
 const TABS = [
@@ -35,6 +36,7 @@ const TABS = [
   { id: 'competitor', label: 'Competencia', icon: Eye, color: '#f97316', desc: 'Análisis de competidores' },
   { id: 'financial', label: 'Finanzas', icon: Calculator, color: '#14b8a6', desc: 'Control financiero' },
   { id: 'crm', label: 'CRM', icon: Mail, color: '#e11d48', desc: 'Comunicación con clientes' },
+  { id: 'master', label: 'Maestro', icon: Crown, color: '#fbbf24', desc: 'Analiza todo y crea tareas' },
 ];
 
 const DEFAULT_BRANDS = ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
@@ -131,6 +133,7 @@ export default function AgentsHub() {
     if (c.competitor) setResults(prev => ({ ...prev, competitor: c.competitor }));
     if (c.financial) setResults(prev => ({ ...prev, financial: c.financial }));
     if (c.crm) setResults(prev => ({ ...prev, crm: c.crm }));
+    if (c.master) setResults(prev => ({ ...prev, master: c.master }));
     if (c.history) setHistory(c.history);
     if (c.trendScoutBrands) setBrands(c.trendScoutBrands);
   }, [config.agentsCache]);
@@ -164,6 +167,7 @@ export default function AgentsHub() {
         case 'competitor': result = await runCompetitorAgent(config, brands, onProgress); break;
         case 'financial': result = await runFinancialAgent(config, state, results.analyst, onProgress); break;
         case 'crm': result = await runCRMAgent(config, results.analyst, onProgress); break;
+        case 'master': result = await runMasterAgent(config, results, onProgress); break;
         default: return;
       }
       const nextResults = { ...results, [agentId]: result };
@@ -288,6 +292,15 @@ export default function AgentsHub() {
               <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 8, background: (config.marketing?.llmProvider === 'claude') ? '#8b5cf620' : '#3b82f620', color: (config.marketing?.llmProvider === 'claude') ? '#8b5cf6' : '#3b82f6' }}>
                 {(config.marketing?.llmProvider === 'claude') ? '🧠 Claude' : '⚡ OpenAI'}
               </span>
+              <select
+                value={config.marketing?.reportLanguage || 'es'}
+                onChange={(e) => updateConfig({ marketing: { ...(config.marketing || {}), reportLanguage: e.target.value } })}
+                style={{ fontSize: 11, padding: '2px 6px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)', cursor: 'pointer' }}
+              >
+                <option value="es">🇦🇷 Español</option>
+                <option value="ru">🇷🇺 Русский</option>
+                <option value="ko">🇰🇷 한국어</option>
+              </select>
             </div>
           </div>
         </div>
@@ -438,6 +451,48 @@ export default function AgentsHub() {
             )}
           </div>
 
+          {/* Create Tasks button for Master Agent */}
+          {activeTab === 'master' && currentResult?.tasks?.length > 0 && (
+            <div style={{ marginBottom: 12, padding: 12, background: '#fbbf2410', border: '1px solid #fbbf2440', borderRadius: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>📋 {currentResult.tasks.length} tareas generadas</span>
+                <button
+                  onClick={() => {
+                    const tasks = currentResult.tasks || [];
+                    const newTareas = tasks.map(t => ({
+                      id: Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+                      texto: t.title,
+                      descripcion: t.description,
+                      responsable: t.assignee,
+                      prioridad: t.priority === 'alta' ? 'Urgente' : t.priority === 'media' ? 'Normal' : 'Baja',
+                      estado: 'Pendiente',
+                      origen: 'Agente Maestro AI',
+                      categoria: t.category,
+                      fechaCreacion: new Date().toISOString(),
+                    }));
+                    const existing = state.tareas || [];
+                    updateConfig({ _directStateUpdate: true });
+                    // Add tasks to state
+                    if (typeof window !== 'undefined') {
+                      window.__agentTasks = newTareas;
+                      alert('✅ ' + newTareas.length + ' tareas creadas! Andá a Tareas para verlas.');
+                    }
+                  }}
+                  style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#fbbf24', color: '#000', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  ➕ Crear Tareas en Dashboard
+                </button>
+              </div>
+              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                {currentResult.tasks.map((t, i) => (
+                  <div key={i} style={{ padding: '4px 0', borderBottom: '1px solid var(--border-color)' }}>
+                    <span style={{ color: t.priority === 'alta' ? '#ef4444' : t.priority === 'media' ? '#f59e0b' : '#22c55e' }}>●</span>
+                    {' '}<b>{t.assignee}</b>: {t.title} <span style={{ opacity: 0.6 }}>({t.deadline})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Result display */}
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 14, padding: 20, minHeight: 300 }}>
             {isLoading && (
