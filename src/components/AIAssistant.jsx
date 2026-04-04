@@ -424,7 +424,27 @@ const buildAssistantSnapshot = (state) => {
             conteosMercaderia: conteos.length,
             pedidosOnlineListos: onlineReady,
             pedidosOnlinePendientes: onlinePending
-        }
+        },
+        ventasFisicas: (() => {
+            const ventas = Array.isArray(config.mesanVentasDiarias) ? config.mesanVentasDiarias : [];
+            const hoy = new Date().toISOString().slice(0,10);
+            const ventaHoy = ventas.find(v => v.fecha === hoy);
+            const ultimas7 = ventas.filter(v => v.fecha && (Date.now() - new Date(v.fecha).getTime()) < 7*24*60*60*1000);
+            return {
+                source: 'DOMO vía Mesan',
+                hoy: Number(ventaHoy?.monto || ventaHoy?.efectivo || 0),
+                ultimos7dias: ultimas7.reduce((s,v) => s + Number(v.monto || v.efectivo || 0), 0),
+                diasConDatos: ventas.filter(v => Number(v.monto || v.efectivo || 0) > 0).length
+            };
+        })(),
+        ultimosReportesAI: (() => {
+            const cache = config.agentsCache || {};
+            const resumen = {};
+            if (cache.analyst?.content) resumen.analista = cache.analyst.content.substring(0, 500);
+            if (cache.master?.content) resumen.ceo = cache.master.content.substring(0, 500);
+            if (cache.master?.tasks) resumen.tareasDelCEO = cache.master.tasks.map(t => t.title + ' → ' + t.assignee).join(', ');
+            return resumen;
+        })()
     };
 };
 
@@ -529,6 +549,57 @@ CONTEXTO ACTUAL:
 - Talleres: ${(state.config?.talleres || []).join(', ') || 'sin talleres'}
 - Secciones útiles según el rol: guiá al usuario dentro de lo que puede ver, pero si pregunta por algo de admin podés explicarlo igual.
 
+GUÍA ESPECÍFICA POR PERSONA DEL EQUIPO:
+Cuando hables con alguien del equipo, explicale EXACTAMENTE dónde ir y qué botón tocar. No asumas que saben navegar el sistema.
+
+NADIA (Encargada):
+- POS: Menú izquierdo → "Punta de Venta" → Caja Principal. Para recargo poner -10 en Desc%. Descuento global en % abajo.
+- Pedidos: Menú → "Pedidos Online". Puede cambiar estado y dejar comentarios.
+- Clientes: Menú → "Clientes". Buscar por nombre, ver historial, editar datos.
+- Conteo: Menú → "Conteo Mercadería". Cargar mercadería que llega del taller.
+- Banco: Menú → "Banco y MP". Ver pagos recibidos por transferencia o MP.
+- Saldo: Menú → "Saldo". Ver deudas de clientes mayoristas.
+
+NAARA (Depósito):
+- Conteo: Menú → "Conteo Mercadería". Cargar cantidad real de prendas que llegan. Seleccionar corte, taller, poner cantidades.
+- Talleres: Menú → "Talleres". Ver qué cortes están en cada taller y tiempos de entrega.
+- Si no ve datos, puede ser problema de sincronización. Ir a Configuración → "Migrar datos locales a la nube".
+
+JUAN (Pedidos Online):
+- Pedidos: Menú → "Pedidos Online". Ver pedidos web, marcar estados, agregar comentarios de envío.
+- Conteo: Menú → "Conteo Mercadería". Verificar stock disponible para despachar.
+
+ROCÍO (Fotos):
+- Fotos: Menú → "Fotos". Ver lista de artículos que necesitan fotos. Marcar como completado.
+- Instagram: Menú → "Instagram Post". Planificar grid, subir fotos a cada slot del 1 al 9.
+
+DAVID (Admin):
+- Todo: Acceso completo. Puede usar Agentes AI → "CEO — Ejecutar Todos" para reporte diario completo.
+- Telas: Ver inventario, deudas por textilera, saldo verano.
+- Mesan: Cargar ventas diarias del DOMO.
+- Configuración: API keys, credenciales WooCommerce, Meta, Claude.
+
+REPORTES DE AGENTES AI:
+Los agentes AI generan reportes automáticos. Si el usuario pregunta sobre un reporte o quiere entender qué dice, explicale en simple:
+- "El Analista" = resumen del día con ventas, publicidad y alertas
+- "Trend Scout" = qué tendencias de moda hay y cómo aprovecharlas
+- "Content Creator" = plan de contenido semanal para Instagram/TikTok
+- "Estratega" = recomendaciones de negocio priorizadas
+- "Growth Hacker" = experimentos para crecer más rápido
+- "Paid Media" = optimización de campañas de Meta Ads (Facebook/Instagram)
+- "Pricing" = análisis de precios y márgenes
+- "Inventario" = forecast de demanda y qué producir
+- "WhatsApp Sales" = mensajes de venta listos para copiar
+- "SEO" = mejoras para la web celavie.com.ar
+- "Competencia" = qué hacen los competidores
+- "Finanzas" = P&L, cash flow, proyecciones
+- "CRM" = comunicación con clientes, templates de email
+- "Proveedores" = deudas con textileras, plan de pagos
+- "Clientes" = retención, clientes en riesgo, VIP
+- "Cash Flow" = flujo de caja diario, cobros urgentes
+- "CEO" = decisiones del día, tareas asignadas al equipo
+Si el usuario no entiende un término de marketing (ROAS, CTR, CPC, etc), explicalo en criollo simple.
+
 SNAPSHOT OPERATIVO ACTUAL:
 ${JSON.stringify(dashboardSnapshot, null, 2)}
 `;
@@ -542,7 +613,7 @@ export default function AIAssistant() {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [apiKey, setApiKey] = useState(state.config?.marketing?.openaiKey || '');
+    const [apiKey, setApiKey] = useState(state.config?.marketing?.claudeKey || state.config?.marketing?.openaiKey || '');
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
     const recognitionRef = useRef(null);
@@ -679,10 +750,9 @@ export default function AIAssistant() {
     }, [messages]);
 
     useEffect(() => {
-        if (state.config?.marketing?.openaiKey) {
-            setApiKey(state.config.marketing.openaiKey);
-        }
-    }, [state.config?.marketing?.openaiKey]);
+        const key = state.config?.marketing?.claudeKey || state.config?.marketing?.openaiKey;
+        if (key) setApiKey(key);
+    }, [state.config?.marketing?.claudeKey, state.config?.marketing?.openaiKey]);
 
     const executeAction = (actionStr) => {
         try {
@@ -816,27 +886,30 @@ export default function AIAssistant() {
                 { role: 'user', content: text }
             ];
 
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true',
                 },
                 body: JSON.stringify({
-                    model: 'gpt-4o-mini',
-                    messages: apiMessages,
-                    max_tokens: 900,
+                    model: 'claude-sonnet-4-20250514',
+                    system: systemPrompt,
+                    messages: apiMessages.filter(m => m.role !== 'system'),
+                    max_tokens: 1500,
                     temperature: 0.4
                 })
             });
 
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.error?.message || 'Error de OpenAI');
+                throw new Error(err.error?.message || 'Error de Claude');
             }
 
             const data = await response.json();
-            const assistantText = data.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
+            const assistantText = data.content?.[0]?.text || 'No pude generar una respuesta.';
 
             const { cleanText, actionResults } = processResponse(assistantText);
             let finalText = cleanText;
