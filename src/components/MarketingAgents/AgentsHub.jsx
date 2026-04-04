@@ -567,11 +567,22 @@ export default function AgentsHub() {
                   ➕ Crear Tareas en Dashboard
                 </button>
               </div>
-              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+              <div style={{ marginTop: 8, fontSize: 12 }}>
                 {currentResult.tasks.map((t, i) => (
-                  <div key={i} style={{ padding: '4px 0', borderBottom: '1px solid var(--border-color)' }}>
-                    <span style={{ color: t.priority === 'alta' ? '#ef4444' : t.priority === 'media' ? '#f59e0b' : '#22c55e' }}>●</span>
-                    {' '}<b>{t.assignee}</b>: {t.title} <span style={{ opacity: 0.6 }}>({t.deadline})</span>
+                  <div key={i} style={{ padding: '10px 12px', marginBottom: 8, background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--border-color)', borderLeft: `3px solid ${t.priority === 'alta' ? '#ef4444' : t.priority === 'media' ? '#f59e0b' : '#22c55e'}` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                        <span style={{ color: t.priority === 'alta' ? '#ef4444' : t.priority === 'media' ? '#f59e0b' : '#22c55e', marginRight: 6 }}>●</span>
+                        {t.title}
+                      </span>
+                      <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: 'rgba(251,191,36,0.15)', color: '#f59e0b', whiteSpace: 'nowrap' }}>{t.deadline}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 6, whiteSpace: 'pre-wrap' }}>{t.description}</div>
+                    <div style={{ display: 'flex', gap: 8, fontSize: 10 }}>
+                      <span style={{ padding: '1px 6px', borderRadius: 4, background: 'rgba(59,130,246,0.1)', color: '#3b82f6' }}>👤 {t.assignee}</span>
+                      <span style={{ padding: '1px 6px', borderRadius: 4, background: 'rgba(139,92,246,0.1)', color: '#8b5cf6' }}>{t.category}</span>
+                      <span style={{ padding: '1px 6px', borderRadius: 4, background: 'rgba(107,114,128,0.1)', color: '#6b7280' }}>📡 {t.source}</span>
+                    </div>
                   </div>
                 ))}
               </div>
