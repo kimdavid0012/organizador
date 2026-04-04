@@ -276,7 +276,19 @@ export default function AgentsHub() {
           </div>
           <div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>Agentes AI</h2>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Marketing Intelligence System</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+              <select
+                value={config.marketing?.llmProvider || 'openai'}
+                onChange={(e) => updateConfig({ marketing: { ...(config.marketing || {}), llmProvider: e.target.value } })}
+                style={{ fontSize: 11, padding: '2px 6px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)', cursor: 'pointer' }}
+              >
+                <option value="openai">GPT-4o-mini</option>
+                <option value="claude">Claude Sonnet</option>
+              </select>
+              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 8, background: (config.marketing?.llmProvider === 'claude') ? '#8b5cf620' : '#3b82f620', color: (config.marketing?.llmProvider === 'claude') ? '#8b5cf6' : '#3b82f6' }}>
+                {(config.marketing?.llmProvider === 'claude') ? '🧠 Claude' : '⚡ OpenAI'}
+              </span>
+            </div>
           </div>
         </div>
         <button
