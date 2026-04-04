@@ -178,7 +178,7 @@ export default function PosCaja({ onOpenCatalog }) {
     };
 
     const handleUpdateItemDiscount = (id, percentStr) => {
-        const percent = Math.min(100, Math.max(0, Number(percentStr) || 0));
+        const percent = Math.min(100, Math.max(-100, Number(percentStr) || 0));
         setCart(prev => prev.map(i => {
             if (i.id === id) {
                 const newPrice = i.precioOriginal * (1 - (percent / 100));
@@ -416,13 +416,13 @@ export default function PosCaja({ onOpenCatalog }) {
                 {/* Zona inferior de Descuentos extra y Cliente */}
                 <div style={{ display: 'flex', gap: 16, background: 'var(--bg-card)', padding: 'var(--sp-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)' }}>Descuento Global $:</span>
+                        <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)' }}>Desc/Recargo $:</span>
                         <input
                             type="number"
                             className="form-input"
                             style={{ width: 100 }}
                             value={descuentoGlobal || ''}
-                            onChange={(e) => setDescuentoGlobal(Math.max(0, Number(e.target.value)))}
+                            onChange={(e) => setDescuentoGlobal(Number(e.target.value) || 0)}
                         />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 'min-content' }}>
