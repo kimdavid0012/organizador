@@ -793,11 +793,14 @@ export default function FabricCatalog() {
                         const cover = getCoverImage(tela);
                         const colors = tela.coloresStock || [];
                         let r = colors.reduce((s, c) => s + (c.items?.length || parseFloat(c.rollos) || 0), 0);
-                        if (r === 0 && tela.nombre) {
-                          const _seed = {'MODAL SOFT':170,'modal soft':170,'SUPER SOFT':77,'kerry brush':58,'KERRY BRUSH':58,'lanilla melow':39,'LANILLA MELLOW':39,'LAN MELOW':39,'lanilla sweter':16,'LANILLA SWETER':16,'lanilla swetet':16,'frisado':28,'ALGODÓN FRISADO':28};
-                          const _n = tela.nombre.trim();
-                          r = _seed[_n] || _seed[_n.toUpperCase()] || _seed[_n.toLowerCase()] || 0;
-                        }
+                        const _SEED = {'MODAL SOFT':170,'modal soft':170,'SUPER SOFT':77,'kerry brush':58,'KERRY BRUSH':58,'lanilla melow':39,'LANILLA MELLOW':39,'LAN MELOW':39,'lanilla sweter':16,'LANILLA SWETER':16,'lanilla swetet':16,'frisado':28,'ALGODÓN FRISADO':28};
+                        const _tn = (tela.nombre || '').trim();
+                        const recibidos = _SEED[_tn] || _SEED[_tn.toUpperCase()] || _SEED[_tn.toLowerCase()] || r;
+                        if (r === 0) r = recibidos;
+                        // Calculate consumption from cortes
+                        let usados = 0;
+                        (state.config.cortes || []).forEach(corte => (corte.consumos || []).forEach(co => { if (co.telaId === tela.id) usados += parseInt(co.rollos) || 0; }));
+                        const quedan = Math.max(0, recibidos - usados);
                         const unidad = tela.unidadPrecio === 'kg' ? 'kg' : 'mts';
 
                         return (
@@ -816,9 +819,15 @@ export default function FabricCatalog() {
                                         {tela.nombre || t('sinNombre')}
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                        <span>📦 {r} rollos</span>
+                                        <span style={{ color: quedan > 0 ? '#22c55e' : '#ef4444' }}>📦 {quedan} rollos</span>
                                         <span>{tela.moneda === 'USD' ? 'US$' : '$'}{tela.precioPorUnidad || 0}/{unidad}</span>
                                     </div>
+                                    {recibidos > 0 && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginTop: 2 }}>
+                                        <span>📥 {recibidos} recib.</span>
+                                        <span>✂️ {usados} usados</span>
+                                    </div>
+                                    )}
                                     <button className="btn btn-sm btn-ghost" style={{ width: '100%', marginTop: 10 }}>Editar Stock</button>
                                 </div>
                             </div>
