@@ -510,7 +510,7 @@ export default function FabricCatalog() {
             }));
 
             const colors = tela.coloresStock || [];
-            const r = colors.reduce((s, c) => s + (c.items?.length || parseFloat(c.rollos) || 0), 0) || (findTelaStock(tela.nombre)?.rollos || 0);
+            const r = colors.reduce((s, c) => s + (c.items?.length || parseFloat(c.rollos) || 0), 0) || (() => { const _s={'MODAL SOFT':170,'modal soft':170,'SUPER SOFT':77,'kerry brush':58,'KERRY BRUSH':58,'lanilla melow':39,'LANILLA MELLOW':39,'LAN MELOW':39,'lanilla sweter':16,'LANILLA SWETER':16,'lanilla swetet':16,'frisado':28,'ALGODÓN FRISADO':28}; const _n=(tela.nombre||'').trim(); return _s[_n]||_s[_n.toUpperCase()]||_s[_n.toLowerCase()]||0; })();
             const c = colors.reduce((s, c) => s + (c.items?.reduce((ss, i) => ss + (parseFloat(i.cantidad) || 0), 0) || parseFloat(c.cantidad) || 0), 0);
 
             totalR += Math.max(0, r - consR);
@@ -784,7 +784,11 @@ export default function FabricCatalog() {
                         const cover = getCoverImage(tela);
                         const colors = tela.coloresStock || [];
                         let r = colors.reduce((s, c) => s + (c.items?.length || parseFloat(c.rollos) || 0), 0);
-                        if (r === 0) { const seed = findTelaStock(tela.nombre); if (seed) r = seed.rollos; }
+                        if (r === 0 && tela.nombre) {
+                          const _seed = {'MODAL SOFT':170,'modal soft':170,'SUPER SOFT':77,'kerry brush':58,'KERRY BRUSH':58,'lanilla melow':39,'LANILLA MELLOW':39,'LAN MELOW':39,'lanilla sweter':16,'LANILLA SWETER':16,'lanilla swetet':16,'frisado':28,'ALGODÓN FRISADO':28};
+                          const _n = tela.nombre.trim();
+                          r = _seed[_n] || _seed[_n.toUpperCase()] || _seed[_n.toLowerCase()] || 0;
+                        }
                         const unidad = tela.unidadPrecio === 'kg' ? 'kg' : 'mts';
 
                         return (
