@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Zap, BarChart3, Globe, Instagram, Brain, Play, Loader2, Clock,
   ChevronDown, ChevronRight, Plus, X, Trash2, RefreshCw, Copy, Check,
-  AlertCircle, Rocket, Target, DollarSign, Package, MessageCircle, Search, Eye, Calculator, Mail, Crown
+  AlertCircle, Rocket, Target, DollarSign, Package, MessageCircle, Search, Eye, Calculator, Mail, Crown,
+  Truck, Heart, Banknote, Bot
 } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import {
@@ -19,7 +20,12 @@ import {
   runCompetitorAgent,
   runFinancialAgent,
   runCRMAgent,
-  runMasterAgent
+  runMasterAgent,
+  runSupplyChainAgent,
+  runCustomerSuccessAgent,
+  runCashFlowAgent,
+  runCEOAutoDaily,
+  shouldAutoRun
 } from '../../services/agentService';
 
 const TABS = [
@@ -36,7 +42,10 @@ const TABS = [
   { id: 'competitor', label: 'Competencia', icon: Eye, color: '#f97316', desc: 'Análisis de competidores' },
   { id: 'financial', label: 'Finanzas', icon: Calculator, color: '#14b8a6', desc: 'Control financiero' },
   { id: 'crm', label: 'CRM', icon: Mail, color: '#e11d48', desc: 'Comunicación con clientes' },
-  { id: 'master', label: 'Maestro', icon: Crown, color: '#fbbf24', desc: 'Analiza todo y crea tareas' },
+  { id: 'supplyChain', label: 'Proveedores', icon: Truck, color: '#7c3aed', desc: 'Cadena de suministro y telas' },
+  { id: 'customerSuccess', label: 'Clientes', icon: Heart, color: '#f43f5e', desc: 'Retención y satisfacción' },
+  { id: 'cashflow', label: 'Cash Flow', icon: Banknote, color: '#059669', desc: 'Flujo de caja diario' },
+  { id: 'master', label: '👑 CEO', icon: Crown, color: '#fbbf24', desc: 'Director General AI — decide y delega' },
 ];
 
 const DEFAULT_BRANDS = ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
@@ -133,6 +142,9 @@ export default function AgentsHub() {
     if (c.competitor) setResults(prev => ({ ...prev, competitor: c.competitor }));
     if (c.financial) setResults(prev => ({ ...prev, financial: c.financial }));
     if (c.crm) setResults(prev => ({ ...prev, crm: c.crm }));
+    if (c.supplyChain) setResults(prev => ({ ...prev, supplyChain: c.supplyChain }));
+    if (c.customerSuccess) setResults(prev => ({ ...prev, customerSuccess: c.customerSuccess }));
+    if (c.cashflow) setResults(prev => ({ ...prev, cashflow: c.cashflow }));
     if (c.master) setResults(prev => ({ ...prev, master: c.master }));
     if (c.history) setHistory(c.history);
     if (c.trendScoutBrands) setBrands(c.trendScoutBrands);
@@ -167,6 +179,9 @@ export default function AgentsHub() {
         case 'competitor': result = await runCompetitorAgent(config, brands, onProgress); break;
         case 'financial': result = await runFinancialAgent(config, state, results.analyst, onProgress); break;
         case 'crm': result = await runCRMAgent(config, results.analyst, onProgress); break;
+        case 'supplyChain': result = await runSupplyChainAgent(config, state, results.analyst, onProgress); break;
+        case 'customerSuccess': result = await runCustomerSuccessAgent(config, results.analyst, onProgress); break;
+        case 'cashflow': result = await runCashFlowAgent(config, state, results.analyst, onProgress); break;
         case 'master': result = await runMasterAgent(config, results, onProgress); break;
         default: return;
       }
@@ -223,11 +238,36 @@ export default function AgentsHub() {
       // 6. Paid Media
       setActiveTab('paidMedia');
       const paidMedia = await runPaidMediaAgent(config, analyst, onProgress);
-      const finalResults = { analyst, trendScout, contentCreator: content, strategist, growth, paidMedia };
+      setResults(prev => ({ ...prev, paidMedia }));
+      addToHistory(paidMedia);
+      setCompletedSteps(prev => [...prev, 'paidMedia']);
+
+      // 7-9. New agents in parallel
+      setProgressMsg('Ejecutando agentes de proveedores, clientes y cash flow...');
+      const [supplyRes, custRes, cashRes] = await Promise.allSettled([
+        runSupplyChainAgent(config, state, analyst, onProgress),
+        runCustomerSuccessAgent(config, analyst, onProgress),
+        runCashFlowAgent(config, state, analyst, onProgress),
+      ]);
+      if (supplyRes.status === 'fulfilled') { setResults(prev => ({ ...prev, supplyChain: supplyRes.value })); addToHistory(supplyRes.value); }
+      if (custRes.status === 'fulfilled') { setResults(prev => ({ ...prev, customerSuccess: custRes.value })); addToHistory(custRes.value); }
+      if (cashRes.status === 'fulfilled') { setResults(prev => ({ ...prev, cashflow: cashRes.value })); addToHistory(cashRes.value); }
+      setCompletedSteps(prev => [...prev, 'supplyChain', 'customerSuccess', 'cashflow']);
+
+      // 10. CEO synthesis
+      setActiveTab('master');
+      setProgressMsg('👑 CEO analizando todos los reportes...');
+      const allRes = { analyst, trendScout, contentCreator: content, strategist, growth, paidMedia,
+        supplyChain: supplyRes.status === 'fulfilled' ? supplyRes.value : null,
+        customerSuccess: custRes.status === 'fulfilled' ? custRes.value : null,
+        cashflow: cashRes.status === 'fulfilled' ? cashRes.value : null,
+      };
+      const master = await runMasterAgent(config, allRes, onProgress);
+      const finalResults = { ...allRes, master };
       setResults(finalResults);
-      const nextHistory = addToHistory(paidMedia);
-      persistCache({ ...finalResults, history: nextHistory });
-      setCompletedSteps(['analyst', 'trendScout', 'contentCreator', 'strategist', 'growth', 'paidMedia']);
+      const nextHistory = addToHistory(master);
+      persistCache({ ...finalResults, history: nextHistory, lastCEOAutoRun: new Date().toISOString().split('T')[0] });
+      setCompletedSteps(prev => [...prev, 'master']);
     } catch (err) {
       setError({ agent: 'all', message: err.message });
     } finally {
@@ -314,8 +354,8 @@ export default function AgentsHub() {
             fontWeight: 600, fontSize: 13, opacity: loading ? 0.6 : 1, transition: 'all 0.2s',
           }}
         >
-          {loading === 'all' ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Play size={16} />}
-          Ejecutar Todos
+          {loading === 'all' ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Bot size={16} />}
+          👑 CEO — Ejecutar Todos
         </button>
       </div>
 
@@ -336,7 +376,7 @@ export default function AgentsHub() {
             })}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {progressMsg || 'Procesando...'} ({completedSteps.length}/4)
+            {progressMsg || 'Procesando...'} ({completedSteps.length}/{TABS.length})
           </div>
         </div>
       )}
@@ -451,6 +491,50 @@ export default function AgentsHub() {
             )}
           </div>
 
+          {/* CEO Dashboard for Master Agent */}
+          {activeTab === 'master' && currentResult?.healthScore && (
+            <div style={{ marginBottom: 12, padding: 16, background: 'linear-gradient(135deg, #fbbf2410, #f59e0b10)', border: '1px solid #fbbf2440', borderRadius: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: '#fff', background: currentResult.healthScore >= 70 ? 'linear-gradient(135deg, #22c55e, #16a34a)' : currentResult.healthScore >= 40 ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'linear-gradient(135deg, #ef4444, #dc2626)' }}>
+                  {currentResult.healthScore}
+                </div>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>👑 Reporte del CEO</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{currentResult.parsedTasks?.healthJustification || ''}</div>
+                </div>
+              </div>
+              {currentResult.parsedTasks?.ceoStatement && (
+                <div style={{ padding: 12, background: 'var(--bg-card)', borderRadius: 10, fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)', fontStyle: 'italic', borderLeft: '3px solid #fbbf24' }}>
+                  "{currentResult.parsedTasks.ceoStatement}"
+                </div>
+              )}
+              {currentResult.alerts?.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  {currentResult.alerts.map((alert, i) => (
+                    <div key={i} style={{ padding: '6px 10px', marginTop: 4, background: 'rgba(239,68,68,0.1)', borderRadius: 8, fontSize: 12, color: '#ef4444' }}>🚨 {alert}</div>
+                  ))}
+                </div>
+              )}
+              {currentResult.weeklyGoals?.length > 0 && (
+                <div style={{ marginTop: 10, padding: 10, background: 'rgba(34,197,94,0.08)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#22c55e', marginBottom: 4 }}>🎯 Metas de la semana:</div>
+                  {currentResult.weeklyGoals.map((g, i) => (
+                    <div key={i} style={{ fontSize: 12, padding: '2px 0', color: 'var(--text-secondary)' }}>✓ {g}</div>
+                  ))}
+                </div>
+              )}
+              {currentResult.criticalDecisions?.length > 0 && (
+                <div style={{ marginTop: 10, padding: 10, background: 'rgba(251,191,36,0.08)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#f59e0b', marginBottom: 4 }}>⚡ Decisiones del CEO:</div>
+                  {currentResult.criticalDecisions.map((d, i) => (
+                    <div key={i} style={{ fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--border-color)' }}>
+                      <b>{d.owner}</b>: {d.decision} <span style={{ opacity: 0.6 }}>— {d.reason}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {/* Create Tasks button for Master Agent */}
           {activeTab === 'master' && currentResult?.tasks?.length > 0 && (
             <div style={{ marginBottom: 12, padding: 12, background: '#fbbf2410', border: '1px solid #fbbf2440', borderRadius: 10 }}>
