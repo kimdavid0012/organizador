@@ -395,10 +395,12 @@ export default function PosCaja({ onOpenCatalog }) {
                                     </td>
                                     <td>
                                         <input
-                                            type="number"
+                                            type="text"
+                                            inputMode="numeric"
                                             value={item.descuentoPorcentaje || ''}
-                                            onChange={e => handleUpdateItemDiscount(item.id, e.target.value)}
-                                            style={{ width: '40px', padding: '2px 4px', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                                            onChange={e => { const v = e.target.value; if (v === '' || v === '-' || !isNaN(Number(v))) handleUpdateItemDiscount(item.id, v); }}
+                                            placeholder="-=rec"
+                                            style={{ width: '50px', padding: '2px 4px', background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: Number(item.descuentoPorcentaje || 0) < 0 ? '#ef4444' : 'var(--text-primary)' }}
                                         />%
                                     </td>
                                     <td style={{ textAlign: 'right', fontWeight: 'bold' }}>${item.importe.toFixed(2)}</td>
@@ -422,7 +424,7 @@ export default function PosCaja({ onOpenCatalog }) {
                             className="form-input"
                             style={{ width: 100 }}
                             value={descuentoGlobal || ''}
-                            onChange={(e) => setDescuentoGlobal(Number(e.target.value) || 0)}
+                            onChange={(e) => { const v = e.target.value; if (v === '' || v === '-' || !isNaN(Number(v))) setDescuentoGlobal(v === '' ? 0 : v === '-' ? v : Number(v)); }}
                         />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 'min-content' }}>
