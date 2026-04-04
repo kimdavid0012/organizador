@@ -134,6 +134,17 @@ async function callLLM(config, systemPrompt, userPrompt, options = {}) {
 
 // Legacy callOpenAI removed — all agents now use callLLM directly
 
+// ─── Language support ─────────────────────────────────────
+function getLanguageInstruction(config) {
+  const lang = config.marketing?.reportLanguage || config.i18nLang || 'es';
+  const langMap = {
+    es: 'Respondé siempre en español rioplatense.',
+    ru: 'Отвечай всегда на русском языке.',
+    ko: '항상 한국어로 답변하세요.',
+  };
+  return langMap[lang] || langMap.es;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────
 function todayLabel() {
   return new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -415,7 +426,10 @@ Respondé: ventas hoy vs tendencia, ticket promedio, productos clave, alertas st
   const prevHistory = getAgentHistory(config, 'analyst');
   const historyCtx = buildHistoryContext(prevHistory);
 
+  const langInst = getLanguageInstruction(config);
+
   const prompt = `Fecha: ${todayLabel()}
+IDIOMA: ${langInst}
 ${historyCtx}
 📊 ANÁLISIS PROFUNDO META ADS (paso 1):
 ${step1.text}
@@ -1340,5 +1354,95 @@ Asunto + cuerpo pidiendo opinión
 
   const { text, tokens } = await callLLM(config, CRM_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.6 });
   return { type: 'crm', content: text, timestamp: agentTimestamp(), tokens };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  MASTER AGENT — Orchestrator that creates actionable tasks
+// ═══════════════════════════════════════════════════════════════
+const MASTER_SYSTEM = `Sos el Director de Operaciones AI de CELAVIE. Tu trabajo es analizar TODOS los reportes de los demás agentes y generar TAREAS CONCRETAS asignadas a personas específicas del equipo.
+${BRAND_CONTEXT}
+${TEAM_CONTEXT}
+
+REGLAS CRÍTICAS:
+- Cada tarea DEBE tener: título corto, descripción, responsable, prioridad (alta/media/baja), deadline
+- Solo asigná tareas a personas que pueden ejecutarlas según su rol
+- Máximo 10 tareas por ejecución
+- Las tareas deben ser ACCIONABLES (no análisis ni sugerencias vagas)
+- Formato de respuesta: JSON puro, sin markdown
+
+ASIGNACIÓN DE RESPONSABLES:
+- David: decisiones estratégicas, presupuesto, nuevos productos, pricing
+- Ro: contenido IG/TikTok/FB, reels, captions, community management
+- Nadia: POS, atención al cliente, pedidos físicos, banco, saldo
+- Naara: conteo de mercadería, inventario, stock, depósito
+- Juan: pedidos online, envíos, seguimiento de entregas
+- Rocío: fotografía de productos, Instagram Planner`;
+
+export async function runMasterAgent(config, allResults, onProgress) {
+  const langInst = getLanguageInstruction(config);
+  onProgress?.('Agente Maestro: analizando todos los reportes...');
+
+  // Collect all available agent reports
+  const reports = {};
+  if (allResults.analyst?.content) reports.analyst = allResults.analyst.content.substring(0, 1500);
+  if (allResults.trendScout?.content) reports.trendScout = allResults.trendScout.content.substring(0, 800);
+  if (allResults.contentCreator?.content) reports.contentCreator = allResults.contentCreator.content.substring(0, 800);
+  if (allResults.strategist?.content) reports.strategist = allResults.strategist.content.substring(0, 1000);
+  if (allResults.growth?.content) reports.growth = allResults.growth.content.substring(0, 800);
+  if (allResults.paidMedia?.content) reports.paidMedia = allResults.paidMedia.content.substring(0, 800);
+  if (allResults.pricing?.content) reports.pricing = allResults.pricing.content.substring(0, 800);
+  if (allResults.inventory?.content) reports.inventory = allResults.inventory.content.substring(0, 800);
+  if (allResults.financial?.content) reports.financial = allResults.financial.content.substring(0, 800);
+
+  if (Object.keys(reports).length === 0) {
+    throw new Error('No hay reportes de agentes disponibles. Ejecutá al menos el Analista primero.');
+  }
+
+  onProgress?.(`Generando tareas basadas en ${Object.keys(reports).length} reportes...`);
+
+  const prompt = `Fecha: ${todayLabel()}
+IDIOMA: ${langInst}
+
+REPORTES DE AGENTES DISPONIBLES:
+${Object.entries(reports).map(([k, v]) => `--- ${k.toUpperCase()} ---\n${v}`).join('\n\n')}
+
+───────────────────────
+Basándote en TODOS los reportes, generá un JSON con tareas accionables.
+Respondé SOLO con JSON válido, sin markdown, sin backticks:
+
+{
+  "tasks": [
+    {
+      "title": "título corto de la tarea",
+      "description": "qué hay que hacer concretamente",
+      "assignee": "David|Ro|Nadia|Naara|Juan|Rocío",
+      "priority": "alta|media|baja",
+      "deadline": "hoy|mañana|esta semana|próxima semana",
+      "source": "nombre del agente que generó esta necesidad",
+      "category": "marketing|ventas|inventario|contenido|operaciones|finanzas"
+    }
+  ],
+  "summary": "resumen de 2 líneas de las prioridades del día"
+}`;
+
+  const { text, tokens } = await callLLM(config, MASTER_SYSTEM, prompt, { maxTokens: 3000, temperature: 0.3 });
+
+  // Parse JSON response
+  let parsedTasks = null;
+  try {
+    parsedTasks = JSON.parse(text.replace(/```json|```/g, '').trim());
+  } catch {
+    parsedTasks = { tasks: [], summary: text, parseError: true };
+  }
+
+  return {
+    type: 'master',
+    content: parsedTasks.summary || text,
+    timestamp: agentTimestamp(),
+    tokens,
+    tasks: parsedTasks.tasks || [],
+    parsedTasks,
+  };
 }
 
