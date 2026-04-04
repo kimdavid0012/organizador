@@ -478,8 +478,15 @@ export default function InformesPage() {
     }, [allSales, state.config, state.config?.clientes, state.telas]);
 
     const generateBusinessReport = async () => {
+        const provider = state.config?.marketing?.llmProvider || 'openai';
         const openaiKey = state.config?.marketing?.openaiKey;
-        if (!openaiKey) {
+        const claudeKey = state.config?.marketing?.claudeKey;
+
+        if (provider === 'claude' && !claudeKey) {
+            alert('Falta Claude API Key en Configuración → Asistente IA');
+            return;
+        }
+        if (provider !== 'claude' && !openaiKey) {
             alert(pageText.alertNeedKey);
             return;
         }
@@ -490,36 +497,56 @@ export default function InformesPage() {
                 .replace('{{business_data}}', JSON.stringify(reportData, null, 2))
                 .replace('{{language_rule}}', REPORT_LANGUAGE_INSTRUCTIONS[lang] || REPORT_LANGUAGE_INSTRUCTIONS.es);
 
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${openaiKey}`
-                },
-                body: JSON.stringify({
-                    model: 'gpt-4o-mini',
-                    temperature: 0.4,
-                    max_tokens: 1800,
-                    messages: [
-                        {
-                            role: 'system',
-                            content: 'Respondé en español rioplatense profesional, con criterio financiero, comercial y operativo. Priorizá utilidad real para dueña de local.'
-                        },
-                        {
-                            role: 'user',
-                            content: prompt
-                        }
-                    ]
-                })
-            });
+            const systemMsg = 'Respondé en español rioplatense profesional, con criterio financiero, comercial y operativo. Priorizá utilidad real para dueña de local.';
+            let report;
 
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error?.message || 'Error generando informe');
+            if (provider === 'claude') {
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': claudeKey,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true',
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 2000,
+                        temperature: 0.4,
+                        system: systemMsg,
+                        messages: [{ role: 'user', content: prompt }],
+                    }),
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error?.message || 'Error Claude');
+                }
+                const data = await response.json();
+                report = data.content?.[0]?.text || 'No pude generar el informe.';
+            } else {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${openaiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o-mini',
+                        temperature: 0.4,
+                        max_tokens: 1800,
+                        messages: [
+                            { role: 'system', content: systemMsg },
+                            { role: 'user', content: prompt }
+                        ]
+                    })
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error?.message || 'Error generando informe');
+                }
+                const data = await response.json();
+                report = data.choices?.[0]?.message?.content || 'No pude generar el informe.';
             }
-
-            const data = await response.json();
-            const report = data.choices?.[0]?.message?.content || 'No pude generar el informe.';
             setReportText(report);
             setGeneratedAt(new Date().toISOString());
             updateConfig({
@@ -649,13 +676,23 @@ export default function InformesPage() {
                             </div>
                         )}
                     </div>
-                    <button className="btn btn-primary informes-report-button" onClick={generateBusinessReport} disabled={loading}>
-                        {loading ? <RefreshCw size={16} className="spin" /> : <FileText size={16} />}
-                        {loading ? pageText.generating : pageText.generate}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <select
+                            value={state.config?.marketing?.llmProvider || 'openai'}
+                            onChange={(e) => updateConfig({ marketing: { ...(state.config.marketing || {}), llmProvider: e.target.value } })}
+                            style={{ fontSize: 11, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                        >
+                            <option value="openai">⚡ GPT-4o-mini</option>
+                            <option value="claude">🧠 Claude Sonnet</option>
+                        </select>
+                        <button className="btn btn-primary informes-report-button" onClick={generateBusinessReport} disabled={loading}>
+                            {loading ? <RefreshCw size={16} className="spin" /> : <FileText size={16} />}
+                            {loading ? pageText.generating : pageText.generate}
+                        </button>
+                    </div>
                 </div>
 
-                {!state.config?.marketing?.openaiKey && (
+                {!state.config?.marketing?.openaiKey && !state.config?.marketing?.claudeKey && (
                     <div style={{ padding: 14, borderRadius: 12, background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.2)', color: 'var(--text-secondary)', fontSize: 13 }}>
                         {pageText.needKey}
                     </div>
