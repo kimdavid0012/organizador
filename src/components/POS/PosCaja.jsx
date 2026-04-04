@@ -96,8 +96,10 @@ export default function PosCaja({ onOpenCatalog }) {
         return acc + ((item.precioOriginal - item.precioUnitario) * item.cantidad);
     }, 0);
 
-    // Apply global discount
-    const totalFinal = Math.max(0, subtotal - totalDescuentosItem - descuentoGlobal);
+    // Apply global discount/surcharge as percentage
+    const subtotalAfterItems = subtotal - totalDescuentosItem;
+    const descuentoGlobalMonto = subtotalAfterItems * ((descuentoGlobal || 0) / 100);
+    const totalFinal = Math.max(0, subtotalAfterItems - descuentoGlobalMonto);
 
     const handleAddToCart = (product, { focusQuantity = false } = {}) => {
         const pricing = getChannelPricing(product, canalVenta);
@@ -234,7 +236,7 @@ export default function PosCaja({ onOpenCatalog }) {
             notas: notasDePedido || '',
             items: cart,
             subtotal,
-            descuento: totalDescuentosItem + descuentoGlobal,
+            descuento: totalDescuentosItem + descuentoGlobalMonto,
             total: totalFinal,
             pago,
             vuelto: vuelto > 0 ? vuelto : 0
@@ -422,13 +424,15 @@ export default function PosCaja({ onOpenCatalog }) {
                 {/* Zona inferior de Descuentos extra y Cliente */}
                 <div style={{ display: 'flex', gap: 16, background: 'var(--bg-card)', padding: 'var(--sp-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)' }}>Desc/Recargo $:</span>
+                        <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)' }}>Desc/Recargo %:</span>
                         <input
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             className="form-input"
-                            style={{ width: 100 }}
+                            style={{ width: 80, color: Number(descuentoGlobal || 0) < 0 ? '#ef4444' : 'var(--text-primary)' }}
                             value={descuentoGlobal || ''}
                             onChange={(e) => { const v = e.target.value; if (v === '' || v === '-' || !isNaN(Number(v))) setDescuentoGlobal(v === '' ? 0 : v === '-' ? v : Number(v)); }}
+                            placeholder="ej: 10 o -10"
                         />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 'min-content' }}>
@@ -492,7 +496,7 @@ export default function PosCaja({ onOpenCatalog }) {
                     </div>
                     <div className="pos-total-row" style={{ color: 'var(--danger)' }}>
                         <span>Descuentos:</span>
-                        <span>-${(totalDescuentosItem + descuentoGlobal).toFixed(2)}</span>
+                        <span>{descuentoGlobalMonto >= 0 ? '-' : '+'}${Math.abs(totalDescuentosItem + descuentoGlobalMonto).toFixed(2)}</span>
                     </div>
                     <div className="pos-total-row grand-total">
                         <span>Total Final:</span>
