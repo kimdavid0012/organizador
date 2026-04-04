@@ -567,7 +567,7 @@ export async function runContentAgent(config, analystData, trendData, onProgress
 ${safeContentTruncate(analystData)}
 
 📸 INSTAGRAM ORGÁNICO — Métricas reales de @celavieindumentaria:
-${safeTruncate(analystData?.data?.instagram?.analytics || bd?.instagram?.analytics, 1500)}
+${safeTruncate(analystData?.data?.instagram?.analytics, 1500)}
 
 🌍 TENDENCIAS DEL SCOUT:
 ${safeContentTruncate(trendData)}
