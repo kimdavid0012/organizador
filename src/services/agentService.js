@@ -41,6 +41,16 @@ const TEAM_CONTEXT = `EQUIPO CELAVIE:
 - Rocío: fotos de productos, Instagram Planner
 IMPORTANTE: Cuando generes tareas/acciones, SIEMPRE asigná a la persona correcta del equipo.`;
 
+// ─── Didactic explanation rule for all agents ──────────────
+const ELI5_RULE = `
+REGLA DIDÁCTICA OBLIGATORIA: Después de cada sección técnica o métrica importante, incluí una línea que empiece con "📚 En criollo:" con 1-2 oraciones simples explicando qué significa para alguien SIN conocimiento de marketing, finanzas o e-commerce.
+Ejemplos:
+- Después de ROAS: "📚 En criollo: Por cada $1 que ponemos en publicidad, nos vuelven $3.5 en ventas — eso está muy bien, arriba de $2 ya es rentable."
+- Después de CTR: "📚 En criollo: De cada 100 personas que ven nuestro anuncio, 2.3 le hacen click. Es un número aceptable pero podríamos mejorar."
+- Después de CAC: "📚 En criollo: Nos cuesta $850 conseguir cada cliente nuevo. Si ese cliente gasta $3000 en promedio, el negocio cierra bien."
+- Después de stock: "📚 En criollo: Nos quedan remeras para 5 días más al ritmo actual de ventas, hay que cortar urgente."
+Esta explicación NO reemplaza el dato técnico — va DESPUÉS, como ayuda para el equipo que no maneja la jerga.`;
+
 // ─── LLM helper: supports Claude (Anthropic) and OpenAI with retry + timeout ──
 async function callLLM(config, systemPrompt, userPrompt, options = {}) {
   const provider = config.marketing?.llmProvider || 'openai';
@@ -374,6 +384,7 @@ Respondé SOLO con un JSON (sin markdown):
 //  AGENT 1 — ANALISTA (Enhanced Daily Business Intelligence)
 // ═══════════════════════════════════════════════════════════════
 const ANALYST_SYSTEM = `Sos un analista de business intelligence especializado en e-commerce de moda argentino.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Tu trabajo es consolidar TODOS los datos disponibles (Meta Ads, WooCommerce, POS, inventario, clientes, sub-agentes) y producir un brief ejecutivo completo.
 Respondé en español rioplatense, profesional pero directo. Usá emojis con moderación.
@@ -471,6 +482,7 @@ Generá un BRIEF EJECUTIVO DEL DÍA con:
 //  AGENT 2 — TREND SCOUT (Enhanced Fashion Intelligence)
 // ═══════════════════════════════════════════════════════════════
 const SCOUT_SYSTEM = `Sos un trend scout de moda internacional especializado en basics, modal, y ropa casual/urbana.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Conocés muy bien el mercado argentino mayorista y sabés traducir tendencias globales a oportunidades para ${BRAND.handle}.
 Respondé en español rioplatense. Sé concreto: colores Pantone, telas, siluetas, referencias.
@@ -521,6 +533,7 @@ Basándote en tu conocimiento actualizado:
 //  AGENT 3 — CONTENT CREATOR (Enhanced, multi-platform)
 // ═══════════════════════════════════════════════════════════════
 const CONTENT_SYSTEM = `Sos un Instagram Curator y content strategist experto en moda mayorista argentina.
+${ELI5_RULE}
 La cuenta es ${BRAND.handle} en Instagram, TikTok y Facebook. SIEMPRE usá ese handle en captions y CTAs.
 ${BRAND_CONTEXT}
 
@@ -596,6 +609,7 @@ Además incluí:
 //  AGENT 4 — ESTRATEGA (Enhanced, with full sub-agent data)
 // ═══════════════════════════════════════════════════════════════
 const STRATEGIST_SYSTEM = `Sos un director de marketing y estrategia comercial con 15 años de experiencia en e-commerce de moda.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Tu trabajo es sintetizar TODOS los datos disponibles — incluyendo reportes de sub-agentes de producto y audiencia — y dar recomendaciones estratégicas de alto nivel.
 Pensás en ROI, unit economics, ciclos de producto, LTV, CAC. Sos directo y no tenés miedo de decir "pará todo y cambiá esto".
@@ -685,6 +699,7 @@ Generá un **REPORTE ESTRATÉGICO** con:
 //  AGENT 5 — GROWTH HACKER (Experimentation & Viral Growth)
 // ═══════════════════════════════════════════════════════════════
 const GROWTH_SYSTEM = `Sos un growth hacker con experiencia en e-commerce de moda y DTC brands.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Tu especialidad es diseñar experimentos de crecimiento, identificar viral loops, optimizar funnels de conversión y encontrar canales de adquisición no explotados.
 Pensás en frameworks: AARRR (Acquisition, Activation, Revenue, Retention, Referral), ICE scoring, North Star Metrics.
@@ -759,6 +774,7 @@ Para cada experimento:
 //  AGENT 6 — PAID MEDIA OPTIMIZER (Deep Meta Ads Analysis)
 // ═══════════════════════════════════════════════════════════════
 const PAID_MEDIA_SYSTEM = `Sos un paid media specialist con 10 años en Meta Ads (Facebook/Instagram) para e-commerce de moda.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Dominás: campaign structure, audience targeting, creative testing, budget allocation, bid strategies, ROAS optimization, attribution models, y creative fatigue detection.
 Analizás datos granulares de campañas, ad sets y ads para dar recomendaciones accionables con números específicos.
@@ -869,6 +885,7 @@ Para cada campaña activa:
 //  AGENT 7 — PRICING OPTIMIZER
 // ═══════════════════════════════════════════════════════════════
 const PRICING_SYSTEM = `Sos un pricing strategist especializado en moda mayorista argentina.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Analizás precios vs costos vs márgenes vs competencia y sugerís ajustes para maximizar rentabilidad sin perder competitividad.
 Entendés la dinámica mayorista: listas de precio L1-L5, descuentos por volumen, pricing psicológico.
@@ -943,6 +960,7 @@ Generá un **REPORTE DE PRICING**:
 //  AGENT 8 — INVENTORY FORECASTER
 // ═══════════════════════════════════════════════════════════════
 const INVENTORY_SYSTEM = `Sos un demand planner y inventory forecaster para moda mayorista argentina.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Predecís demanda futura basándote en ventas históricas, tendencias, y estacionalidad.
 Entendés ciclos de producción (corte → taller → producto terminado tarda ~7-15 días).
@@ -1019,6 +1037,7 @@ Generá un **FORECAST DE INVENTARIO**:
 //  AGENT 9 — WHATSAPP SALES
 // ═══════════════════════════════════════════════════════════════
 const WHATSAPP_SYSTEM = `Sos un copywriter de ventas por WhatsApp para marca de moda mayorista argentina.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Escribís mensajes que venden sin ser spam. Conocés el tono correcto para revendedoras: directo, cálido, con urgencia sutil.
 WhatsApp tiene límite de ~4000 chars por mensaje. Los catálogos van con emojis y estructura clara.
@@ -1083,6 +1102,7 @@ Texto corto para estado de WhatsApp (máx 139 chars) con gancho visual.
 //  AGENT 10 — SEO & WEB OPTIMIZER
 // ═══════════════════════════════════════════════════════════════
 const SEO_SYSTEM = `Sos un SEO specialist para e-commerce de moda en Argentina.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Web: celavie.com.ar (WooCommerce). Optimizás títulos, descripciones, keywords, meta tags, y estructura de categorías.
 Conocés SEO para e-commerce: long-tail keywords, schema markup, Google Shopping, URL structure.
@@ -1147,6 +1167,7 @@ Generá un **REPORTE SEO**:
 //  AGENT 11 — COMPETITOR SPY
 // ═══════════════════════════════════════════════════════════════
 const COMPETITOR_SYSTEM = `Sos un competitive intelligence analyst especializado en moda mayorista argentina.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Monitoreás competidores directos e indirectos, analizás su estrategia de producto, pricing, contenido y posicionamiento.
 Respondé en español rioplatense. Formato: markdown con tablas comparativas.`;
@@ -1203,6 +1224,7 @@ Para cada marca:
 //  AGENT 12 — FINANCIAL CONTROLLER
 // ═══════════════════════════════════════════════════════════════
 const FINANCIAL_SYSTEM = `Sos un controller financiero especializado en PyMEs de moda argentina.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Analizás P&L, cash flow, márgenes, y proyectás resultados. Entendés la dinámica mayorista: cobro a 10 días, producción adelantada.
 Pensás en: gross margin, operating margin, break-even, cash conversion cycle.
@@ -1287,6 +1309,7 @@ Revenue Web + POS, Costo estimado, Gross Margin, Gastos Meta Ads, Net estimado
 //  AGENT 13 — EMAIL/CRM COMMUNICATIONS
 // ═══════════════════════════════════════════════════════════════
 const CRM_SYSTEM = `Sos un CRM strategist y email marketer para moda mayorista argentina.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 Diseñás comunicaciones personalizadas para diferentes segmentos de clientes: mayoristas activos, inactivos, nuevos, y web.
 Tono: profesional pero cercano, español rioplatense. Formato: markdown con templates listos para usar.`;
@@ -1360,9 +1383,19 @@ Asunto + cuerpo pidiendo opinión
 // ═══════════════════════════════════════════════════════════════
 //  MASTER AGENT — Orchestrator that creates actionable tasks
 // ═══════════════════════════════════════════════════════════════
-const MASTER_SYSTEM = `Sos el Director de Operaciones AI de CELAVIE. Tu trabajo es analizar TODOS los reportes de los demás agentes y generar TAREAS CONCRETAS asignadas a personas específicas del equipo.
+const MASTER_SYSTEM = `Sos el CEO VIRTUAL de CELAVIE — el Director General AI que toma decisiones autónomas y dirige la operación diaria.
+${ELI5_RULE}
 ${BRAND_CONTEXT}
 ${TEAM_CONTEXT}
+
+FILOSOFÍA DE GESTIÓN:
+- NO sos un asistente que sugiere — sos un ejecutivo que DECIDE. Hablás en primera persona del plural ("hacemos", "vamos a", "decidí que").
+- Pensás como dueño: cada peso cuenta, cada decisión afecta el P&L
+- Priorizás por impacto en revenue y cash flow
+- Delegás bien: sabés qué puede hacer cada persona del equipo
+- Medís todo: si no se mide, no se gestiona
+- Anticipás problemas: no esperás a que explote
+- Sos directo: si algo anda mal, lo decís sin vueltas
 
 REGLAS CRÍTICAS:
 - Cada tarea DEBE tener: título corto, descripción, responsable, prioridad (alta/media/baja), deadline
@@ -1394,6 +1427,9 @@ export async function runMasterAgent(config, allResults, onProgress) {
   if (allResults.pricing?.content) reports.pricing = allResults.pricing.content.substring(0, 800);
   if (allResults.inventory?.content) reports.inventory = allResults.inventory.content.substring(0, 800);
   if (allResults.financial?.content) reports.financial = allResults.financial.content.substring(0, 800);
+  if (allResults.supplyChain?.content) reports.supplyChain = allResults.supplyChain.content.substring(0, 800);
+  if (allResults.cashflow?.content) reports.cashflow = allResults.cashflow.content.substring(0, 800);
+  if (allResults.customerSuccess?.content) reports.customerSuccess = allResults.customerSuccess.content.substring(0, 800);
 
   if (Object.keys(reports).length === 0) {
     throw new Error('No hay reportes de agentes disponibles. Ejecutá al menos el Analista primero.');
@@ -1408,21 +1444,36 @@ REPORTES DE AGENTES DISPONIBLES:
 ${Object.entries(reports).map(([k, v]) => `--- ${k.toUpperCase()} ---\n${v}`).join('\n\n')}
 
 ───────────────────────
-Basándote en TODOS los reportes, generá un JSON con tareas accionables.
-Respondé SOLO con JSON válido, sin markdown, sin backticks:
+Sos el CEO de CELAVIE. Analizá TODOS los reportes y TOMÁ DECISIONES.
+No sugieras — DECIDÍ. Hablá como director: "Decidí que...", "Vamos a...", "Hoy hacemos...".
+
+Respondé con JSON válido (sin markdown, sin backticks):
 
 {
+  "ceoStatement": "Párrafo de 3-5 líneas donde el CEO habla sobre el estado del negocio HOY, qué le preocupa, y qué decidió. Tono ejecutivo, directo, con números.",
+  "healthScore": 75,
+  "healthJustification": "justificación en 1 línea del score",
+  "criticalDecisions": [
+    {
+      "decision": "qué se decidió",
+      "reason": "por qué, con datos",
+      "impact": "qué pasa si no se hace",
+      "owner": "David|Ro|Nadia|Naara|Juan|Rocío"
+    }
+  ],
   "tasks": [
     {
       "title": "título corto de la tarea",
-      "description": "qué hay que hacer concretamente",
+      "description": "qué hay que hacer concretamente + explicación simple de por qué",
       "assignee": "David|Ro|Nadia|Naara|Juan|Rocío",
       "priority": "alta|media|baja",
       "deadline": "hoy|mañana|esta semana|próxima semana",
       "source": "nombre del agente que generó esta necesidad",
-      "category": "marketing|ventas|inventario|contenido|operaciones|finanzas"
+      "category": "marketing|ventas|inventario|contenido|operaciones|finanzas|proveedores"
     }
   ],
+  "alerts": ["alertas críticas que necesitan atención inmediata"],
+  "weeklyGoals": ["3-5 metas medibles para esta semana"],
   "summary": "resumen de 2 líneas de las prioridades del día"
 }`;
 
@@ -1438,11 +1489,509 @@ Respondé SOLO con JSON válido, sin markdown, sin backticks:
 
   return {
     type: 'master',
-    content: parsedTasks.summary || text,
+    content: parsedTasks.ceoStatement || parsedTasks.summary || text,
     timestamp: agentTimestamp(),
     tokens,
     tasks: parsedTasks.tasks || [],
     parsedTasks,
+    healthScore: parsedTasks.healthScore,
+    criticalDecisions: parsedTasks.criticalDecisions || [],
+    alerts: parsedTasks.alerts || [],
+    weeklyGoals: parsedTasks.weeklyGoals || [],
   };
 }
+
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 14 — SUPPLY CHAIN MANAGER (Fabric & Provider Tracking)
+// ═══════════════════════════════════════════════════════════════
+const SUPPLY_CHAIN_SYSTEM = `Sos un supply chain manager especializado en la industria textil argentina.
+${ELI5_RULE}
+${BRAND_CONTEXT}
+Controlás proveedores de tela, deudas, entregas, calidad, y timing de producción.
+Entendés que CELAVIE trabaja con proveedores clave (MARITEL, KLH, DAN, BRIAN, AM TEX) y que el flujo es: compra tela → entrega → corte → taller → producto terminado (7-15 días).
+Español rioplatense, directo, con tablas de números. Formato: markdown.`;
+
+export async function runSupplyChainAgent(config, state, analystData, onProgress) {
+  onProgress?.('Analizando cadena de suministro y proveedores...');
+  const telas = state.telas || [];
+  const telasTransactions = state.telasTransactions || [];
+  const cortes = state.cortes || [];
+
+  const providerData = {};
+  telasTransactions.forEach(t => {
+    const prov = t.textil || t.proveedor || 'DESCONOCIDO';
+    if (!providerData[prov]) providerData[prov] = { entregas: [], pagos: [], totalEntregas: 0, totalPagos: 0 };
+    if (t.estado === 'ENTREGA') {
+      providerData[prov].entregas.push({ fecha: t.fecha, tela: t.tipoTela, rollos: t.rollos, kilos: t.kilos, monto: t.totalDol || 0 });
+      providerData[prov].totalEntregas += parseFloat(t.totalDol || 0);
+    } else if (t.estado === 'PAGO') {
+      providerData[prov].pagos.push({ fecha: t.fecha, monto: Math.abs(parseFloat(t.totalDol || t.totalPeso || 0)) });
+      providerData[prov].totalPagos += Math.abs(parseFloat(t.totalDol || 0));
+    }
+  });
+
+  const KNOWN_DEBTS = {
+    MARITEL: { usd: 62253, telas: ['Modal Soft', 'Super Soft', 'Kerry Brush'] },
+    KLH: { usd: 17439, telas: ['Lanilla Melow', 'Lanilla Sweter'] },
+    DAN: { usd: 2657, telas: ['saldo verano'] },
+    BRIAN: { usd: 0, telas: [] },
+    'AM TEX': { usd: 0, pesos: 7430632, telas: ['Algodón Frisado'] },
+  };
+
+  const cortesActivos = cortes.filter(c => c.estado !== 'finalizado');
+  const langInst = getLanguageInstruction(config);
+
+  const prompt = `Fecha: ${todayLabel()}
+IDIOMA: ${langInst}
+
+🏭 PROVEEDORES Y DEUDAS ACTUALES:
+${JSON.stringify(KNOWN_DEBTS, null, 2)}
+
+📦 TRANSACCIONES POR PROVEEDOR:
+${safeTruncate(providerData, 3000)}
+
+🧵 STOCK DE TELAS:
+${safeTruncate(telas.map(t => ({ nombre: t.nombre, stock: t.stock })), 1500)}
+
+✂️ CORTES ACTIVOS (${cortesActivos.length}):
+${safeTruncate(cortesActivos.slice(0, 10).map(c => ({ articulo: c.articulo, cantidad: c.cantidad, estado: c.estado, tela: c.tela })), 1000)}
+
+📊 CONTEXTO DE VENTAS:
+${safeContentTruncate(analystData, 1000)}
+
+${BRAND_CONTEXT}
+
+Generá un **REPORTE DE CADENA DE SUMINISTRO**:
+
+## 🏭 DEUDA POR PROVEEDOR
+| Proveedor | Deuda USD | Deuda ARS | Última Entrega | Último Pago | Estado |
+- Clasificar: al día, atrasado, crítico
+
+## 📊 ANÁLISIS DE PROVEEDORES
+Para cada proveedor: confiabilidad, precio/calidad, riesgo de dependencia
+📚 En criollo: explicar qué significa cada análisis
+
+## 🧵 STOCK DE TELAS vs DEMANDA
+| Tela | Stock Actual | Consumo Semanal Est. | Días de Stock | Acción |
+
+## 💸 PLAN DE PAGOS SUGERIDO
+| Proveedor | Monto Sugerido | Fecha | Prioridad | Razón |
+
+## ⚠️ RIESGOS
+- Proveedores con deuda alta que pueden cortar suministro
+- Telas sin stock para cortes planeados
+
+## ✅ ACCIONES INMEDIATAS
+| Acción | Responsable | Deadline |`;
+
+  const { text, tokens } = await callLLM(config, SUPPLY_CHAIN_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.3 });
+  return { type: 'supplyChain', content: text, timestamp: agentTimestamp(), tokens, data: { providerData, KNOWN_DEBTS } };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 15 — CUSTOMER SUCCESS (Retention & Satisfaction)
+// ═══════════════════════════════════════════════════════════════
+const CUSTOMER_SUCCESS_SYSTEM = `Sos un Customer Success Manager especializado en e-commerce de moda mayorista argentina.
+${ELI5_RULE}
+${BRAND_CONTEXT}
+Tu foco es retención, satisfacción, recompra, y lifetime value. Identificás clientes en riesgo y oportunidades de upsell.
+Entendés la dinámica mayorista: las revendedoras son clientas recurrentes que compran cada 2-4 semanas.
+Español rioplatense. Formato: markdown con tablas.`;
+
+export async function runCustomerSuccessAgent(config, analystData, onProgress) {
+  onProgress?.('Analizando éxito y retención de clientes...');
+  let customers = [], recentOrders = [];
+  try {
+    customers = await wooService.fetchCustomers(config);
+    recentOrders = await wooService.fetchRecentOrders(config, 100);
+  } catch {}
+
+  const audienceIntel = analystData?.data?.audienceIntel;
+  const now = Date.now();
+
+  const segmented = {
+    vip: customers.filter(c => parseFloat(c.total_spent || 0) > 50000 && c.orders_count > 5),
+    active: customers.filter(c => c.orders_count > 2 && c.orders_count <= 5),
+    atRisk: customers.filter(c => {
+      if (!c.date_modified) return false;
+      const daysSince = (now - new Date(c.date_modified).getTime()) / (1000*60*60*24);
+      return daysSince > 30 && c.orders_count > 0;
+    }),
+    newCust: customers.filter(c => c.orders_count <= 1),
+    dormant: customers.filter(c => {
+      if (!c.date_modified) return c.orders_count > 0;
+      const daysSince = (now - new Date(c.date_modified).getTime()) / (1000*60*60*24);
+      return daysSince > 60 && c.orders_count > 0;
+    }),
+  };
+
+  const ordersByCustomer = {};
+  recentOrders.forEach(o => {
+    const key = o.billing?.email || o.billing?.phone || 'unknown';
+    if (!ordersByCustomer[key]) ordersByCustomer[key] = [];
+    ordersByCustomer[key].push({ date: o.date_created, total: o.total });
+  });
+  const repeatBuyers = Object.values(ordersByCustomer).filter(orders => orders.length > 1).length;
+  const avgOrders = customers.length > 0 ? customers.reduce((s,c) => s + c.orders_count, 0) / customers.length : 0;
+  const langInst = getLanguageInstruction(config);
+
+  const prompt = `Fecha: ${todayLabel()}
+IDIOMA: ${langInst}
+
+👥 CLIENTES TOTALES: ${customers.length}
+VIP (>$50k, >5 orders): ${segmented.vip.length}
+Activos (2-5 orders): ${segmented.active.length}
+Nuevos (0-1 orders): ${segmented.newCust.length}
+En riesgo (>30 días sin compra): ${segmented.atRisk.length}
+Dormidos (>60 días): ${segmented.dormant.length}
+
+📊 MÉTRICAS:
+- Repeat buyers en últimos 100 pedidos: ${repeatBuyers}
+- Promedio de órdenes por cliente: ${avgOrders.toFixed(1)}
+
+🏆 TOP CLIENTES:
+${safeTruncate(customers.sort((a,b) => parseFloat(b.total_spent||0) - parseFloat(a.total_spent||0)).slice(0,15).map(c => ({
+  name: (c.first_name+' '+c.last_name).trim(), orders: c.orders_count, spent: c.total_spent, city: c.billing?.city
+})), 1500)}
+
+👥 AUDIENCIA (del sub-agente):
+${safeTruncate(audienceIntel, 1000)}
+
+${BRAND_CONTEXT}
+
+Generá un **REPORTE DE CUSTOMER SUCCESS**:
+
+## 📊 HEALTH SCORE DE CLIENTES (0-100)
+Score general + justificación
+📚 En criollo: explicación simple
+
+## 👥 SEGMENTACIÓN DETALLADA
+| Segmento | Cantidad | % del Total | Revenue Contrib. | Acción Clave |
+
+## 🔴 CLIENTES EN RIESGO (Top 10 por valor)
+| Cliente | Última Compra | Total Gastado | Días Sin Comprar | Acción Sugerida |
+
+## 🏆 PROGRAMA VIP
+- Clientes que deberían ser VIP
+- Beneficios sugeridos
+- Cómo premiar fidelidad sin regalar margen
+
+## 📈 RETENCIÓN Y RECOMPRA
+- Tasa de recompra estimada
+- Frecuencia promedio de compra
+- LTV estimado por segmento
+
+## 💡 OPORTUNIDADES DE UPSELL/CROSS-SELL
+- Clientes de 1 categoría → ofrecerles otras
+- Packs o combos para subir ticket
+- Timing óptimo para contactar
+
+## ✅ PLAN DE ACCIÓN
+| Acción | Segmento Target | Canal | Responsable | Timeline |`;
+
+  const { text, tokens } = await callLLM(config, CUSTOMER_SUCCESS_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.4 });
+  return { type: 'customerSuccess', content: text, timestamp: agentTimestamp(), tokens, data: { segmented, repeatBuyers } };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 16 — CASH FLOW GUARDIAN (Daily Cash Position)
+// ═══════════════════════════════════════════════════════════════
+const CASHFLOW_SYSTEM = `Sos un tesorero y guardian de cash flow para PyME textil argentina.
+${ELI5_RULE}
+${BRAND_CONTEXT}
+Tu obsesión es que NUNCA falte plata para operar. Controlás cobros, pagos, deudas de clientes, deudas a proveedores, y flujo diario.
+Regla de oro de CELAVIE: no producir más de lo que se puede pagar en 10 días.
+Entendés la economía argentina: dólar blue, inflación, pagos en cuotas, transferencias, efectivo, Mercado Pago.
+Español rioplatense, alarmista cuando hay peligro. Formato: markdown con tablas de dinero.`;
+
+export async function runCashFlowAgent(config, state, analystData, onProgress) {
+  onProgress?.('Monitoreando cash flow en tiempo real...');
+  let revenueStats = null;
+  try { revenueStats = await wooService.fetchRevenueStats(config); } catch {}
+
+  const posVentas = state.posVentas || [];
+  const bankPayments = state.bankPayments || [];
+  const clientes = state.clientes || [];
+  const now = new Date();
+  const today = now.toDateString();
+  const segmented = {
+    vip: customers.filter(c => parseFloat(c.total_spent || 0) > 50000 && c.orders_count > 5),
+    active: customers.filter(c => c.orders_count > 2 && c.orders_count <= 5),
+    atRisk: customers.filter(c => {
+      if (!c.date_modified) return false;
+      const daysSince = (now - new Date(c.date_modified).getTime()) / (1000*60*60*24);
+      return daysSince > 30 && c.orders_count > 0;
+    }),
+    newCustomers: customers.filter(c => c.orders_count <= 1),
+    dormant: customers.filter(c => {
+      if (!c.date_modified) return c.orders_count > 0;
+      const daysSince = (now - new Date(c.date_modified).getTime()) / (1000*60*60*24);
+      return daysSince > 60 && c.orders_count > 0;
+    }),
+  };
+
+  const ordersByCustomer = {};
+  recentOrders.forEach(o => {
+    const key = o.billing?.email || o.billing?.phone || 'unknown';
+    if (!ordersByCustomer[key]) ordersByCustomer[key] = [];
+    ordersByCustomer[key].push({ date: o.date_created, total: o.total });
+  });
+  const repeatBuyers = Object.values(ordersByCustomer).filter(orders => orders.length > 1).length;
+  const avgOrders = customers.length > 0 ? customers.reduce((s,c) => s + c.orders_count, 0) / customers.length : 0;
+  const langInst = getLanguageInstruction(config);
+
+
+  const posHoy = posVentas.filter(v => new Date(v.fecha || v.createdAt).toDateString() === today);
+  const pos7d = posVentas.filter(v => (now - new Date(v.fecha || v.createdAt)) < 7*24*60*60*1000);
+  const pos30d = posVentas.filter(v => (now - new Date(v.fecha || v.createdAt)) < 30*24*60*60*1000);
+
+  const clientesConDeuda = clientes.filter(c => (c.saldo || 0) > 0);
+  const totalCuentasPorCobrar = clientes.reduce((s, c) => s + Math.max(0, c.saldo || 0), 0);
+  const PROVIDER_DEBTS = { MARITEL: 62253, KLH: 17439, DAN: 2657, BRIAN: 0 };
+  const totalCuentasPorPagar = Object.values(PROVIDER_DEBTS).reduce((s, v) => s + v, 0);
+
+  const finHistory = getAgentHistory(config, 'cashflow');
+  const finHistoryCtx = buildHistoryContext(finHistory);
+  const langInst = getLanguageInstruction(config);
+
+  const prompt = `Fecha: ${todayLabel()}
+IDIOMA: ${langInst}
+${finHistoryCtx}
+
+💰 INGRESOS:
+- POS hoy: ${posHoy.length} ventas, $${posHoy.reduce((s,v) => s + (v.total||0), 0).toLocaleString()}
+- POS 7 días: ${pos7d.length} ventas, $${pos7d.reduce((s,v) => s + (v.total||0), 0).toLocaleString()}
+- POS 30 días: ${pos30d.length} ventas, $${pos30d.reduce((s,v) => s + (v.total||0), 0).toLocaleString()}
+- Web revenue 30d: ${safeTruncate(revenueStats?.totals, 500)}
+
+  const prompt = `Fecha: ${todayLabel()}
+IDIOMA: ${langInst}
+
+👥 CLIENTES TOTALES: ${customers.length}
+VIP (>$50k, >5 orders): ${segmented.vip.length}
+Activos (2-5 orders): ${segmented.active.length}
+Nuevos (0-1 orders): ${segmented.newCustomers.length}
+En riesgo (>30 días sin compra): ${segmented.atRisk.length}
+Dormidos (>60 días): ${segmented.dormant.length}
+
+📊 MÉTRICAS:
+- Repeat buyers en últimos 100 pedidos: ${repeatBuyers}
+- Promedio de órdenes por cliente: ${avgOrders.toFixed(1)}
+
+🏆 TOP CLIENTES:
+${safeTruncate(customers.sort((a,b) => parseFloat(b.total_spent||0) - parseFloat(a.total_spent||0)).slice(0,15).map(c => ({
+  name: (c.first_name+' '+c.last_name).trim(), orders: c.orders_count, spent: c.total_spent, city: c.billing?.city
+})), 1500)}
+
+👥 AUDIENCIA (del sub-agente):
+${safeTruncate(audienceIntel, 1000)}
+
+${BRAND_CONTEXT}
+
+💸 CUENTAS POR COBRAR (clientes):
+Total: $${totalCuentasPorCobrar.toLocaleString()}
+Clientes con deuda (${clientesConDeuda.length}):
+${safeTruncate(clientesConDeuda.slice(0, 15).map(c => ({ nombre: c.nombre, saldo: c.saldo })), 1000)}
+
+🏭 CUENTAS POR PAGAR (proveedores tela):
+MARITEL: USD ${PROVIDER_DEBTS.MARITEL.toLocaleString()}
+KLH: USD ${PROVIDER_DEBTS.KLH.toLocaleString()}
+DAN: USD ${PROVIDER_DEBTS.DAN.toLocaleString()}
+Total proveedores: USD ${totalCuentasPorPagar.toLocaleString()}
+
+🏦 MOVIMIENTOS BANCARIOS:
+${safeTruncate(bankPayments.slice(0, 10), 800)}
+
+📊 CONTEXTO:
+${safeContentTruncate(analystData, 1000)}
+
+${BRAND_CONTEXT}
+Regla: no producir más de lo que se puede pagar en 10 días.
+
+Generá un **REPORTE DE CUSTOMER SUCCESS**:
+
+## 📊 HEALTH SCORE DE CLIENTES (0-100)
+Score general + justificación
+📚 En criollo: explicación simple
+
+## 👥 SEGMENTACIÓN DETALLADA
+| Segmento | Cantidad | % del Total | Revenue Contrib. | Acción Clave |
+
+## 🔴 CLIENTES EN RIESGO (top 10 por valor)
+| Cliente | Última Compra | Total Gastado | Días Sin Comprar | Acción |
+
+## 🏆 PROGRAMA VIP
+- Clientes VIP actuales y potenciales
+- Beneficios sugeridos
+- Cómo premiar fidelidad sin regalar margen
+
+## 📈 RETENCIÓN Y RECOMPRA
+- Tasa de recompra estimada
+- Frecuencia promedio de compra
+- LTV estimado por segmento
+
+## 💡 OPORTUNIDADES DE UPSELL/CROSS-SELL
+- Clientes de 1 categoría → ofrecerles otras
+- Packs o combos para subir ticket
+
+## ✅ PLAN DE ACCIÓN
+| Acción | Segmento Target | Canal | Responsable | Timeline |`;
+
+  const { text, tokens } = await callLLM(config, CUSTOMER_SUCCESS_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.4 });
+  return { type: 'customerSuccess', content: text, timestamp: agentTimestamp(), tokens, data: { segmented, repeatBuyers } };
+}
+
+Generá un **REPORTE DE CASH FLOW**:
+
+## 🚦 SEMÁFORO DE CAJA (Verde/Amarillo/Rojo)
+Estado actual + justificación en 1 línea
+📚 En criollo: explicación simple del estado
+
+## 💰 POSICIÓN DE CAJA ESTIMADA
+| Concepto | Monto |
+Efectivo estimado, MP, banco, total disponible
+
+## 📈 FLUJO DE CAJA PROYECTADO (próximos 7 días)
+| Día | Ingresos Est. | Egresos Est. | Saldo Proyectado |
+
+## 🔴 COBROS URGENTES
+| Cliente | Deuda | Días | Acción |
+
+## 💸 PAGOS PROGRAMADOS
+| Proveedor | Monto | Prioridad | Consecuencia si no se paga |
+
+## ⚠️ ALERTAS DE LIQUIDEZ
+- Cash runway: cuántos días podemos operar sin cobrar nada
+- Ratio cobros/pagos
+- Riesgo de descalce
+
+## ✅ PLAN DE ACCIÓN FINANCIERO
+| Acción | Monto Involucrado | Responsable | Deadline |`;
+
+  const { text, tokens } = await callLLM(config, CASHFLOW_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.3 });
+  return { type: 'cashflow', content: text, timestamp: agentTimestamp(), tokens, data: { totalCuentasPorCobrar, totalCuentasPorPagar } };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  CEO DAILY AUTO-RUN — Autonomous daily execution
+// ═══════════════════════════════════════════════════════════════
+export async function runCEOAutoDaily(config, state, onProgress) {
+  const cacheKey = 'ceoDailyRun_' + new Date().toISOString().split('T')[0];
+  const cached = config.agentsCache?.[cacheKey];
+  if (cached) {
+    onProgress?.('CEO: reporte de hoy ya fue generado, cargando desde cache...');
+    return cached;
+  }
+
+  onProgress?.('🤖 CEO AUTO-RUN: Iniciando análisis diario completo...');
+  const results = {};
+
+  // Phase 1: Core data
+  onProgress?.('Fase 1/4: Recopilando datos del negocio...');
+  try { results.analyst = await runAnalystAgent(config, state, onProgress); }
+  catch (e) { console.warn('CEO: Analyst failed', e.message); }
+
+  // Phase 2: Market intelligence
+  onProgress?.('Fase 2/4: Inteligencia de mercado...');
+  try { results.trendScout = await runTrendScoutAgent(config, [], onProgress); }
+  catch (e) { console.warn('CEO: TrendScout failed', e.message); }
+
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 16 — CASH FLOW GUARDIAN (Daily Cash Position)
+// ═══════════════════════════════════════════════════════════════
+const CASHFLOW_SYSTEM = `Sos un tesorero y guardian de cash flow para PyME textil argentina.
+${ELI5_RULE}
+${BRAND_CONTEXT}
+Tu obsesión es que NUNCA falte plata para operar. Controlás cobros, pagos, deudas de clientes, deudas a proveedores, y flujo diario.
+Regla de oro de CELAVIE: no producir más de lo que se puede pagar en 10 días.
+Entendés la economía argentina: dólar blue, inflación, pagos en cuotas, transferencias, efectivo, Mercado Pago.
+Español rioplatense, alarmista cuando hay peligro. Formato: markdown con tablas de dinero.`;
+
+export async function runCashFlowAgent(config, state, analystData, onProgress) {
+  onProgress?.('Monitoreando cash flow en tiempo real...');
+  let revenueStats = null;
+  try { revenueStats = await wooService.fetchRevenueStats(config); } catch {}
+
+  const posVentas = state.posVentas || [];
+  const bankPayments = state.bankPayments || [];
+  const clientes = state.clientes || [];
+
+  // Phase 3: Strategy & operations (parallel)
+  onProgress?.('Fase 3/4: Estrategia y operaciones...');
+  const [strat, content, supply, cashflow, custSuccess] = await Promise.allSettled([
+    runStrategistAgent(config, results.analyst, results.trendScout, null, onProgress),
+    runContentAgent(config, results.analyst, results.trendScout, onProgress),
+    runSupplyChainAgent(config, state, results.analyst, onProgress),
+    runCashFlowAgent(config, state, results.analyst, onProgress),
+    runCustomerSuccessAgent(config, results.analyst, onProgress),
+  ]);
+  if (strat.status === 'fulfilled') results.strategist = strat.value;
+  if (content.status === 'fulfilled') results.contentCreator = content.value;
+  if (supply.status === 'fulfilled') results.supplyChain = supply.value;
+  if (cashflow.status === 'fulfilled') results.cashflow = cashflow.value;
+  if (custSuccess.status === 'fulfilled') results.customerSuccess = custSuccess.value;
+
+  // Phase 4: CEO synthesis
+  onProgress?.('Fase 4/4: CEO sintetizando y tomando decisiones...');
+  try { results.master = await runMasterAgent(config, results, onProgress); }
+  catch (e) { console.warn('CEO: Master failed', e.message); }
+
+  return { type: 'ceoDailyRun', results, timestamp: agentTimestamp(), cached: false };
+}
+
+// ── Check if CEO auto-run should trigger ──
+export function shouldAutoRun(config) {
+  const today = new Date().toISOString().split('T')[0];
+  const lastRun = config.agentsCache?.lastCEOAutoRun;
+  return lastRun !== today;
+}
+  const now = new Date();
+  const today = now.toDateString();
+  const posHoy = posVentas.filter(v => new Date(v.fecha || v.createdAt).toDateString() === today);
+  const pos7d = posVentas.filter(v => (now - new Date(v.fecha || v.createdAt)) < 7*24*60*60*1000);
+  const pos30d = posVentas.filter(v => (now - new Date(v.fecha || v.createdAt)) < 30*24*60*60*1000);
+
+  const clientesConDeuda = clientes.filter(c => (c.saldo || 0) > 0);
+  const totalCuentasPorCobrar = clientes.reduce((s, c) => s + Math.max(0, c.saldo || 0), 0);
+  const PROVIDER_DEBTS = { MARITEL: 62253, KLH: 17439, DAN: 2657, BRIAN: 0 };
+  const totalCuentasPorPagar = Object.values(PROVIDER_DEBTS).reduce((s, v) => s + v, 0);
+
+  const finHistory = getAgentHistory(config, 'cashflow');
+  const finHistoryCtx = buildHistoryContext(finHistory);
+  const langInst = getLanguageInstruction(config);
+
+  const prompt = `Fecha: ${todayLabel()}
+IDIOMA: ${langInst}
+${finHistoryCtx}
+
+💰 INGRESOS:
+- POS hoy: ${posHoy.length} ventas, $${posHoy.reduce((s,v) => s + (v.total||0), 0).toLocaleString()}
+- POS 7 días: ${pos7d.length} ventas, $${pos7d.reduce((s,v) => s + (v.total||0), 0).toLocaleString()}
+- POS 30 días: ${pos30d.length} ventas, $${pos30d.reduce((s,v) => s + (v.total||0), 0).toLocaleString()}
+- Web revenue 30d: ${safeTruncate(revenueStats?.totals, 500)}
+
+💸 CUENTAS POR COBRAR (clientes):
+Total: $${totalCuentasPorCobrar.toLocaleString()}
+Clientes con deuda (${clientesConDeuda.length}):
+${safeTruncate(clientesConDeuda.slice(0, 15).map(c => ({ nombre: c.nombre, saldo: c.saldo })), 1000)}
+
+🏭 CUENTAS POR PAGAR (proveedores tela):
+MARITEL: USD ${PROVIDER_DEBTS.MARITEL.toLocaleString()}
+KLH: USD ${PROVIDER_DEBTS.KLH.toLocaleString()}
+DAN: USD ${PROVIDER_DEBTS.DAN.toLocaleString()}
+Total proveedores: USD ${totalCuentasPorPagar.toLocaleString()}
+
+🏦 MOVIMIENTOS BANCARIOS:
+${safeTruncate(bankPayments.slice(0, 10), 800)}
+
+📊 CONTEXTO:
+${safeContentTruncate(analystData, 1000)}
+
+${BRAND_CONTEXT}
+Regla: no producir más de lo que se puede pagar en 10 días.
 
