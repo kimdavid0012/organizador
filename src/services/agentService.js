@@ -316,6 +316,19 @@ async function gatherBusinessData(config, state, onProgress) {
     clientes: (state.clientes || []).length,
   };
 
+  // ── POS/DOMO product sales aggregation (from tickets) ──
+  const posTickets = state.config?.posVentas || state.posVentas || [];
+  const posSalesByProduct = {};
+  posTickets.forEach(ticket => {
+    (ticket.items || []).forEach(item => {
+      const key = (item.codigoInterno || item.detalleCorto || item.nombre || 'desconocido').toString().toUpperCase().trim();
+      if (!posSalesByProduct[key]) posSalesByProduct[key] = { nombre: item.detalleCorto || item.nombre || key, unidades: 0, facturacion: 0 };
+      posSalesByProduct[key].unidades += Number(item.cantidad || 1);
+      posSalesByProduct[key].facturacion += Number(item.importe || item.precioUnitario || 0) * Number(item.cantidad || 1);
+    });
+  });
+  data.posProductSales = Object.values(posSalesByProduct).sort((a, b) => b.unidades - a.unidades).slice(0, 20);
+
   return data;
 }
 
@@ -332,8 +345,11 @@ ${safeTruncate(businessData.products, 3000)}
 
 CATEGORÍAS: ${JSON.stringify(businessData.categories)}
 
-TOP SELLERS: ${safeTruncate(businessData.woo?.topProducts, 1500)}
-WORST SELLERS: ${safeTruncate(businessData.woo?.bottomProducts, 1000)}
+TOP SELLERS WEB (WooCommerce): ${safeTruncate(businessData.woo?.topProducts, 1500)}
+WORST SELLERS WEB: ${safeTruncate(businessData.woo?.bottomProducts, 1000)}
+
+VENTAS FÍSICAS (POS/DOMO - MUY IMPORTANTE, estas son las ventas del local que muchas veces superan a la web):
+${safeTruncate(businessData.posProductSales, 2000)}
 
 STOCK INTERNO: ${JSON.stringify(businessData.internal)}
 
