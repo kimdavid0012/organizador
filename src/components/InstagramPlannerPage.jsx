@@ -247,7 +247,10 @@ export default function InstagramPlannerPage() {
                             <Heart size={16} color="#ef4444" /> Top 5 Posts (por engagement)
                         </h3>
                         {(igMetrics.topPosts || []).map((post, i) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-color)', fontSize: 12 }}>
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-color)', fontSize: 12 }}>
+                                {(post.media_url || post.thumbnail_url) && (
+                                    <img src={post.thumbnail_url || post.media_url} alt="" style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} onError={(e) => { e.target.style.display = 'none'; }} />
+                                )}
                                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>
                                     {post.type === 'VIDEO' ? '🎬' : post.type === 'CAROUSEL_ALBUM' ? '🎠' : '📸'} {post.caption || 'Sin caption'}
                                 </span>
