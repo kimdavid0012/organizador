@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { Plus, Edit2, Trash2, X, Save, Scissors, Camera, Loader, ChevronDown, ChevronRight, Hash, Trash } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, Scissors, Camera, Loaderr, ChevronDown, ChevronRight, Hash, Trash } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { useI18n } from '../store/I18nContext';
+import { findTelaStock } from '../data/telasData';
 import { useAuth } from '../store/AuthContext';
 import ImageUploader from './ImageUploader';
 import ImageGallery from './ImageGallery';
@@ -509,7 +510,7 @@ export default function FabricCatalog() {
             }));
 
             const colors = tela.coloresStock || [];
-            const r = colors.reduce((s, c) => s + (c.items?.length || parseFloat(c.rollos) || 0), 0);
+            const r = colors.reduce((s, c) => s + (c.items?.length || parseFloat(c.rollos) || 0), 0) || (findTelaStock(tela.nombre)?.rollos || 0);
             const c = colors.reduce((s, c) => s + (c.items?.reduce((ss, i) => ss + (parseFloat(i.cantidad) || 0), 0) || parseFloat(c.cantidad) || 0), 0);
 
             totalR += Math.max(0, r - consR);
@@ -782,7 +783,8 @@ export default function FabricCatalog() {
                     {telas.map(tela => {
                         const cover = getCoverImage(tela);
                         const colors = tela.coloresStock || [];
-                        const r = colors.reduce((s, c) => s + (c.items?.length || parseFloat(c.rollos) || 0), 0);
+                        let r = colors.reduce((s, c) => s + (c.items?.length || parseFloat(c.rollos) || 0), 0);
+                        if (r === 0) { const seed = findTelaStock(tela.nombre); if (seed) r = seed.rollos; }
                         const unidad = tela.unidadPrecio === 'kg' ? 'kg' : 'mts';
 
                         return (
