@@ -7,6 +7,7 @@
 
 import { metaService } from '../utils/metaService';
 import { wooService } from '../utils/wooService';
+import { instagramService } from '../utils/instagramService';
 
 // ─── Brand constants ─────────────────────────────────────────
 const BRAND = {
@@ -22,6 +23,23 @@ const BRAND = {
 const BRAND_CONTEXT = `MARCA: ${BRAND.name} (${BRAND.handle} en ${BRAND.platforms})
 Web: ${BRAND.web} | ${BRAND.desc}
 Producción: ${BRAND.production} | Canales: ${BRAND.channels}`;
+
+const TEAM = {
+  david: { name: 'David', role: 'Dueño + Redes Sociales', areas: 'estrategia, redes, marketing, decisiones' },
+  ro: { name: 'Ro', role: 'Redes Sociales', areas: 'contenido IG/TikTok/FB, fotos, reels, community management' },
+  nadia: { name: 'Nadia', role: 'Encargada', areas: 'POS, pedidos, clientes, banco, saldo, operaciones diarias' },
+  naara: { name: 'Naara', role: 'Depósito', areas: 'conteo mercadería, inventario, stock' },
+  juan: { name: 'Juan', role: 'Pedidos Online', areas: 'pedidos web, envíos, seguimiento' },
+  rocio: { name: 'Rocío', role: 'Fotos + IG Planner', areas: 'fotos de productos, planificación IG' },
+};
+
+const TEAM_CONTEXT = `EQUIPO CELAVIE:
+- David + Ro: redes sociales (@celavieindumentaria), marketing, contenido
+- Nadia: encargada del local (POS, pedidos, clientes, banco, saldo)
+- Naara: depósito (conteo mercadería, inventario)
+- Juan: pedidos online (web, envíos)
+- Rocío: fotos de productos, Instagram Planner
+IMPORTANTE: Cuando generes tareas/acciones, SIEMPRE asigná a la persona correcta del equipo.`;
 
 // ─── LLM helper: supports Claude (Anthropic) and OpenAI with retry + timeout ──
 async function callLLM(config, systemPrompt, userPrompt, options = {}) {
@@ -245,6 +263,16 @@ async function gatherBusinessData(config, state, onProgress) {
     ticketPromedio: posVentas.length > 0 ? posVentas.reduce((s, v) => s + (v.total || 0), 0) / posVentas.length : 0,
   };
 
+  // ── Instagram organic data ──
+  onProgress?.('Obteniendo métricas de Instagram @celavieindumentaria...');
+  try {
+    const igReport = await instagramService.fetchFullReport(config);
+    data.instagram = igReport;
+  } catch (e) {
+    console.warn('Data collector: Instagram unavailable', e.message);
+    data.instagram = null;
+  }
+
   // ── Internal Firestore data ──
   onProgress?.('Procesando datos internos...');
   const articulos = state.articulos || [];
@@ -395,11 +423,16 @@ ${step1.text}
 🛒 ANÁLISIS PROFUNDO VENTAS (paso 2):
 ${step2.text}
 
+📸 INSTAGRAM ORGÁNICO (@celavieindumentaria):
+${safeTruncate(bd.instagram?.analytics, 1500)}
+
 🔬 SUB-AGENTE — INTELIGENCIA DE PRODUCTO:
 ${safeTruncate(pi, 1500)}
 
 👥 SUB-AGENTE — ANÁLISIS DE AUDIENCIA:
 ${safeTruncate(ai, 1500)}
+
+${TEAM_CONTEXT}
 
 ───────────────────────
 Generá un BRIEF EJECUTIVO DEL DÍA con:
@@ -410,12 +443,14 @@ Generá un BRIEF EJECUTIVO DEL DÍA con:
 5. **📦 PRODUCTOS**: top sellers, alertas de stock, productos a pushear/pausar
 6. **👥 CLIENTES**: segmentos clave, ciudades top, oportunidades de retargeting
 7. **🔴 ALERTAS URGENTES** (stock, budget, performance)
-8. **✅ TOP 5 ACCIONES PARA HOY** (concretas, con responsable: David/Marketing/Rocío/Nadia)
+8. **✅ TOP 5 ACCIONES PARA HOY** — SIEMPRE asigná a una persona específica:
+| Acción | Responsable | Deadline |
+(David/Ro=redes, Nadia=encargada/POS, Naara=inventario, Juan=pedidos, Rocío=fotos)
 9. **📈 PROYECCIÓN SEMANAL** (revenue estimado, metas)`;
 
   const { text, tokens } = await callLLM(config, ANALYST_SYSTEM, prompt, { maxTokens: 4000 });
   const totalTokens = { prompt: (step1.tokens?.prompt || 0) + (step2.tokens?.prompt || 0) + (tokens?.prompt || 0), completion: (step1.tokens?.completion || 0) + (step2.tokens?.completion || 0) + (tokens?.completion || 0), total: (step1.tokens?.total || 0) + (step2.tokens?.total || 0) + (tokens?.total || 0) };
-  return { type: 'analyst', content: text, timestamp: agentTimestamp(), tokens: totalTokens, data: { meta: bd.meta, woo: bd.woo, pos: bd.pos, productIntel: pi, audienceIntel: ai }, multiStep: true };
+  return { type: 'analyst', content: text, timestamp: agentTimestamp(), tokens: totalTokens, data: { meta: bd.meta, woo: bd.woo, pos: bd.pos, productIntel: pi, audienceIntel: ai, instagram: bd.instagram }, multiStep: true };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -503,6 +538,9 @@ export async function runContentAgent(config, analystData, trendData, onProgress
 📊 DATOS DEL ANALISTA (qué se vende):
 ${safeContentTruncate(analystData)}
 
+📸 INSTAGRAM ORGÁNICO — Métricas reales de @celavieindumentaria:
+${safeTruncate(analystData?.data?.instagram?.analytics || bd?.instagram?.analytics, 1500)}
+
 🌍 TENDENCIAS DEL SCOUT:
 ${safeContentTruncate(trendData)}
 
@@ -580,6 +618,7 @@ ${safeTruncate(productIntel, 1500)}
 ${safeTruncate(audienceIntel, 1500)}
 
 ${BRAND_CONTEXT}
+${TEAM_CONTEXT}
 Redes: ${BRAND.handle} en ${BRAND.platforms}
 
 ───────────────────────
