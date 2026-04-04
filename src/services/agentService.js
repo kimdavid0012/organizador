@@ -1450,6 +1450,8 @@ No sugieras — DECIDÍ. Hablá como director: "Decidí que...", "Vamos a...", "
 
 Respondé con JSON válido (sin markdown, sin backticks):
 
+REGLA DE TAREAS: Cada tarea debe ser un MINI-INSTRUCTIVO que cualquier persona del equipo pueda seguir sin preguntar nada. La descripción debe tener: 1) QUÉ hacer paso a paso, 2) DÓNDE hacerlo (qué plataforma, sección, herramienta), 3) POR QUÉ es importante (en lenguaje simple), 4) CÓMO se mide el éxito. Si alguien lee la tarea y tiene que preguntar "¿pero cómo hago eso?", la tarea está mal escrita.
+
 {
   "ceoStatement": "Párrafo de 3-5 líneas donde el CEO habla sobre el estado del negocio HOY, qué le preocupa, y qué decidió. Tono ejecutivo, directo, con números.",
   "healthScore": 75,
@@ -1464,8 +1466,8 @@ Respondé con JSON válido (sin markdown, sin backticks):
   ],
   "tasks": [
     {
-      "title": "título corto de la tarea",
-      "description": "qué hay que hacer concretamente + explicación simple de por qué",
+      "title": "título corto y claro de la tarea (máx 10 palabras)",
+      "description": "INSTRUCCIONES DETALLADAS: 1) Paso a paso qué hacer exactamente. 2) En qué plataforma/herramienta/sección. 3) Por qué es importante en lenguaje simple. 4) Qué resultado se espera. Ejemplo bueno: 'Entrá a Meta Ads Manager → Campañas → Seleccioná las campañas de awareness (las que dicen Alcance/Reconocimiento) → Hacé click en Pausar. Esto es porque estamos gastando $X por día en campañas que no generan ventas directas, y necesitamos redirigir ese presupuesto a retargeting que sí convierte. Resultado esperado: ahorro de $X/día.' Ejemplo malo: 'Pausar campañas de awareness'.",
       "assignee": "David|Ro|Nadia|Naara|Juan|Rocío",
       "priority": "alta|media|baja",
       "deadline": "hoy|mañana|esta semana|próxima semana",
