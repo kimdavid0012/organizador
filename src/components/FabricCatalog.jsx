@@ -586,12 +586,18 @@ export default function FabricCatalog() {
     const providerPayments = state.config.fabricPayments || [];
 
     const providerSummary = useMemo(() => {
-        const EXCEL_DEBTS = { MARITEL: { totalValue: 62253, paid: 8608 }, KLH: { totalValue: 17439, paid: 2000 }, DAN: { totalValue: 4657, paid: 2000 }, BRIAN: { totalValue: 3096, paid: 3096 }, 'AM TEX': { totalValue: 0, paid: 0, totalPeso: 7430632 } };
+        const EXCEL_DEBTS = {
+          MARITEL: { totalValue: 62253, paid: 8608, saldoVerano: 31380, entregas: 'Modal Soft, Super Soft, Kerry Brush' },
+          KLH: { totalValue: 17439, paid: 2000, saldoVerano: 11900, entregas: 'Lanilla Melow, Lanilla Sweter' },
+          DAN: { totalValue: 4657, paid: 2000, saldoVerano: 4657, entregas: 'Saldo verano' },
+          BRIAN: { totalValue: 3096, paid: 3096, saldoVerano: 3096, entregas: 'Saldo verano' },
+          'AM TEX': { totalValue: 0, paid: 0, saldoVerano: 0, totalPeso: 7430632, entregas: 'Algodón Frisado' }
+        };
         const grouped = {};
 
         // Seed ALL providers from Excel first
         Object.entries(EXCEL_DEBTS).forEach(([prov, data]) => {
-            grouped[prov] = { totalValue: data.totalValue, paid: data.paid, fallados: 0, totalPeso: data.totalPeso || 0 };
+            grouped[prov] = { totalValue: data.totalValue, paid: data.paid, fallados: 0, totalPeso: data.totalPeso || 0, saldoVerano: data.saldoVerano || 0, entregas: data.entregas || '' };
         });
 
         telas.forEach((tela) => {
@@ -676,9 +682,19 @@ export default function FabricCatalog() {
                             <div key={provider} style={{ padding: 12, borderRadius: 12, background: `linear-gradient(90deg, hsla(${(index * 57) % 360}, 70%, 60%, 0.12), rgba(255,255,255,0.02))` }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr auto', gap: 12, alignItems: 'center' }}>
                                     <div style={{ fontWeight: 'var(--fw-bold)' }}>{provider}</div>
-                                    <div>US$ {summary.totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                                    <div>Pagado US$ {summary.paid.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                                    <div style={{ color: summary.fallados ? 'var(--warning)' : 'var(--text-secondary)' }}>Fallados: {summary.fallados}</div>
+                                    <div>US$ {summary.totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                    <div>Pagado US$ {summary.paid.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                    <div style={{ color: (summary.totalValue - summary.paid) > 0 ? '#ef4444' : '#22c55e', fontWeight: 700 }}>
+                                        {(summary.totalValue - summary.paid) > 0 ? `Debe US$ ${(summary.totalValue - summary.paid).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '✅ Saldado'}
+                                    </div>
+                                </div>
+                                {(summary.saldoVerano > 0 || summary.totalPeso > 0 || summary.entregas) && (
+                                <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                                    {summary.saldoVerano > 0 && <span style={{ padding: '2px 8px', borderRadius: 6, background: 'rgba(251,191,36,0.1)', color: '#f59e0b' }}>☀️ Saldo Verano 25: US$ {summary.saldoVerano.toLocaleString()}</span>}
+                                    {summary.totalPeso > 0 && <span style={{ padding: '2px 8px', borderRadius: 6, background: 'rgba(59,130,246,0.1)', color: '#3b82f6' }}>🇦🇷 ARS ${summary.totalPeso.toLocaleString()}</span>}
+                                    {summary.entregas && <span>📦 {summary.entregas}</span>}
+                                </div>
+                                )}
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '140px 120px 120px 1fr auto', gap: 8, marginTop: 10 }}>
                                     <input
