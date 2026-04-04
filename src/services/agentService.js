@@ -8,6 +8,7 @@
 import { metaService } from '../utils/metaService';
 import { wooService } from '../utils/wooService';
 import { instagramService } from '../utils/instagramService';
+import { telasTransactions as importedTelasTransactions, providerSummary } from '../data/telasData';
 
 // ─── Brand constants ─────────────────────────────────────────
 const BRAND = {
@@ -1515,7 +1516,7 @@ Español rioplatense, directo, con tablas de números. Formato: markdown.`;
 export async function runSupplyChainAgent(config, state, analystData, onProgress) {
   onProgress?.('Analizando cadena de suministro y proveedores...');
   const telas = state.telas || [];
-  const telasTransactions = state.telasTransactions || [];
+  const telasTransactions = (state.telasTransactions && state.telasTransactions.length > 0) ? state.telasTransactions : importedTelasTransactions;
   const cortes = state.cortes || [];
 
   const providerData = {};
