@@ -717,6 +717,45 @@ export default function FabricCatalog() {
                 </div>
             )}
 
+            {/* ═══ INVENTARIO DE TELAS ═══ */}
+            <div className="glass-panel" style={{ padding: 'var(--sp-4)', marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div>
+                        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>📦 Inventario de Telas</h3>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Rollos recibidos (Excel) - usados (Cortes) = stock disponible</div>
+                    </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                    {telas.map(tela => {
+                        const _INV = {'MODAL SOFT':170,'modal soft':170,'SUPER SOFT':77,'kerry brush':58,'KERRY BRUSH':58,'lanilla melow':39,'LANILLA MELLOW':39,'LAN MELOW':39,'lanilla sweter':16,'LANILLA SWETER':16,'lanilla swetet':16,'frisado':28,'ALGODÓN FRISADO':28};
+                        const tn = (tela.nombre || '').trim();
+                        const recib = _INV[tn] || _INV[tn.toUpperCase()] || _INV[tn.toLowerCase()] || 0;
+                        let usad = 0;
+                        (state.config.cortes || []).forEach(corte => (corte.consumos || []).forEach(co => { if (co.telaId === tela.id) usad += parseInt(co.rollos) || 0; }));
+                        const qued = Math.max(0, recib - usad);
+                        const pct = recib > 0 ? Math.round((qued / recib) * 100) : 0;
+                        const barColor = pct > 50 ? '#22c55e' : pct > 20 ? '#f59e0b' : '#ef4444';
+                        return (
+                            <div key={tela.id} style={{ padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <span style={{ fontWeight: 700, fontSize: 14 }}>{tela.nombre}</span>
+                                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tela.proveedor || ''}</span>
+                                </div>
+                                <div style={{ fontSize: 28, fontWeight: 800, color: barColor, marginBottom: 4 }}>{qued} <span style={{ fontSize: 14, fontWeight: 400 }}>rollos</span></div>
+                                <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', marginBottom: 8 }}>
+                                    <div style={{ width: `${pct}%`, height: '100%', borderRadius: 3, background: barColor, transition: 'width 0.5s' }} />
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
+                                    <span>📥 {recib} recibidos</span>
+                                    <span>✂️ {usad} usados</span>
+                                    <span>{pct}% disponible</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
             {consumoStats.byTela.length > 0 && (
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)', marginBottom: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
