@@ -586,28 +586,26 @@ export default function FabricCatalog() {
     const providerPayments = state.config.fabricPayments || [];
 
     const providerSummary = useMemo(() => {
-        const EXCEL_DEBTS = { MARITEL: { totalValue: 62253, paid: 8608 }, KLH: { totalValue: 17439, paid: 2000 }, DAN: { totalValue: 4657, paid: 2000 }, BRIAN: { totalValue: 3096, paid: 3096 }, 'AM TEX': { totalValue: 0, paid: 0 }, 'MARITEL / KLH': { totalValue: 0, paid: 0 } };
+        const EXCEL_DEBTS = { MARITEL: { totalValue: 62253, paid: 8608 }, KLH: { totalValue: 17439, paid: 2000 }, DAN: { totalValue: 4657, paid: 2000 }, BRIAN: { totalValue: 3096, paid: 3096 }, 'AM TEX': { totalValue: 0, paid: 0, totalPeso: 7430632 } };
         const grouped = {};
+
+        // Seed ALL providers from Excel first
+        Object.entries(EXCEL_DEBTS).forEach(([prov, data]) => {
+            grouped[prov] = { totalValue: data.totalValue, paid: data.paid, fallados: 0, totalPeso: data.totalPeso || 0 };
+        });
+
         telas.forEach((tela) => {
             const provider = tela.proveedor || 'Sin proveedor';
             const totalValue = (parseFloat(tela.precioPorUnidad) || 0) * (parseFloat(tela.cantidadTotal) || 0);
-            if (!grouped[provider]) grouped[provider] = { totalValue: 0, paid: 0, fallados: 0 };
-            grouped[provider].totalValue += totalValue;
+            if (!grouped[provider]) grouped[provider] = { totalValue: 0, paid: 0, fallados: 0, totalPeso: 0 };
+            if (totalValue > 0) grouped[provider].totalValue += totalValue;
             grouped[provider].fallados += (tela.coloresStock || []).reduce((acc, color) => acc + ((color.items || []).filter((item) => Number(item.fallado || 0) > 0).length), 0);
         });
 
         providerPayments.forEach((payment) => {
             const provider = payment.proveedor || 'Sin proveedor';
-            if (!grouped[provider]) grouped[provider] = { totalValue: 0, paid: 0, fallados: 0 };
+            if (!grouped[provider]) grouped[provider] = { totalValue: 0, paid: 0, fallados: 0, totalPeso: 0 };
             grouped[provider].paid += parseFloat(payment.montoUSD) || 0;
-        });
-
-        // Seed from Excel data when Firestore values are 0
-        Object.entries(EXCEL_DEBTS).forEach(([prov, data]) => {
-            if (grouped[prov] && grouped[prov].totalValue === 0) {
-                grouped[prov].totalValue = data.totalValue;
-                if (grouped[prov].paid === 0) grouped[prov].paid = data.paid;
-            }
         });
 
         return Object.entries(grouped);
