@@ -2081,3 +2081,237 @@ export function shouldAutoRun(config) {
   const lastRun = config.agentsCache?.lastCEOAutoRun;
   return lastRun !== today;
 }
+  const segmented = {
+    vip: customers.filter(c => parseFloat(c.total_spent || 0) > 50000 && c.orders_count > 5),
+    active: customers.filter(c => c.orders_count > 2 && c.orders_count <= 5),
+    atRisk: customers.filter(c => {
+      if (!c.date_modified) return false;
+      const daysSince = (now - new Date(c.date_modified).getTime()) / (1000*60*60*24);
+      return daysSince > 30 && c.orders_count > 0;
+    }),
+    newCust: customers.filter(c => c.orders_count <= 1),
+    dormant: customers.filter(c => {
+      if (!c.date_modified) return c.orders_count > 0;
+      const daysSince = (now - new Date(c.date_modified).getTime()) / (1000*60*60*24);
+      return daysSince > 60 && c.orders_count > 0;
+    }),
+  };
+
+  const ordersByCustomer = {};
+  recentOrders.forEach(o => {
+    const key = o.billing?.email || o.billing?.phone || 'unknown';
+    if (!ordersByCustomer[key]) ordersByCustomer[key] = [];
+    ordersByCustomer[key].push({ date: o.date_created, total: o.total });
+  });
+  const repeatBuyers = Object.values(ordersByCustomer).filter(orders => orders.length > 1).length;
+  const avgOrders = customers.length > 0 ? customers.reduce((s,c) => s + c.orders_count, 0) / customers.length : 0;
+  const langInst = getLanguageInstruction(config);
+
+  const prompt = `Fecha: ${todayLabel()}
+IDIOMA: ${langInst}
+
+👥 CLIENTES TOTALES: ${customers.length}
+VIP (>$50k, >5 orders): ${segmented.vip.length}
+Activos (2-5 orders): ${segmented.active.length}
+Nuevos (0-1 orders): ${segmented.newCust.length}
+En riesgo (>30 días sin compra): ${segmented.atRisk.length}
+Dormidos (>60 días): ${segmented.dormant.length}
+
+📊 MÉTRICAS:
+- Repeat buyers en últimos 100 pedidos: ${repeatBuyers}
+- Promedio de órdenes por cliente: ${avgOrders.toFixed(1)}
+
+🏆 TOP CLIENTES:
+${safeTruncate(customers.sort((a,b) => parseFloat(b.total_spent||0) - parseFloat(a.total_spent||0)).slice(0,15).map(c => ({
+  name: (c.first_name+' '+c.last_name).trim(), orders: c.orders_count, spent: c.total_spent, city: c.billing?.city
+})), 1500)}
+
+👥 AUDIENCIA (del sub-agente):
+${safeTruncate(audienceIntel, 1000)}
+
+${BRAND_CONTEXT}
+
+Generá un **REPORTE DE CUSTOMER SUCCESS**:
+
+## 📊 HEALTH SCORE DE CLIENTES (0-100)
+Score general + justificación
+📚 En criollo: explicación simple del estado
+
+## 👥 SEGMENTACIÓN DETALLADA
+| Segmento | Cantidad | % del Total | Revenue Contrib. | Acción Clave |
+
+## 🔴 CLIENTES EN RIESGO
+| Cliente | Última Compra | Total Gastado | Días Sin Comprar | Acción Sugerida |
+(Top 10 clientes en riesgo por valor)
+
+## 🏆 PROGRAMA VIP
+- Clientes que deberían ser VIP
+- Beneficios sugeridos
+- Cómo premiar fidelidad sin regalar margen
+
+## 📈 RETENCIÓN Y RECOMPRA
+- Tasa de recompra actual estimada
+- Frecuencia promedio de compra
+- LTV estimado por segmento
+
+## 💡 OPORTUNIDADES DE UPSELL/CROSS-SELL
+- Clientes que compran solo 1 categoría
+- Packs o combos para subir ticket promedio
+
+## ✅ PLAN DE ACCIÓN
+| Acción | Segmento Target | Canal | Responsable | Timeline |`;
+
+  const { text, tokens } = await callLLM(config, CUSTOMER_SUCCESS_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.4 });
+  return { type: 'customerSuccess', content: text, timestamp: agentTimestamp(), tokens, data: { segmented, repeatBuyers } };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 16 — CASH FLOW GUARDIAN (Daily Cash Position)
+// ═══════════════════════════════════════════════════════════════
+const CASHFLOW_SYSTEM = `Sos un tesorero y guardian de cash flow para PyME textil argentina.
+${ELI5_RULE}
+${BRAND_CONTEXT}
+Tu obsesión es que NUNCA falte plata para operar. Controlás cobros, pagos, deudas de clientes, deudas a proveedores, y flujo diario.
+Regla de oro de CELAVIE: no producir más de lo que se puede pagar en 10 días.
+Entendés la economía argentina: dólar blue, inflación, pagos en cuotas, transferencias, efectivo, Mercado Pago.
+Español rioplatense, alarmista cuando hay peligro. Formato: markdown con tablas de dinero.`;
+
+export async function runCashFlowAgent(config, state, analystData, onProgress) {
+  onProgress?.('Monitoreando cash flow en tiempo real...');
+  let revenueStats = null;
+  try { revenueStats = await wooService.fetchRevenueStats(config); } catch {}
+
+  const posVentas = state.posVentas || [];
+  const bankPayments = state.bankPayments || [];
+  const clientes = state.clientes || [];
+  const now = new Date();
+  const today = now.toDateString();
+
+  const posHoy = posVentas.filter(v => new Date(v.fecha || v.createdAt).toDateString() === today);
+  const pos7d = posVentas.filter(v => (now - new Date(v.fecha || v.createdAt)) < 7*24*60*60*1000);
+  const pos30d = posVentas.filter(v => (now - new Date(v.fecha || v.createdAt)) < 30*24*60*60*1000);
+
+  const clientesConDeuda = clientes.filter(c => (c.saldo || 0) > 0);
+  const totalCuentasPorCobrar = clientes.reduce((s, c) => s + Math.max(0, c.saldo || 0), 0);
+  const PROVIDER_DEBTS = { MARITEL: 62253, KLH: 17439, DAN: 2657, BRIAN: 0 };
+  const totalCuentasPorPagar = Object.values(PROVIDER_DEBTS).reduce((s, v) => s + v, 0);
+
+  const finHistory = getAgentHistory(config, 'cashflow');
+  const finHistoryCtx = buildHistoryContext(finHistory);
+  const langInst = getLanguageInstruction(config);
+
+  const prompt = `Fecha: ${todayLabel()}
+IDIOMA: ${langInst}
+${finHistoryCtx}
+
+💰 INGRESOS:
+- POS hoy: ${posHoy.length} ventas, $${posHoy.reduce((s,v) => s + (v.total||0), 0).toLocaleString()}
+- POS 7 días: ${pos7d.length} ventas, $${pos7d.reduce((s,v) => s + (v.total||0), 0).toLocaleString()}
+- POS 30 días: ${pos30d.length} ventas, $${pos30d.reduce((s,v) => s + (v.total||0), 0).toLocaleString()}
+- Web revenue 30d: ${safeTruncate(revenueStats?.totals, 500)}
+
+💸 CUENTAS POR COBRAR (clientes):
+Total: $${totalCuentasPorCobrar.toLocaleString()}
+Clientes con deuda (${clientesConDeuda.length}):
+${safeTruncate(clientesConDeuda.slice(0, 15).map(c => ({ nombre: c.nombre, saldo: c.saldo })), 1000)}
+
+🏭 CUENTAS POR PAGAR (proveedores tela):
+MARITEL: USD ${PROVIDER_DEBTS.MARITEL.toLocaleString()}
+KLH: USD ${PROVIDER_DEBTS.KLH.toLocaleString()}
+DAN: USD ${PROVIDER_DEBTS.DAN.toLocaleString()}
+Total proveedores: USD ${totalCuentasPorPagar.toLocaleString()}
+
+🏦 MOVIMIENTOS BANCARIOS:
+${safeTruncate(bankPayments.slice(0, 10), 800)}
+
+📊 CONTEXTO:
+${safeContentTruncate(analystData, 1000)}
+
+${BRAND_CONTEXT}
+Regla: no producir más de lo que se puede pagar en 10 días.
+
+Generá un **REPORTE DE CASH FLOW**:
+
+## 🚦 SEMÁFORO DE CAJA (Verde/Amarillo/Rojo)
+Estado actual + justificación en 1 línea
+📚 En criollo: explicación simple del estado
+
+## 💰 POSICIÓN DE CAJA ESTIMADA
+| Concepto | Monto |
+Efectivo estimado, MP, banco, total disponible
+
+## 📈 FLUJO DE CAJA PROYECTADO (próximos 7 días)
+| Día | Ingresos Est. | Egresos Est. | Saldo Proyectado |
+
+## 🔴 COBROS URGENTES
+| Cliente | Deuda | Días | Acción |
+
+## 💸 PAGOS PROGRAMADOS
+| Proveedor | Monto | Prioridad | Consecuencia si no se paga |
+
+## ⚠️ ALERTAS DE LIQUIDEZ
+- Cash runway: cuántos días podemos operar sin cobrar nada
+- Ratio cobros/pagos
+- Riesgo de descalce
+
+## ✅ PLAN DE ACCIÓN FINANCIERO
+| Acción | Monto Involucrado | Responsable | Deadline |`;
+
+  const { text, tokens } = await callLLM(config, CASHFLOW_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.3 });
+  return { type: 'cashflow', content: text, timestamp: agentTimestamp(), tokens, data: { totalCuentasPorCobrar, totalCuentasPorPagar } };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  CEO DAILY AUTO-RUN — Autonomous daily execution
+// ═══════════════════════════════════════════════════════════════
+export async function runCEOAutoDaily(config, state, onProgress) {
+  const today = new Date().toISOString().split('T')[0];
+  const cacheKey = 'ceoDailyRun_' + today;
+  const cached = config.agentsCache?.[cacheKey];
+  if (cached) {
+    onProgress?.('CEO: reporte de hoy ya fue generado, cargando desde cache...');
+    return cached;
+  }
+
+  onProgress?.('🤖 CEO AUTO-RUN: Iniciando análisis diario completo...');
+  const results = {};
+
+  // Phase 1: Core data
+  onProgress?.('Fase 1/4: Recopilando datos del negocio...');
+  try { results.analyst = await runAnalystAgent(config, state, onProgress); } catch (e) { console.warn('CEO: Analyst failed', e.message); }
+
+  // Phase 2: Market intelligence
+  onProgress?.('Fase 2/4: Inteligencia de mercado...');
+  try { results.trendScout = await runTrendScoutAgent(config, [], onProgress); } catch (e) { console.warn('CEO: TrendScout failed', e.message); }
+
+  // Phase 3: Strategy & operations (parallel)
+  onProgress?.('Fase 3/4: Estrategia y operaciones...');
+  const [strat, content, supply, cashflow, custSuccess] = await Promise.allSettled([
+    runStrategistAgent(config, results.analyst, results.trendScout, null, onProgress),
+    runContentAgent(config, results.analyst, results.trendScout, onProgress),
+    runSupplyChainAgent(config, state, results.analyst, onProgress),
+    runCashFlowAgent(config, state, results.analyst, onProgress),
+    runCustomerSuccessAgent(config, results.analyst, onProgress),
+  ]);
+  if (strat.status === 'fulfilled') results.strategist = strat.value;
+  if (content.status === 'fulfilled') results.contentCreator = content.value;
+  if (supply.status === 'fulfilled') results.supplyChain = supply.value;
+  if (cashflow.status === 'fulfilled') results.cashflow = cashflow.value;
+  if (custSuccess.status === 'fulfilled') results.customerSuccess = custSuccess.value;
+
+  // Phase 4: CEO synthesis
+  onProgress?.('Fase 4/4: CEO sintetizando y tomando decisiones...');
+  try { results.master = await runMasterAgent(config, results, onProgress); } catch (e) { console.warn('CEO: Master failed', e.message); }
+
+  const ceoResult = { type: 'ceoDailyRun', results, timestamp: agentTimestamp(), cached: false };
+  return ceoResult;
+}
+
+// ── Check if CEO auto-run should trigger ──
+export function shouldAutoRun(config) {
+  const today = new Date().toISOString().split('T')[0];
+  const lastRun = config.agentsCache?.lastCEOAutoRun;
+  return lastRun !== today;
+}
