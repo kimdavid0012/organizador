@@ -1995,3 +1995,89 @@ ${safeContentTruncate(analystData, 1000)}
 ${BRAND_CONTEXT}
 Regla: no producir más de lo que se puede pagar en 10 días.
 
+Generá un **REPORTE DE CASH FLOW**:
+
+## 🚦 SEMÁFORO DE CAJA (Verde/Amarillo/Rojo)
+Estado actual + justificación
+📚 En criollo: explicación simple del estado
+
+## 💰 POSICIÓN DE CAJA ESTIMADA
+| Concepto | Monto |
+
+## 📈 FLUJO PROYECTADO (próximos 7 días)
+| Día | Ingresos Est. | Egresos Est. | Saldo |
+
+## 🔴 COBROS URGENTES
+| Cliente | Deuda | Días | Acción |
+
+## 💸 PAGOS PROGRAMADOS
+| Proveedor | Monto | Prioridad | Consecuencia si no se paga |
+
+## ⚠️ ALERTAS DE LIQUIDEZ
+- Cash runway: cuántos días podemos operar sin cobrar
+- Ratio cobros/pagos
+- Riesgo de descalce
+
+## ✅ PLAN DE ACCIÓN FINANCIERO
+| Acción | Monto | Responsable | Deadline |`;
+
+  const { text, tokens } = await callLLM(config, CASHFLOW_SYSTEM, prompt, { maxTokens: 4000, temperature: 0.3 });
+  return { type: 'cashflow', content: text, timestamp: agentTimestamp(), tokens, data: { totalCuentasPorCobrar, totalCuentasPorPagar } };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  CEO DAILY AUTO-RUN — Autonomous daily execution
+// ═══════════════════════════════════════════════════════════════
+export async function runCEOAutoDaily(config, state, onProgress) {
+  const today = new Date().toISOString().split('T')[0];
+  const cacheKey = 'ceoDailyRun_' + today;
+  const cached = config.agentsCache?.[cacheKey];
+  if (cached) {
+    onProgress?.('CEO: reporte de hoy ya fue generado, cargando cache...');
+    return cached;
+  }
+
+  onProgress?.('🤖 CEO AUTO-RUN: Iniciando análisis diario completo...');
+  const results = {};
+
+  // Phase 1: Core data
+  onProgress?.('Fase 1/4: Recopilando datos del negocio...');
+  try { results.analyst = await runAnalystAgent(config, state, onProgress); }
+  catch (e) { console.warn('CEO: Analyst failed', e.message); }
+
+  // Phase 2: Market intelligence
+  onProgress?.('Fase 2/4: Inteligencia de mercado...');
+  try { results.trendScout = await runTrendScoutAgent(config, [], onProgress); }
+  catch (e) { console.warn('CEO: TrendScout failed', e.message); }
+
+  // Phase 3: Strategy & operations (parallel)
+  onProgress?.('Fase 3/4: Estrategia y operaciones...');
+  const [strat, content, supply, cashflow, custSuccess] = await Promise.allSettled([
+    runStrategistAgent(config, results.analyst, results.trendScout, null, onProgress),
+    runContentAgent(config, results.analyst, results.trendScout, onProgress),
+    runSupplyChainAgent(config, state, results.analyst, onProgress),
+    runCashFlowAgent(config, state, results.analyst, onProgress),
+    runCustomerSuccessAgent(config, results.analyst, onProgress),
+  ]);
+  if (strat.status === 'fulfilled') results.strategist = strat.value;
+  if (content.status === 'fulfilled') results.contentCreator = content.value;
+  if (supply.status === 'fulfilled') results.supplyChain = supply.value;
+  if (cashflow.status === 'fulfilled') results.cashflow = cashflow.value;
+  if (custSuccess.status === 'fulfilled') results.customerSuccess = custSuccess.value;
+
+  // Phase 4: CEO synthesis
+  onProgress?.('Fase 4/4: CEO sintetizando y tomando decisiones...');
+  try { results.master = await runMasterAgent(config, results, onProgress); }
+  catch (e) { console.warn('CEO: Master failed', e.message); }
+
+  const ceoResult = { type: 'ceoDailyRun', results, timestamp: agentTimestamp(), cached: false };
+  return ceoResult;
+}
+
+// ── Check if CEO auto-run should trigger ──
+export function shouldAutoRun(config) {
+  const today = new Date().toISOString().split('T')[0];
+  const lastRun = config.agentsCache?.lastCEOAutoRun;
+  return lastRun !== today;
+}
