@@ -44,3 +44,41 @@ export const providerSummary = {
   KLH: { deudaUsd: 17439, deudaPeso: 0, entregas: 4, pagos: 3, telas: ['lanilla melow','saldo verano 25','lanilla sweter'] },
   BRIAN: { deudaUsd: 0, deudaPeso: 0, entregas: 1, pagos: 6, telas: ['saldo verano 25'] }
 };
+
+
+// Stock summary per tela type (aggregated from transactions)
+// Used by FabricCatalog to auto-populate stock when empty
+export const telaStockSeed = {
+  'MODAL SOFT': { rollos: 170, kilos: 4223.4, precioUsd: 4.9, proveedor: 'MARITEL', fason: 'CONCORDIA' },
+  'modal soft': { rollos: 170, kilos: 4223.4, precioUsd: 4.9, proveedor: 'MARITEL', fason: 'CONCORDIA' },
+  'SUPER SOFT': { rollos: 77, kilos: 1743.1, precioUsd: 5.9, proveedor: 'MARITEL', fason: 'CONCORDIA' },
+  'kerry brush': { rollos: 58, kilos: 1440.9, precioUsd: 5.9, proveedor: 'MARITEL' },
+  'KERRY BRUSH': { rollos: 58, kilos: 1440.9, precioUsd: 5.9, proveedor: 'MARITEL' },
+  'lanilla melow': { rollos: 39, kilos: 899.8, precioUsd: 6.1, proveedor: 'KLH' },
+  'LANILLA MELLOW': { rollos: 39, kilos: 899.8, precioUsd: 6.1, proveedor: 'KLH' },
+  'LANILLA MELLOW ': { rollos: 39, kilos: 899.8, precioUsd: 6.1, proveedor: 'KLH' },
+  'LAN MELOW': { rollos: 39, kilos: 899.8, precioUsd: 6.1, proveedor: 'KLH' },
+  'lanilla sweter': { rollos: 16, kilos: 359.7, precioUsd: 5.7, proveedor: 'KLH', fason: 'zuviria' },
+  'LANILLA SWETER': { rollos: 16, kilos: 359.7, precioUsd: 5.7, proveedor: 'KLH', fason: 'zuviria' },
+  'lanilla swetet': { rollos: 16, kilos: 359.7, precioUsd: 5.7, proveedor: 'KLH', fason: 'zuviria' },
+  'ALGODÓN FRISADO': { rollos: 28, kilos: 604, precioUsd: 0, proveedor: 'AM TEX' },
+  'frisado': { rollos: 28, kilos: 604, precioUsd: 9.3, proveedor: 'AM TEX' },
+};
+
+// Helper to find stock data for a tela by name (fuzzy match)
+export function findTelaStock(telaName) {
+  if (!telaName) return null;
+  const name = telaName.trim();
+  // Exact match first
+  if (telaStockSeed[name]) return telaStockSeed[name];
+  // Case-insensitive
+  const lower = name.toLowerCase();
+  for (const [key, val] of Object.entries(telaStockSeed)) {
+    if (key.toLowerCase() === lower) return val;
+  }
+  // Partial match
+  for (const [key, val] of Object.entries(telaStockSeed)) {
+    if (lower.includes(key.toLowerCase()) || key.toLowerCase().includes(lower)) return val;
+  }
+  return null;
+}
