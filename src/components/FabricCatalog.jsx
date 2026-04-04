@@ -695,7 +695,6 @@ export default function FabricCatalog() {
                                     {summary.entregas && <span>📦 {summary.entregas}</span>}
                                 </div>
                                 )}
-                                </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '140px 120px 120px 1fr auto', gap: 8, marginTop: 10 }}>
                                     <input
                                         type="date"
