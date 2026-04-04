@@ -274,15 +274,23 @@ async function gatherBusinessData(config, state, onProgress) {
     };
   } catch (e) { console.warn('Data collector: WooCommerce unavailable', e.message); }
 
-  // ── POS data from Firestore state ──
-  const posVentas = (state.posVentas || []).filter(v => {
-    const d = new Date(v.fecha || v.createdAt);
-    return d.toDateString() === new Date().toDateString();
-  });
+  // ── Ventas físicas (DOMO/Mesan) ──
+  const mesanVentas = state.config?.mesanVentasDiarias || [];
+  const mesanMovimientos = state.config?.mesanMovimientos || [];
+  const hoy = new Date().toISOString().slice(0, 10);
+  const ventaHoy = mesanVentas.find(v => v.fecha === hoy);
+  const ventas7d = mesanVentas.filter(v => v.fecha && (Date.now() - new Date(v.fecha).getTime()) < 7*24*60*60*1000);
+  const ventas30d = mesanVentas.filter(v => v.fecha && (Date.now() - new Date(v.fecha).getTime()) < 30*24*60*60*1000);
   data.pos = {
-    ventasHoy: posVentas.length,
-    totalHoy: posVentas.reduce((s, v) => s + (v.total || 0), 0),
-    ticketPromedio: posVentas.length > 0 ? posVentas.reduce((s, v) => s + (v.total || 0), 0) / posVentas.length : 0,
+    source: 'DOMO (vía Mesan)',
+    ventasHoy: ventaHoy ? 1 : 0,
+    totalHoy: Number(ventaHoy?.monto || ventaHoy?.efectivo || 0),
+    total7d: ventas7d.reduce((s, v) => s + Number(v.monto || v.efectivo || 0), 0),
+    total30d: ventas30d.reduce((s, v) => s + Number(v.monto || v.efectivo || 0), 0),
+    diasConDatos: mesanVentas.filter(v => Number(v.monto || v.efectivo || 0) > 0).length,
+    promedioDialio: ventas30d.length > 0 ? ventas30d.reduce((s, v) => s + Number(v.monto || v.efectivo || 0), 0) / ventas30d.length : 0,
+    ticketPromedio: 0,
+    movimientos: mesanMovimientos.length,
   };
 
   // ── Instagram organic data ──
@@ -426,7 +434,7 @@ Respondé con: estado general, mejor campaña, peor campaña, alertas de budget,
 WORST: ${safeTruncate(bd.woo?.bottomProducts, 600)}
 REVENUE 30d: ${safeTruncate(bd.revenueStats?.totals, 500)}
 PEDIDOS: ${JSON.stringify(bd.recentOrders)}
-POS HOY: ${JSON.stringify(bd.pos)}
+POS/DOMO HOY (vía Mesan): ${JSON.stringify(bd.pos)}
 STOCK: ${JSON.stringify(bd.internal)}
 Respondé: ventas hoy vs tendencia, ticket promedio, productos clave, alertas stock.`,
     { maxTokens: 1500, temperature: 0.3 }
@@ -1241,12 +1249,11 @@ export async function runFinancialAgent(config, state, analystData, onProgress) 
   let revenueStats = null;
   try { revenueStats = await wooService.fetchRevenueStats(config); } catch {}
 
-  const posVentas = state.posVentas || [];
-  const posHoy = posVentas.filter(v => new Date(v.fecha || v.createdAt).toDateString() === new Date().toDateString());
-  const pos7d = posVentas.filter(v => {
-    const d = new Date(v.fecha || v.createdAt);
-    return (Date.now() - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
-  });
+  const mesanVD = state.config?.mesanVentasDiarias || [];
+  const finHoy = new Date().toISOString().slice(0, 10);
+  const finVentaHoy = mesanVD.find(v => v.fecha === finHoy);
+  const finVentas7d = mesanVD.filter(v => v.fecha && (Date.now() - new Date(v.fecha).getTime()) < 7*24*60*60*1000);
+  const finVentas30d = mesanVD.filter(v => v.fecha && (Date.now() - new Date(v.fecha).getTime()) < 30*24*60*60*1000);
 
   const bankPayments = state.bankPayments || [];
   const clientes = state.clientes || [];
@@ -1256,9 +1263,10 @@ export async function runFinancialAgent(config, state, analystData, onProgress) 
 💰 REVENUE WEB (30 días):
 ${safeTruncate(revenueStats?.totals, 1000)}
 
-🏪 POS:
-- Hoy: ${posHoy.length} ventas, $${posHoy.reduce((s, v) => s + (v.total || 0), 0)}
-- Últimos 7 días: ${pos7d.length} ventas, $${pos7d.reduce((s, v) => s + (v.total || 0), 0)}
+🏪 VENTAS FÍSICAS (DOMO vía Mesan):
+- Hoy: $${Number(finVentaHoy?.monto || finVentaHoy?.efectivo || 0).toLocaleString()}
+- Últimos 7 días: ${finVentas7d.length} días con datos, $${finVentas7d.reduce((s, v) => s + Number(v.monto || v.efectivo || 0), 0).toLocaleString()}
+- Últimos 30 días: ${finVentas30d.length} días con datos, $${finVentas30d.reduce((s, v) => s + Number(v.monto || v.efectivo || 0), 0).toLocaleString()}
 
 🏦 MOVIMIENTOS BANCARIOS: ${bankPayments.length} registros
 Últimos 5: ${safeTruncate(bankPayments.slice(0, 5), 500)}
@@ -1623,15 +1631,15 @@ export async function runCashFlowAgent(config, state, analystData, onProgress) {
   onProgress?.('Monitoreando cash flow en tiempo real...');
   let revenueStats = null;
   try { revenueStats = await wooService.fetchRevenueStats(config); } catch {}
-  const posVentas = state.posVentas || [];
+  const cfMesan = state.config?.mesanVentasDiarias || [];
   const bankPayments = state.bankPayments || [];
   const clientes = state.clientes || [];
   const cfNow = new Date();
-  const cfToday = cfNow.toDateString();
+  const cfHoyStr = cfNow.toISOString().slice(0, 10);
 
-  const cfPosHoy = posVentas.filter(v => new Date(v.fecha || v.createdAt).toDateString() === cfToday);
-  const cfPos7d = posVentas.filter(v => (cfNow - new Date(v.fecha || v.createdAt)) < 7*24*60*60*1000);
-  const cfPos30d = posVentas.filter(v => (cfNow - new Date(v.fecha || v.createdAt)) < 30*24*60*60*1000);
+  const cfVentaHoy = cfMesan.find(v => v.fecha === cfHoyStr);
+  const cfVentas7d = cfMesan.filter(v => v.fecha && (cfNow - new Date(v.fecha)) < 7*24*60*60*1000);
+  const cfVentas30d = cfMesan.filter(v => v.fecha && (cfNow - new Date(v.fecha)) < 30*24*60*60*1000);
   const clientesConDeuda = clientes.filter(c => (c.saldo || 0) > 0);
   const totalCxC = clientes.reduce((s, c) => s + Math.max(0, c.saldo || 0), 0);
   const PROV_DEBTS = { MARITEL: 62253, KLH: 17439, DAN: 2657, BRIAN: 0 };
@@ -1644,7 +1652,7 @@ export async function runCashFlowAgent(config, state, analystData, onProgress) {
 IDIOMA: ${cfLangInst}
 ${cfHistoryCtx}
 
-💰 INGRESOS POS: Hoy ${cfPosHoy.length} ventas ($${cfPosHoy.reduce((s,v) => s + (v.total||0), 0)}) | 7d ${cfPos7d.length} ventas ($${cfPos7d.reduce((s,v) => s + (v.total||0), 0)}) | 30d ${cfPos30d.length} ventas ($${cfPos30d.reduce((s,v) => s + (v.total||0), 0)})
+💰 VENTAS FÍSICAS (DOMO vía Mesan): Hoy  | 7d  ( días) | 30d  ( días)
 💰 Web revenue 30d: ${safeTruncate(revenueStats?.totals, 500)}
 💸 CUENTAS x COBRAR: $${totalCxC} (${clientesConDeuda.length} clientes): ${safeTruncate(clientesConDeuda.slice(0, 15).map(c => ({ nombre: c.nombre, saldo: c.saldo })), 800)}
 🏭 CUENTAS x PAGAR: MARITEL USD ${PROV_DEBTS.MARITEL} | KLH USD ${PROV_DEBTS.KLH} | DAN USD ${PROV_DEBTS.DAN} | Total USD ${totalCxP}
