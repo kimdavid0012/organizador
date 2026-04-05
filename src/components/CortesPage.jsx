@@ -899,7 +899,11 @@ export default function CortesPage() {
                                                                     </div>
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                                                         <span style={{ fontSize: '9px', color: '#60a5fa', textTransform: 'uppercase' }}>% Ganancia prueba</span>
-                                                                        <div style={{ padding: '6px', fontSize: '12px', color: '#60a5fa', background: 'rgba(0,0,0,0.3)', borderRadius: 4 }}>{cost.costoPruebaTotal > 0 ? (((cData.precioPrueba || 0) / cost.costoPruebaTotal - 1) * 100).toFixed(1) : 0}%</div>
+                                                                        <input type="number" className="form-input"
+                                                                            value={cData.margenPrueba ?? (cData.precioPrueba > 0 && cost.costoPruebaTotal > 0 ? ((cData.precioPrueba / cost.costoPruebaTotal - 1) * 100).toFixed(1) : '')}
+                                                                            onChange={e => { const val = parseFloat(e.target.value) || 0; updateMoldeInCorte(selected, m.id, { margenPrueba: val, precioPrueba: cost.costoPruebaTotal * (1 + (val / 100)) }); }}
+                                                                            placeholder="0"
+                                                                            style={{ padding: '6px', fontSize: '12px', color: '#60a5fa' }} />
                                                                     </div>
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                                                         <span style={{ fontSize: '9px', color: '#60a5fa', textTransform: 'uppercase' }}>Taller prueba</span>
