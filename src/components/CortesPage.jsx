@@ -148,6 +148,9 @@ export default function CortesPage() {
             precioVentaL4: cData?.precioVentaL4 !== undefined ? cData.precioVentaL4 : (existingProduct?.precioVentaL4 || 0),
             precioVentaL5: existingProduct?.precioVentaL5 || 0,
             precioVentaWeb: existingProduct?.precioVentaWeb || 0,
+            precioModatex: cData?.precioModatex !== undefined ? cData.precioModatex : (existingProduct?.precioModatex || 0),
+            precioDistModa: cData?.precioDistModa !== undefined ? cData.precioDistModa : (existingProduct?.precioDistModa || 0),
+            precioCliente: cData?.precioCliente !== undefined ? cData.precioCliente : (existingProduct?.precioCliente || 0),
             activo: existingProduct?.activo ?? true,
             stock: cData?.cantidad || existingProduct?.stock || 0,
             imagenBase64: img || existingProduct?.imagenBase64 || null,
@@ -789,115 +792,137 @@ export default function CortesPage() {
                                                             </div>
                                                         </div>
 
-                                                        {/* Advanced Costs & Price (Admin Only) */}
+                                                                                                                {/* ═══ PRECIOS REALES (conectados a POS, Clientes, Agentes AI) ═══ */}
                                                         {user?.role === 'admin' && (
-                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 12, width: '100%' }}>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>% Ganancia</span>
-                                                                    <input
-                                                                        type="number" className="form-input"
-                                                                        value={cData.margenGanancia !== undefined ? cData.margenGanancia : cost.margen}
-                                                                        onChange={e => {
-                                                                            const val = parseFloat(e.target.value) || 0;
-                                                                            updateMoldeInCorte(selected, m.id, { margenGanancia: val, precioLocal: cost.costoTotal * (1 + (val / 100)) });
-                                                                        }}
-                                                                        style={{ padding: '6px', fontSize: '12px' }}
-                                                                    />
+                                                            <div style={{ width: '100%', border: '2px solid rgba(34,197,94,0.3)', borderRadius: 8, padding: 12, background: 'rgba(34,197,94,0.05)' }}>
+                                                                <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--success)', marginBottom: 8 }}>
+                                                                    💰 PRECIOS REALES — Se reflejan en POS, Clientes y Agentes AI
                                                                 </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Precio real venta</span>
-                                                                    <input
-                                                                        type="number" className="form-input"
-                                                                        value={cData.precioLocal ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioLocal: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px', color: 'var(--success)', fontWeight: 'bold' }}
-                                                                    />
+                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 12, marginBottom: 8 }}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--warning)', textTransform: 'uppercase' }}>Costo (calc)</span>
+                                                                        <div style={{ padding: '6px', fontSize: '12px', fontWeight: 'bold', color: 'var(--warning)', background: 'rgba(0,0,0,0.3)', borderRadius: 4 }}>${cost.costoTotal.toFixed(0)}</div>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>% Ganancia</span>
+                                                                        <input type="number" className="form-input" value={cData.margenGanancia !== undefined ? cData.margenGanancia : cost.margen}
+                                                                            onChange={e => { const val = parseFloat(e.target.value) || 0; updateMoldeInCorte(selected, m.id, { margenGanancia: val, precioLocal: cost.costoTotal * (1 + (val / 100)) }); }}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--success)', textTransform: 'uppercase', fontWeight: 'bold' }}>Precio Local</span>
+                                                                        <input type="number" className="form-input" value={cData.precioLocal ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { precioLocal: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px', color: 'var(--success)', fontWeight: 'bold', border: '1px solid var(--success)' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Minorista</span>
+                                                                        <input type="number" className="form-input" value={cData.precioVentaL2 ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { precioVentaL2: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Chloe</span>
+                                                                        <input type="number" className="form-input" value={cData.precioVentaL3 ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { precioVentaL3: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Web</span>
+                                                                        <input type="number" className="form-input" value={cData.precioVentaL4 ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { precioVentaL4: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Modatex</span>
+                                                                        <input type="number" className="form-input" value={cData.precioModatex ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { precioModatex: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Dist Moda</span>
+                                                                        <input type="number" className="form-input" value={cData.precioDistModa ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { precioDistModa: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Cliente</span>
+                                                                        <input type="number" className="form-input" value={cData.precioCliente ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { precioCliente: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
                                                                 </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 'bold' }}>Precio de prueba</span>
-                                                                    <input
-                                                                        type="number" className="form-input"
-                                                                        value={cData.precioPrueba ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioPrueba: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px', color: '#60a5fa', fontWeight: 'bold' }}
-                                                                    />
-                                                                </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Lista 2 Minorista</span>
-                                                                    <input
-                                                                        type="number" className="form-input"
-                                                                        value={cData.precioVentaL2 ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioVentaL2: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px' }}
-                                                                    />
-                                                                </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Lista 3 Chloe</span>
-                                                                    <input
-                                                                        type="number" className="form-input"
-                                                                        value={cData.precioVentaL3 ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioVentaL3: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px' }}
-                                                                    />
-                                                                </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Lista 4 Luis</span>
-                                                                    <input
-                                                                        type="number" className="form-input"
-                                                                        value={cData.precioVentaL4 ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { precioVentaL4: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px' }}
-                                                                    />
-                                                                </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Precio x m/kg</span>
-                                                                    <input
-                                                                        type="number" className="form-input" step="0.01"
-                                                                        value={cData.usoRealTela !== undefined ? cData.usoRealTela : cost.consumo}
-                                                                        onChange={e => updateMoldeInCorte(selected, m.id, { usoRealTela: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px' }}
-                                                                    />
-                                                                </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: '#f59e0b', textTransform: 'uppercase', fontWeight: 'bold' }}>% de Tela</span>
-                                                                    <input
-                                                                        type="number" className="form-input" step="0.01"
-                                                                        value={cData.porcentajeTela !== undefined ? cData.porcentajeTela : cost.pctTela}
-                                                                        onChange={e => updateMoldeInCorte(selected, m.id, { porcentajeTela: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px', color: '#f59e0b', fontWeight: 'bold' }}
-                                                                    />
-                                                                </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Accesorios 1</span>
-                                                                    <input
-                                                                        type="number" className="form-input"
-                                                                        value={cData.costoAccesorio !== undefined ? cData.costoAccesorio : cost.acc1}
-                                                                        onChange={e => updateMoldeInCorte(selected, m.id, { costoAccesorio: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px' }}
-                                                                    />
-                                                                </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Accesorios 2</span>
-                                                                    <input
-                                                                        type="number" className="form-input"
-                                                                        value={cData.costoAccesorio2 !== undefined ? cData.costoAccesorio2 : cost.acc2}
-                                                                        onChange={e => updateMoldeInCorte(selected, m.id, { costoAccesorio2: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px' }}
-                                                                    />
-                                                                </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Taller prueba</span>
-                                                                    <input
-                                                                        type="number" className="form-input"
-                                                                        value={cData.costoTallerPrueba ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { costoTallerPrueba: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px' }}
-                                                                    />
-                                                                </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>FasÃ³n prueba</span>
-                                                                    <input
-                                                                        type="number" className="form-input"
-                                                                        value={cData.costoFasonPrueba ?? ''} onChange={e => updateMoldeInCorte(selected, m.id, { costoFasonPrueba: parseFloat(e.target.value) || 0 })}
-                                                                        style={{ padding: '6px', fontSize: '12px' }}
-                                                                    />
+                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 12 }}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: '#f59e0b', textTransform: 'uppercase', fontWeight: 'bold' }}>% de Tela</span>
+                                                                        <input type="number" className="form-input" step="0.01" value={cData.porcentajeTela !== undefined ? cData.porcentajeTela : cost.pctTela}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { porcentajeTela: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px', color: '#f59e0b', fontWeight: 'bold' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Precio x m/kg</span>
+                                                                        <input type="number" className="form-input" step="0.01" value={cData.usoRealTela !== undefined ? cData.usoRealTela : cost.consumo}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { usoRealTela: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Accesorios 1</span>
+                                                                        <input type="number" className="form-input" value={cData.costoAccesorio !== undefined ? cData.costoAccesorio : cost.acc1}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { costoAccesorio: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Accesorios 2</span>
+                                                                        <input type="number" className="form-input" value={cData.costoAccesorio2 !== undefined ? cData.costoAccesorio2 : cost.acc2}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { costoAccesorio2: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         )}
+                                                        {/* ═══ PRECIOS DE PRUEBA (sandbox - NO conectan al dashboard) ═══ */}
+                                                        {user?.role === 'admin' && (
+                                                            <div style={{ width: '100%', border: '2px solid rgba(96,165,250,0.3)', borderRadius: 8, padding: 12, background: 'rgba(96,165,250,0.05)' }}>
+                                                                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#60a5fa', marginBottom: 8 }}>
+                                                                    🧪 PRUEBA — Simulá costos sin afectar precios reales
+                                                                </div>
+                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 12 }}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: '#60a5fa', textTransform: 'uppercase' }}>Costo prueba</span>
+                                                                        <div style={{ padding: '6px', fontSize: '12px', fontWeight: 'bold', color: '#f59e0b', background: 'rgba(0,0,0,0.3)', borderRadius: 4 }}>${cost.costoPruebaTotal.toFixed(0)}</div>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 'bold' }}>Precio prueba</span>
+                                                                        <input type="number" className="form-input" value={cData.precioPrueba ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { precioPrueba: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px', color: '#60a5fa', fontWeight: 'bold', border: '1px solid #60a5fa' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: '#60a5fa', textTransform: 'uppercase' }}>% Ganancia prueba</span>
+                                                                        <div style={{ padding: '6px', fontSize: '12px', color: '#60a5fa', background: 'rgba(0,0,0,0.3)', borderRadius: 4 }}>{cost.costoPruebaTotal > 0 ? (((cData.precioPrueba || 0) / cost.costoPruebaTotal - 1) * 100).toFixed(1) : 0}%</div>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: '#60a5fa', textTransform: 'uppercase' }}>Taller prueba</span>
+                                                                        <input type="number" className="form-input" value={cData.costoTallerPrueba ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { costoTallerPrueba: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: '#60a5fa', textTransform: 'uppercase' }}>Fasón prueba</span>
+                                                                        <input type="number" className="form-input" value={cData.costoFasonPrueba ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { costoFasonPrueba: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                        <span style={{ fontSize: '9px', color: '#60a5fa', textTransform: 'uppercase' }}>Accesorio prueba</span>
+                                                                        <input type="number" className="form-input" value={cData.costoAccesorioPrueba ?? ''}
+                                                                            onChange={e => updateMoldeInCorte(selected, m.id, { costoAccesorioPrueba: parseFloat(e.target.value) || 0 })}
+                                                                            style={{ padding: '6px', fontSize: '12px' }} />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
 
                                                         {/* Status & Extras */}
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 8 }}>
