@@ -44,7 +44,9 @@ IMPORTANTE: Cuando generes tareas/acciones, SIEMPRE asigná a la persona correct
 
 // ─── Didactic explanation rule for all agents ──────────────
 const ELI5_RULE = `
-REGLA DIDÁCTICA OBLIGATORIA: Después de cada sección técnica o métrica importante, incluí una línea que empiece con "📚 En criollo:" con 1-2 oraciones simples explicando qué significa para alguien SIN conocimiento de marketing, finanzas o e-commerce.
+REGLA DE IDIOMA: Detectá el idioma del usuario desde la configuración. Si el idioma es ruso (ru), respondé TODO en ruso. Si es coreano (ko), respondé en coreano. En cualquier otro caso, respondé en español rioplatense.
+
+REGLA DIDÁCTICA OBLIGATORIA: Después de cada sección técnica o métrica importante, incluí una línea que empiece con "📚 En criollo:" (o "📚 Простыми словами:" en ruso, "📚 쉽게 말하면:" en coreano) con 1-2 oraciones simples explicando qué significa para alguien SIN conocimiento de marketing, finanzas o e-commerce.
 Ejemplos:
 - Después de ROAS: "📚 En criollo: Por cada $1 que ponemos en publicidad, nos vuelven $3.5 en ventas — eso está muy bien, arriba de $2 ya es rentable."
 - Después de CTR: "📚 En criollo: De cada 100 personas que ven nuestro anuncio, 2.3 le hacen click. Es un número aceptable pero podríamos mejorar."
