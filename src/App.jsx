@@ -559,6 +559,35 @@ function AppContent() {
                 </aside>
 
                 <div className="main-content">
+                    {/* Emergency data recovery banner */}
+                    <div style={{ background: 'linear-gradient(90deg, #dc2626, #b91c1c)', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderRadius: 0 }}>
+                        <span style={{ color: 'white', fontSize: '13px', fontWeight: 'bold' }}>🚨 Recuperación de datos — Descargá tu backup local</span>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => {
+                                const raw = localStorage.getItem('organizador_moldes_data');
+                                if (!raw) { alert('No hay datos locales en este browser'); return; }
+                                const blob = new Blob([raw], { type: 'application/json' });
+                                const a = document.createElement('a');
+                                a.href = URL.createObjectURL(blob);
+                                a.download = 'backup_' + (user?.name || 'user') + '_' + new Date().toISOString().slice(0,10) + '.json';
+                                a.click();
+                                URL.revokeObjectURL(a.href);
+                                alert('Backup descargado!');
+                            }} style={{ background: 'white', color: '#dc2626', border: 'none', padding: '6px 16px', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+                                📥 Descargar Backup JSON
+                            </button>
+                            <button onClick={async () => {
+                                if (!window.confirm('Esto sube TODOS tus datos locales a Firebase. ¿Continuar?')) return;
+                                try {
+                                    const { migrateLocalToCloud } = await import('./store/storage.js');
+                                    await migrateLocalToCloud();
+                                    alert('Datos migrados a la nube!');
+                                } catch(e) { alert('Error: ' + e.message); }
+                            }} style={{ background: '#22c55e', color: 'white', border: 'none', padding: '6px 16px', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+                                ☁️ Subir a Firebase
+                            </button>
+                        </div>
+                    </div>
                     {(view === 'kanban' || view === 'library') && (
                         <Header
                             filters={filters}
