@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Plus, Edit2, Trash2, Upload, Search, FileSpreadsheet } from 'lucide-react';
 import { useData } from '../../store/DataContext';
+import { useAuth } from '../../store/AuthContext';
 import { generateId, getProductThumb } from '../../utils/helpers';
 import * as XLSX from 'xlsx';
 import './PosProductos.css';
@@ -28,6 +29,9 @@ const DEFAULT_PRODUCT = {
 
 export default function PosProductos() {
     const { state, addPosProduct, updatePosProduct, deletePosProduct, importPosProducts, fetchWooProducts } = useData();
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
+    const canEdit = isAdmin || user?.role === 'encargada';
     const productos = state.config.posProductos || [];
 
     const [search, setSearch] = useState('');
