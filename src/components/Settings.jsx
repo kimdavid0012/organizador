@@ -406,6 +406,15 @@ export default function Settings() {
                         <button className="btn btn-secondary" onClick={handleMigrateToCloud} disabled={migrating}>
                             <CloudUpload /> {migrating ? 'Migrando...' : 'Migrar datos locales a la nube'}
                         </button>
+                        <button className="btn btn-danger" onClick={() => {
+                            if (window.confirm('⚠️ Esto borra los datos locales del browser y recarga TODO desde Firebase.\\n\\nUsalo si ves datos desactualizados (stock, artículos, etc).\\n\\n¿Continuar?')) {
+                                localStorage.clear();
+                                indexedDB.deleteDatabase('organizador-app-storage');
+                                window.location.reload();
+                            }
+                        }}>
+                            ☁️ Forzar carga desde la nube
+                        </button>
                         <button className="btn btn-primary" onClick={exportBackupNow}>
                             <Download /> Descargar backup ahora
                         </button>
