@@ -1543,21 +1543,24 @@ export function DataProvider({ children }) {
                     lastKnownCloudState.current = fullData;
                     const localRecoveryData = mergeBestLocalState(stateRef.current);
                     const remoteRevision = getSyncRevision(fullData);
-                    const localRevision = getSyncRevision(localRecoveryData);
 
-                    // Protección: no sobreescribir si tenemos más datos localmente
-                    if (initialized.current && hasRicherLocalData(stateRef.current, fullData)) {
-                        console.warn(`⚠️ Firestore tiene menos datos que local. Ignorando.`);
-                        return;
-                    }
-
-                    if (initialized.current && localRecoveryData && localRevision > remoteRevision) {
-                        console.warn(`🛡️ Snapshot remoto ignorado: la sesion local tiene una revision mas nueva.`);
-                        return;
+                    // FIREBASE ES SIEMPRE LA FUENTE DE VERDAD
+                    // Solo mergeamos datos locales que NO existan en Firebase (para no perder trabajo offline)
+                    // Pero Firebase SIEMPRE gana cuando tiene datos
+                    if (initialized.current && localRecoveryData) {
+                        const timeSinceLastLocalChange = Date.now() - (localChangeTimestamp.current || 0);
+                        // Si el usuario hizo un cambio local hace menos de 5 segundos, no sobreescribir
+                        // (es el eco de su propio guardado volviendo de Firestore)
+                        if (timeSinceLastLocalChange < 5000 && justSaved.current) {
+                            justSaved.current = false;
+                            return;
+                        }
                     }
 
                     isFromFirestore.current = true;
-                    dispatch({ type: ACTION_TYPES.SET_DATA, payload: mergeProtectedState(fullData, localRecoveryData) });
+                    // Firebase es la base, local solo enriquece con datos que Firebase no tiene
+                    const merged = mergeProtectedState(fullData, localRecoveryData);
+                    dispatch({ type: ACTION_TYPES.SET_DATA, payload: merged });
                     currentRevisionRef.current = remoteRevision;
                     initialized.current = true;
                 } catch (err) {
