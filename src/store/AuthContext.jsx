@@ -16,7 +16,7 @@ const KNOWN_USERS = {
 
 const KNOWN_USER_SECTIONS = {
     'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb'],
-    'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'banking'],
+    'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'banking', 'settings', 'cortes', 'cortadores', 'mesan', 'fotos'],
     'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia'],
     'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia'],
     'rocio@celavie.com': ['fotos', 'instagramplanner']
