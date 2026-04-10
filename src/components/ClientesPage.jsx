@@ -263,6 +263,14 @@ export default function ClientesPage() {
                     <button className="btn btn-primary" onClick={handleOpenNew} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Plus size={18} /> Nuevo Cliente
                     </button>
+                    <button className="btn btn-secondary" onClick={() => {
+                        const emails = filteredClientes.filter(c => c.email).map(c => c.email).join(', ');
+                        if (!emails) { alert('No hay emails en los clientes filtrados'); return; }
+                        navigator.clipboard.writeText(emails);
+                        alert('✅ ' + filteredClientes.filter(c => c.email).length + ' emails copiados al portapapeles!\n\nPodés pegarlos en Gmail, Brevo, o cualquier herramienta de email marketing.');
+                    }} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        📋 Copiar Emails ({filteredClientes.filter(c => c.email).length})
+                    </button>
                 </div>
             </div>
 
@@ -292,6 +300,7 @@ export default function ClientesPage() {
                                 <tr>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Nombre / Razón Social</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>CUIT</th>
+                                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Email</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Teléfono</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Provincia</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Descuento</th>
@@ -311,6 +320,7 @@ export default function ClientesPage() {
                                     >
                                         <td style={{ padding: '12px', fontWeight: 'var(--fw-medium)' }}>{cliente.nombre}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{cliente.cuit || '-'}</td>
+                                        <td style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '12px' }}>{cliente.email || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{normalizeWooPhone(cliente.telefono) || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{cliente.provincia || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--accent)' }}>{cliente.descuento ? `${cliente.descuento}%` : '-'}</td>
@@ -340,8 +350,26 @@ export default function ClientesPage() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: 'var(--fs-sm)' }}>
                                 <div><span style={{ color: 'var(--text-muted)' }}>CUIT:</span> <br />{viewingHistory.cuit || '-'}</div>
                                 <div><span style={{ color: 'var(--text-muted)' }}>Teléfono:</span> <br />{normalizeWooPhone(viewingHistory.telefono) || '-'}</div>
+                                <div style={{ gridColumn: '1 / -1' }}><span style={{ color: 'var(--text-muted)' }}>Email:</span> <br />{viewingHistory.email || '-'}</div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={14} className="text-muted" /> {viewingHistory.provincia || '-'}</div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Truck size={14} className="text-muted" /> {viewingHistory.expreso || '-'}</div>
+                            </div>
+                            {/* Quick contact buttons */}
+                            <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                                {viewingHistory.email && (
+                                    <a href={'mailto:' + viewingHistory.email + '?subject=CELAVIE%20-%20Nuevos%20Ingresos&body=Hola%20' + encodeURIComponent(viewingHistory.nombre?.split(' ')[0] || '') + ',%0A%0ATe%20escribimos%20de%20CELAVIE%20para%20contarte%20sobre%20nuestros%20nuevos%20ingresos.%0A%0AVisitá%20nuestra%20web:%20celavie.com.ar%0A%0ASaludos!'}
+                                        target="_blank" rel="noopener noreferrer"
+                                        style={{ flex: 1, padding: '8px', borderRadius: 6, background: 'rgba(59,130,246,0.15)', color: '#60a5fa', textAlign: 'center', textDecoration: 'none', fontSize: 12, fontWeight: 'bold' }}>
+                                        ✉️ Email
+                                    </a>
+                                )}
+                                {viewingHistory.telefono && (
+                                    <a href={'https://wa.me/549' + String(viewingHistory.telefono).replace(/\D/g, '').replace(/^0/, '').replace(/^54/, '') + '?text=' + encodeURIComponent('Hola ' + (viewingHistory.nombre?.split(' ')[0] || '') + '! Te escribimos de CELAVIE. Tenemos nuevos ingresos que te van a encantar! 🛍️ Mirá todo en celavie.com.ar')}
+                                        target="_blank" rel="noopener noreferrer"
+                                        style={{ flex: 1, padding: '8px', borderRadius: 6, background: 'rgba(34,197,94,0.15)', color: '#22c55e', textAlign: 'center', textDecoration: 'none', fontSize: 12, fontWeight: 'bold' }}>
+                                        💬 WhatsApp
+                                    </a>
+                                )}
                             </div>
                             {viewingHistory.descuento && (
                                 <div style={{ marginTop: '8px', padding: '6px', background: 'rgba(0,0,0,0.1)', borderRadius: '4px', textAlign: 'center', fontWeight: 'bold', border: '1px solid var(--accent)', color: 'var(--accent)' }}>
