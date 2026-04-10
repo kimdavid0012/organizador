@@ -55,12 +55,27 @@ export default function PosProductos() {
         }).format(amount);
     };
 
-    const filteredProducts = productos.filter(p =>
-        (p.detalleCorto || '').toLowerCase().includes(search.toLowerCase()) ||
-        (p.articuloVenta || p.codigoInterno || '').toLowerCase().includes(search.toLowerCase()) ||
-        (p.articuloFabrica || '').toLowerCase().includes(search.toLowerCase()) ||
-        (p.codigoBarras || '').toLowerCase().includes(search.toLowerCase())
-    );
+    const extractNumericCode = (value) => {
+        const match = (value || '').match(/(\d+)/);
+        return match ? match[1] : '';
+    };
+
+    const filteredProducts = productos.filter(p => {
+        const q = search.toLowerCase().trim();
+        if (!q) return true;
+        const artVenta = (p.articuloVenta || p.codigoInterno || '').toLowerCase();
+        const numericPart = extractNumericCode(p.articuloVenta || p.codigoInterno);
+        return artVenta.includes(q) ||
+            numericPart.includes(q) ||
+            (p.detalleCorto || '').toLowerCase().includes(q) ||
+            (p.articuloFabrica || '').toLowerCase().includes(q) ||
+            extractNumericCode(p.articuloFabrica).includes(q) ||
+            (p.codigoBarras || '').toLowerCase().includes(q);
+    }).sort((a, b) => {
+        const numA = parseInt(extractNumericCode(a.articuloVenta || a.codigoInterno), 10) || Infinity;
+        const numB = parseInt(extractNumericCode(b.articuloVenta || b.codigoInterno), 10) || Infinity;
+        return numA - numB;
+    });
 
     // --- Inline Stock Edit ---
     const startEditingStock = (product) => {
