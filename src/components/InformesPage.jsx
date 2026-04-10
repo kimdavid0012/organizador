@@ -212,9 +212,8 @@ export default function InformesPage() {
     const [generatedAt, setGeneratedAt] = useState(reportsCache.businessReportGeneratedAt || '');
     const pageText = PAGE_TEXT[lang] || PAGE_TEXT.es;
 
-    if (user.role !== 'admin') {
-        return <div style={{ padding: 'var(--sp-4)' }}>{pageText.adminOnly}</div>;
-    }
+    const isAdmin = user.role === 'admin';
+    const canViewInformes = isAdmin || user.role === 'encargada';
 
     const posReportsStartDate = state.config?.reportsPosStartDate || getTodayLocalDate();
 
@@ -579,7 +578,9 @@ export default function InformesPage() {
                 </div>
             </div>
 
-            <div className="informes-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            {!canViewInformes && <div style={{ padding: 'var(--sp-4)' }}>{pageText.adminOnly}</div>}
+
+            {canViewInformes && isAdmin && <div className="informes-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{pageText.statMesanTotal}</div>
                     <div style={{ fontSize: 28, fontWeight: 'var(--fw-bold)' }}>{formatMoney(reportData.profitabilitySnapshot.mesanCashIncomeTotalARS)}</div>
@@ -602,9 +603,9 @@ export default function InformesPage() {
                         US$ {Math.round(reportData.profitabilitySnapshot.totalTextileDebtUSD).toLocaleString('es-AR')}
                     </div>
                 </div>
-            </div>
+            </div>}
 
-            <div className="informes-secondary-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 16 }}>
+            {canViewInformes && <div className="informes-secondary-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 16 }}>
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                         <TrendingUp size={18} /> {pageText.restockTitle}
@@ -626,7 +627,7 @@ export default function InformesPage() {
                     </div>
                 </div>
 
-                <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
+                {isAdmin && <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <h3 style={{ marginBottom: 12 }}>{pageText.topExpenses}</h3>
                     <div style={{ display: 'grid', gap: 8 }}>
                         {reportData.topExpenseCategories.map((item) => (
@@ -636,7 +637,7 @@ export default function InformesPage() {
                             </div>
                         ))}
                     </div>
-                </div>
+                </div>}
 
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <h3 style={{ marginBottom: 12 }}>{pageText.quickAlerts}</h3>
@@ -659,9 +660,9 @@ export default function InformesPage() {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div>}
 
-            <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 14 }}>
+            {canViewInformes && <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 14 }}>
                 <div className="informes-report-header" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                     <div>
                         <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -676,7 +677,7 @@ export default function InformesPage() {
                             </div>
                         )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {isAdmin && <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <select
                             value={state.config?.marketing?.llmProvider || 'openai'}
                             onChange={(e) => updateConfig({ marketing: { ...(state.config.marketing || {}), llmProvider: e.target.value } })}
@@ -689,7 +690,7 @@ export default function InformesPage() {
                             {loading ? <RefreshCw size={16} className="spin" /> : <FileText size={16} />}
                             {loading ? pageText.generating : pageText.generate}
                         </button>
-                    </div>
+                    </div>}
                 </div>
 
                 {!state.config?.marketing?.openaiKey && !state.config?.marketing?.claudeKey && (
@@ -718,9 +719,9 @@ export default function InformesPage() {
                         {reportText}
                     </pre>
                 )}
-            </div>
+            </div>}
 
-            {reportData.inventory.overstockCandidates.length > 0 && (
+            {canViewInformes && reportData.inventory.overstockCandidates.length > 0 && (
                 <div className="glass-panel" style={{ padding: 'var(--sp-4)' }}>
                     <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                         <AlertTriangle size={18} /> {pageText.overstockTitle}
