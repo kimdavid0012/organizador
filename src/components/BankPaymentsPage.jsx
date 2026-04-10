@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Download, Landmark, PlusCircle, Upload } from 'lucide-react';
+import { Download, Landmark, PlusCircle, Trash2, Upload } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
@@ -169,6 +169,7 @@ export default function BankPaymentsPage() {
     const [estado, setEstado] = useState('pagado');
     const [searchTerm, setSearchTerm] = useState('');
     const [xlsxStatus, setXlsxStatus] = useState(null);
+    const [deletingMonthKey, setDeletingMonthKey] = useState(null);
     const fileInputRef = useRef(null);
 
     const entries = state.config.bankPayments || [];
@@ -340,6 +341,13 @@ export default function BankPaymentsPage() {
         setCliente('');
         setMonto('');
         setEstado('pagado');
+    };
+
+    const deleteMonth = (monthKey) => {
+        if (!window.confirm(`¿Borrar todos los movimientos de ${getMonthLabel(monthKey)}? Esta acción no se puede deshacer.`)) return;
+        const filtered = entries.filter((entry) => getMonthKey(entry.fecha) !== monthKey);
+        syncBankEntries(filtered);
+        setDeletingMonthKey(null);
     };
 
     const updateEntryStatus = (entryId, nextEstado) => {
@@ -555,11 +563,24 @@ export default function BankPaymentsPage() {
                                     <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 18 }}>{monthGroup.label}</div>
                                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{monthGroup.entryCount} movimientos</div>
                                 </div>
-                                {canSeeTotals && (
-                                    <div style={{ fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>
-                                        ${monthGroup.total.toLocaleString('es-AR')}
-                                    </div>
-                                )}
+                                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                    {canSeeTotals && (
+                                        <div style={{ fontWeight: 'var(--fw-bold)', color: 'var(--success)' }}>
+                                            ${monthGroup.total.toLocaleString('es-AR')}
+                                        </div>
+                                    )}
+                                    {user.role === 'admin' && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-ghost btn-danger"
+                                            style={{ padding: '4px 8px', fontSize: 12 }}
+                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteMonth(monthGroup.monthKey); }}
+                                            title="Borrar mes"
+                                        >
+                                            <Trash2 size={14} /> Borrar mes
+                                        </button>
+                                    )}
+                                </div>
                             </summary>
                             <div style={{ padding: '0 16px 16px', display: 'grid', gap: 10 }}>
                                 {monthGroup.dayGroups.map((dayGroup) => (

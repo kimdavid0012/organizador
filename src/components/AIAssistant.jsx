@@ -602,6 +602,16 @@ Si el usuario no entiende un término de marketing (ROAS, CTR, CPC, etc), explic
 
 SNAPSHOT OPERATIVO ACTUAL:
 ${JSON.stringify(dashboardSnapshot, null, 2)}
+
+ÚLTIMOS REPORTES DE AGENTES AI (agentsCache):
+${(() => {
+    const cache = state?.config?.agentsCache || {};
+    const agents = ['analyst', 'master', 'trendScout', 'contentCreator', 'paidMedia', 'pricing', 'inventory', 'whatsappSales', 'seo', 'competitor', 'finanzas', 'crm', 'proveedores', 'clientes', 'cashFlow'];
+    const summaries = agents
+        .filter(key => cache[key]?.content)
+        .map(key => `[${key.toUpperCase()}]: ${String(cache[key].content).substring(0, 400)}`);
+    return summaries.length > 0 ? summaries.join('\n\n') : 'Sin reportes de agentes disponibles aún.';
+})()}
 `;
 
 export default function AIAssistant() {

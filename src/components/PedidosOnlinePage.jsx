@@ -283,10 +283,12 @@ export default function PedidosOnlinePage() {
                                 value={nuevoOrigen}
                                 onChange={(e) => setNuevoOrigen(e.target.value)}
                             >
+                                <option value="Instagram">Instagram</option>
+                                <option value="WhatsApp">WhatsApp</option>
+                                <option value="Directo">Directo</option>
                                 <option value="Modatex">Modatex</option>
                                 <option value="Web">Web</option>
-                                <option value="Distrito">Distrito</option>
-                                <option value="Local">Local</option>
+                                <option value="Otro">Otro</option>
                             </select>
                         </div>
                         <div className="form-group">

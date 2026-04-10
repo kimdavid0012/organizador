@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Plus, Upload, Wallet } from 'lucide-react';
+import { BarChart3, Pencil, Plus, Trash2, Upload, Wallet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
@@ -70,7 +70,7 @@ const getMovementType = (signedAmount, concepto, categoria) => {
     if (normalizedConcept === 'SALDO ANTERIOR' || normalizedCategory === 'SALDO ANTERIOR') return 'saldo';
     return signedAmount >= 0 ? 'ingreso' : 'gasto';
 };
-const SHEET_MONTHS = { enero: '01', febrero: '02', marzo: '03' };
+const SHEET_MONTHS = { enero: '01', febrero: '02', marzo: '03', abril: '04', mayo: '05', junio: '06', julio: '07', agosto: '08', septiembre: '09', octubre: '10', noviembre: '11', diciembre: '12' };
 const isEmbeddedMesanItem = (item) =>
     normalizeText(item?.importedBatchId) === MESAN_2026_GASTO_IMPORT.batchId ||
     normalizeText(item?.batchId) === MESAN_2026_GASTO_IMPORT.batchId;
@@ -94,6 +94,9 @@ export default function MesanPage() {
     const [concepto, setConcepto] = useState('');
     const [categoria, setCategoria] = useState(CATEGORIES[0]);
     const [monto, setMonto] = useState('');
+    const [selectedChartMonth, setSelectedChartMonth] = useState('');
+    const [editingId, setEditingId] = useState(null);
+    const [editForm, setEditForm] = useState({});
     const fileInputRef = useRef(null);
 
     if (user.role !== 'admin') {
@@ -130,7 +133,9 @@ export default function MesanPage() {
     const monthKey = getMonthKey(fecha);
     const monthMovements = movimientos.filter((item) => getMonthKey(item.fecha) === monthKey);
     const saldoAcumuladoARS = useMemo(() => {
-        const closingPoint = [...(MESAN_2026_GASTO_IMPORT.closingBalances || [])]
+        const dynamicClosingBalances = state.config.mesanClosingBalances || [];
+        const allClosingBalances = [...(MESAN_2026_GASTO_IMPORT.closingBalances || []), ...dynamicClosingBalances];
+        const closingPoint = allClosingBalances
             .filter((item) => item.fecha <= fecha)
             .sort((left, right) => right.fecha.localeCompare(left.fecha))[0];
 
@@ -375,10 +380,13 @@ export default function MesanPage() {
             const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
             const importedMovements = [];
             const ventasMap = new Map(ventasDiarias.map((item) => [item.fecha, { ...item }]));
+            const newClosingBalances = [];
 
             workbook.SheetNames.forEach((sheetName) => {
                 const worksheet = workbook.Sheets[sheetName];
                 const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                let lastSaldoAnteriorDate = null;
+                let lastSaldoAnteriorEfectivo = 0;
 
                 rows.slice(1).forEach((row, index) => {
                     const [rawFecha, rawConcepto, rawCategoria, rawEfectivo, rawMercadoPago, rawBanco, rawUsd, rawAi] = row;
@@ -387,6 +395,16 @@ export default function MesanPage() {
 
                     const conceptoValue = normalizeText(rawConcepto);
                     const categoriaValue = normalizeText(rawCategoria);
+
+                    // Detect SALDO ANTERIOR rows to capture closing balance
+                    if (conceptoValue.toUpperCase() === 'SALDO ANTERIOR' || categoriaValue.toUpperCase() === 'SALDO ANTERIOR') {
+                        const efectivoAmount = parseExcelNumber(rawEfectivo);
+                        if (parsedDate && efectivoAmount !== 0) {
+                            lastSaldoAnteriorDate = parsedDate;
+                            lastSaldoAnteriorEfectivo = efectivoAmount;
+                        }
+                    }
+
                     const columns = [
                         { canal: 'EFECTIVO', moneda: 'ARS', amount: parseExcelNumber(rawEfectivo) },
                         { canal: 'MERCADO_PAGO', moneda: 'ARS', amount: parseExcelNumber(rawMercadoPago) },
@@ -428,6 +446,16 @@ export default function MesanPage() {
                         });
                     });
                 });
+
+                // Save the last SALDO ANTERIOR as closing balance for this sheet
+                if (lastSaldoAnteriorDate && lastSaldoAnteriorEfectivo !== 0) {
+                    newClosingBalances.push({
+                        fecha: lastSaldoAnteriorDate,
+                        efectivo: lastSaldoAnteriorEfectivo,
+                        sheet: sheetName.toLowerCase(),
+                        source: file.name
+                    });
+                }
             });
 
             const batchId = `mesan-${file.name.toLowerCase().replace(/\s+/g, '-')}`;
@@ -437,6 +465,18 @@ export default function MesanPage() {
                 movements: importedMovements.map((item) => ({ ...item, importedBatchId: `${batchId}-${item.importedSheet}` })),
                 sales: Array.from(ventasMap.values()).map((sale) => ({ ...sale, source: file.name, batchId }))
             });
+
+            // Save new closing balances if any
+            if (newClosingBalances.length > 0) {
+                const existingClosingBalances = state.config.mesanClosingBalances || [];
+                const mergedClosingBalances = [...existingClosingBalances];
+                newClosingBalances.forEach((nb) => {
+                    if (!mergedClosingBalances.some((eb) => eb.fecha === nb.fecha && eb.sheet === nb.sheet)) {
+                        mergedClosingBalances.push(nb);
+                    }
+                });
+                updateConfig({ mesanClosingBalances: mergedClosingBalances });
+            }
 
             alert(`Se importaron ${importedMovements.length} movimientos y ${ventasMap.size} dias de venta desde ${file.name}.`);
         } catch (error) {
@@ -683,12 +723,32 @@ export default function MesanPage() {
                                             {dayGroup.movements.map((item) => {
                                                 const signedAmount = toSignedAmount(item);
                                                 const isNegative = signedAmount < 0;
+                                                const isEditing = editingId === item.id;
+                                                if (isEditing) {
+                                                    return (
+                                                        <div key={item.id} style={{ padding: 12, borderRadius: 12, background: 'rgba(139,92,246,0.12)', display: 'grid', gap: 8 }}>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+                                                                <div><label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Fecha</label><input type="date" className="form-input" value={editForm.fecha || ''} onChange={(e) => setEditForm(f => ({ ...f, fecha: e.target.value }))} /></div>
+                                                                <div><label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Concepto</label><input className="form-input" value={editForm.concepto || ''} onChange={(e) => setEditForm(f => ({ ...f, concepto: e.target.value }))} /></div>
+                                                                <div><label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Categoria</label><select className="form-select" value={editForm.categoria || ''} onChange={(e) => setEditForm(f => ({ ...f, categoria: e.target.value }))}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                                                                <div><label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Monto</label><input type="number" className="form-input" value={editForm.monto || ''} onChange={(e) => setEditForm(f => ({ ...f, monto: e.target.value }))} /></div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: 8 }}>
+                                                                <button className="btn btn-primary btn-sm" onClick={() => {
+                                                                    updateConfig({ mesanMovimientos: movimientos.map(m => m.id === item.id ? { ...m, ...editForm, monto: Math.abs(Number(editForm.monto)) } : m) });
+                                                                    setEditingId(null);
+                                                                }}>Guardar</button>
+                                                                <button className="btn btn-ghost btn-sm" onClick={() => setEditingId(null)}>Cancelar</button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
                                                 return (
                                                     <div
                                                         key={item.id}
                                                         style={{
                                                             display: 'grid',
-                                                            gridTemplateColumns: 'minmax(0, 1.3fr) auto auto',
+                                                            gridTemplateColumns: 'minmax(0, 1.3fr) auto auto auto auto',
                                                             gap: 12,
                                                             padding: 12,
                                                             borderRadius: 12,
@@ -708,6 +768,18 @@ export default function MesanPage() {
                                                         <div style={{ fontWeight: 'var(--fw-bold)', color: isNegative ? '#fca5a5' : 'var(--success)' }}>
                                                             {isNegative ? '-' : '+'}{item.moneda === 'USD' ? 'US$' : '$'}{Math.abs(signedAmount).toLocaleString('es-AR')}
                                                         </div>
+                                                        <button
+                                                            type="button"
+                                                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}
+                                                            onClick={() => { setEditingId(item.id); setEditForm({ fecha: item.fecha, concepto: item.concepto, categoria: item.categoria, monto: Math.abs(Number(item.monto || 0)) }); }}
+                                                            title="Editar"
+                                                        ><Pencil size={14} /></button>
+                                                        <button
+                                                            type="button"
+                                                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#fca5a5', padding: 4 }}
+                                                            onClick={() => { if (window.confirm('¿Borrar este movimiento?')) updateConfig({ mesanMovimientos: movimientos.filter(m => m.id !== item.id) }); }}
+                                                            title="Eliminar"
+                                                        ><Trash2 size={14} /></button>
                                                     </div>
                                                 );
                                             })}
@@ -719,6 +791,99 @@ export default function MesanPage() {
                     ))}
                 </div>
             </div>
+
+            {/* CHANGE 6: Gastos por mes with pie chart */}
+            {(() => {
+                const CATEGORY_COLORS = {
+                    Alquiler: '#3b82f6',
+                    Servicios: '#8b5cf6',
+                    Proveedor: '#f97316',
+                    Logistica: '#14b8a6',
+                    Comida: '#22c55e',
+                    Publicidad: '#ec4899',
+                    Varios: '#6b7280'
+                };
+                const availableMonths = monthlyGroups.map(mg => ({ key: mg.monthKey, label: mg.label }));
+                const effectiveChartMonth = selectedChartMonth || (availableMonths[0]?.key || '');
+                const chartMovements = movimientos.filter(item => getMonthKey(item.fecha) === effectiveChartMonth && (item.moneda || 'ARS') === 'ARS' && toSignedAmount(item) < 0);
+                const byCategory = {};
+                chartMovements.forEach(item => {
+                    const key = normalizeText(item.categoria) || 'Varios';
+                    byCategory[key] = (byCategory[key] || 0) + Math.abs(toSignedAmount(item));
+                });
+                const totalGastos = Object.values(byCategory).reduce((a, b) => a + b, 0);
+                const segments = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+                let cumulativeTurn = 0;
+                const pieSegments = segments.map(([name, value]) => {
+                    const turn = value / (totalGastos || 1);
+                    const start = cumulativeTurn;
+                    cumulativeTurn += turn;
+                    return { name, value, color: CATEGORY_COLORS[name] || '#6b7280', start, end: cumulativeTurn };
+                });
+                const pieGradient = pieSegments.length > 0
+                    ? pieSegments.map(s => `${s.color} ${(s.start * 100).toFixed(2)}% ${(s.end * 100).toFixed(2)}%`).join(', ')
+                    : 'rgba(255,255,255,0.1) 0% 100%';
+
+                // Daily totals for bar chart
+                const dayTotals = Array.from(new Set(chartMovements.map(item => item.fecha))).sort().reverse().map(d => ({
+                    fecha: d,
+                    total: Math.abs(chartMovements.filter(item => item.fecha === d).reduce((acc, item) => acc + toSignedAmount(item), 0))
+                }));
+                const maxDayTotal = Math.max(...dayTotals.map(d => d.total), 1);
+
+                return (
+                    <div className="glass-panel" style={{ padding: 'var(--sp-4)', display: 'grid', gap: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                            <h3 style={{ margin: 0 }}>Gastos por mes</h3>
+                            <select className="form-select" style={{ minWidth: 180 }} value={effectiveChartMonth} onChange={e => setSelectedChartMonth(e.target.value)}>
+                                {availableMonths.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+                            </select>
+                        </div>
+                        {totalGastos === 0 ? (
+                            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin gastos registrados para este mes.</div>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 24, alignItems: 'start' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                                    <div style={{ width: 200, height: 200, borderRadius: '50%', background: `conic-gradient(${pieGradient})`, flexShrink: 0 }} />
+                                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Total: <strong>${totalGastos.toLocaleString('es-AR')}</strong></div>
+                                </div>
+                                <div style={{ display: 'grid', gap: 8 }}>
+                                    {segments.map(([name, value]) => (
+                                        <div key={name}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: CATEGORY_COLORS[name] || '#6b7280', display: 'inline-block' }} />
+                                                    {name}
+                                                </span>
+                                                <strong>${value.toLocaleString('es-AR')} ({((value / totalGastos) * 100).toFixed(1)}%)</strong>
+                                            </div>
+                                            <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.05)' }}>
+                                                <div style={{ height: '100%', borderRadius: 999, width: `${(value / totalGastos) * 100}%`, background: CATEGORY_COLORS[name] || '#6b7280' }} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {dayTotals.length > 0 && (
+                            <div>
+                                <h4 style={{ margin: '0 0 8px' }}>Gastos diarios</h4>
+                                <div style={{ display: 'grid', gap: 6 }}>
+                                    {dayTotals.map(d => (
+                                        <div key={d.fecha} style={{ display: 'grid', gridTemplateColumns: '90px 1fr auto', gap: 8, alignItems: 'center', fontSize: 13 }}>
+                                            <span style={{ color: 'var(--text-secondary)' }}>{getDateLabel(d.fecha)}</span>
+                                            <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.05)' }}>
+                                                <div style={{ height: '100%', borderRadius: 999, width: `${(d.total / maxDayTotal) * 100}%`, background: 'linear-gradient(90deg, #ef4444, #fca5a5)' }} />
+                                            </div>
+                                            <strong>${d.total.toLocaleString('es-AR')}</strong>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
         </div>
     );
 }

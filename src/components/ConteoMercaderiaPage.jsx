@@ -65,7 +65,7 @@ const getFormCardStyle = (checked) => ({
 
 export default function ConteoMercaderiaPage() {
     const { user } = useAuth();
-    const { state, saveMercaderiaConteos } = useData();
+    const { state, saveMercaderiaConteos, updateConfig } = useData();
     const conteos = state.config?.mercaderiaConteos || [];
     const productos = state.config?.posProductos || [];
     const cortes = state.config?.cortes || [];
@@ -199,6 +199,51 @@ export default function ConteoMercaderiaPage() {
 
     const saveConteos = (nextConteos) => {
         saveMercaderiaConteos(nextConteos);
+    };
+
+    const STOCK_DEDUCTIONS = {
+        '6000': 550, '6001': 817, '6002': 842, '6003': 318,
+        '6004': 575, '6005': null,
+        '6007': 10, '6008': 199, '6009': 205, '6010': 120,
+        '6011': 105, '6200': 206, '6201': 115, '6202': 340,
+        '6203': 308, '6204': 267, '6205': 215,
+        '6206': 98, '6207': 29, '6208': 100, '6209': 209,
+        '6210': 35, '6211': 14, '6212': 27, '6213': 15,
+        '6300': 201, '6300B': 36, '6302': 203, '6303': 330,
+        '6304': 373, '6305': 49, '6306': 36, '6307': 30,
+        '6308': 168, '6309': 160, '6310': 32
+    };
+
+    const handleApplyStockAjuste = () => {
+        if (state.config?.stockAjusteAplicado) {
+            alert('[AJUSTE APLICADO] Este ajuste ya fue aplicado anteriormente.');
+            return;
+        }
+        if (!window.confirm('¿Aplicar ajuste de ventas al stock? Esta acción descuenta las unidades vendidas del conteo actual y no se puede revertir fácilmente.')) return;
+
+        const updated = conteos.map(item => {
+            const codeV = normalizeCode(item.articuloVenta);
+            const codeF = normalizeCode(item.articuloFabrica);
+            const matchedCode = Object.keys(STOCK_DEDUCTIONS).find(c => normalizeCode(c) === codeV || normalizeCode(c) === codeF);
+            if (!matchedCode) return item;
+
+            const deduction = STOCK_DEDUCTIONS[matchedCode];
+            // Special case 6005: set to 957 total
+            if (matchedCode === '6005') {
+                return { ...item, cantidadContada: 957 };
+            }
+            const current = toNumber(item.cantidadContada);
+            const next = current - (deduction || 0);
+            // 6205 and 6310: if negative, set to 0
+            if ((matchedCode === '6205' || matchedCode === '6310') && next < 0) {
+                return { ...item, cantidadContada: 0 };
+            }
+            return { ...item, cantidadContada: Math.max(0, next) };
+        });
+
+        saveMercaderiaConteos(updated);
+        updateConfig({ stockAjusteAplicado: true });
+        alert('Ajuste de ventas aplicado correctamente al stock.');
     };
 
     const buildConteoItem = (baseItem) => {
@@ -497,6 +542,16 @@ export default function ConteoMercaderiaPage() {
                     <button className="btn btn-secondary" onClick={exportCsv}>
                         <Download size={16} /> Exportar CSV
                     </button>
+                    {user?.role === 'admin' && (
+                        <button
+                            className="btn btn-danger"
+                            onClick={handleApplyStockAjuste}
+                            disabled={Boolean(state.config?.stockAjusteAplicado)}
+                            title={state.config?.stockAjusteAplicado ? '[AJUSTE APLICADO]' : 'Aplicar deducción de unidades vendidas'}
+                        >
+                            <Boxes size={16} /> {state.config?.stockAjusteAplicado ? 'Ajuste aplicado' : 'Aplicar ajuste de ventas'}
+                        </button>
+                    )}
                 </div>
             </div>
 

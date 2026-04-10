@@ -135,7 +135,7 @@ REGLAS DE ANÁLISIS:
 - Respondé siempre en español, tono profesional pero directo.`;
 
 export default function MarketingSection() {
-    const { state, setMarketingCache } = useData();
+    const { state, setMarketingCache, updateConfig } = useData();
     const { config } = state;
     const marketing = config.marketing || {};
     const marketingCache = config.marketingCache || {};
@@ -1012,6 +1012,97 @@ export default function MarketingSection() {
                     </div>
                 </>
             )}
+
+            {/* CHANGE 1: Targeting por Provincia y Origen de Pedidos */}
+            {(() => {
+                const PROVINCIAS = ['Buenos Aires', 'Córdoba', 'Santa Fe', 'Mendoza', 'Tucumán', 'Entre Ríos', 'Salta', 'Misiones', 'Chaco', 'Corrientes', 'Santiago del Estero', 'San Juan', 'Jujuy', 'Río Negro', 'Neuquén', 'Formosa', 'Chubut', 'San Luis', 'Catamarca', 'La Pampa', 'La Rioja', 'Santa Cruz', 'Tierra del Fuego', 'CABA'];
+                const SOURCES = ['Instagram', 'WhatsApp', 'Directo', 'Modatex', 'Web', 'Otro'];
+                const selectedProvinces = state.config?.marketingProvincias || [];
+                const pedidosOnline = state.config?.pedidosOnline || [];
+
+                const origenCount = {};
+                SOURCES.forEach(s => { origenCount[s] = 0; });
+                pedidosOnline.forEach(p => {
+                    const src = p.origen || 'Otro';
+                    origenCount[src] = (origenCount[src] || 0) + 1;
+                });
+                const maxCount = Math.max(...Object.values(origenCount), 1);
+
+                return (
+                    <div style={{ display: 'grid', gap: 16, marginTop: 16 }}>
+                        <div style={{ padding: 'var(--sp-4)', borderRadius: 18, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <h3 style={{ margin: '0 0 12px' }}>Targeting por Provincia y Origen de Pedidos</h3>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                                <div>
+                                    <h4 style={{ margin: '0 0 10px', fontSize: 14 }}>Provincias con publicidad activa</h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 6 }}>
+                                        {PROVINCIAS.map(prov => {
+                                            const active = selectedProvinces.includes(prov);
+                                            return (
+                                                <label
+                                                    key={prov}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 8,
+                                                        padding: '6px 10px',
+                                                        borderRadius: 8,
+                                                        background: active ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.03)',
+                                                        border: `1px solid ${active ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.06)'}`,
+                                                        cursor: 'pointer',
+                                                        fontSize: 13,
+                                                        transition: 'all 0.15s'
+                                                    }}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={active}
+                                                        onChange={() => {
+                                                            const next = active
+                                                                ? selectedProvinces.filter(p => p !== prov)
+                                                                : [...selectedProvinces, prov];
+                                                            updateConfig({ marketingProvincias: next });
+                                                        }}
+                                                        style={{ margin: 0 }}
+                                                    />
+                                                    {prov}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                                        {selectedProvinces.length} provincia{selectedProvinces.length !== 1 ? 's' : ''} con publicidad activa
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h4 style={{ margin: '0 0 10px', fontSize: 14 }}>Origen de pedidos online</h4>
+                                    <div style={{ display: 'grid', gap: 8 }}>
+                                        {SOURCES.map(src => {
+                                            const count = origenCount[src] || 0;
+                                            return (
+                                                <div key={src}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 3 }}>
+                                                        <span>{src}</span>
+                                                        <strong>{count} pedido{count !== 1 ? 's' : ''}</strong>
+                                                    </div>
+                                                    <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.05)' }}>
+                                                        <div style={{ height: '100%', borderRadius: 999, width: `${(count / maxCount) * 100}%`, background: 'linear-gradient(90deg, var(--accent), #34d399)', transition: 'width 0.3s' }} />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                                        Total: {pedidosOnline.length} pedidos online registrados
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }
