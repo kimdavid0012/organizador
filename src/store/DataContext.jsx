@@ -115,8 +115,26 @@ const sanitizeStockBreakdown = (entries = []) =>
         }))
         .filter((entry) => entry.articuloFabrica || entry.articuloVenta || entry.tipoTela || entry.color || entry.numeroCorte || entry.taller || entry.cantidadOriginal || entry.cantidadContada || entry.cantidadEllos || entry.fallado);
 
-const upsertPosProducts = (existingProducts = [], incomingProducts = []) => {
+const PROTECTED_PRODUCT_FIELDS = new Set([
+    'stock', 'stockPorColor', 'articuloVenta', 'articuloFabrica',
+    'precioCosto', 'precioVentaL1', 'precioVentaL2', 'precioVentaL3',
+    'precioVentaL4', 'precioVentaL5', 'precioVentaWeb',
+    'alertaStockMinimo', 'mercaderiaConteos'
+]);
+
+const hasValue = (value) => {
+    if (value === null || value === undefined || value === '') return false;
+    if (typeof value === 'number') return value !== 0;
+    if (Array.isArray(value)) return value.length > 0;
+    return Boolean(value);
+};
+
+const upsertPosProducts = (existingProducts = [], incomingProducts = [], options = {}) => {
+    const { forceOverwrite = false } = options;
     const merged = [...existingProducts];
+
+    let newCount = 0;
+    let preservedCount = 0;
 
     incomingProducts.forEach((incoming) => {
         const incomingCode = normalizeProductCode(incoming.codigoInterno);
@@ -134,12 +152,31 @@ const upsertPosProducts = (existingProducts = [], incomingProducts = []) => {
         };
 
         if (index >= 0) {
-            merged[index] = { ...merged[index], ...normalizedIncoming };
+            if (forceOverwrite) {
+                merged[index] = { ...merged[index], ...normalizedIncoming };
+            } else {
+                // Smart merge: only fill empty fields, never overwrite existing values
+                const existing = merged[index];
+                const safeMerged = { ...existing };
+                Object.keys(normalizedIncoming).forEach((key) => {
+                    if (key === 'id') return; // never overwrite id
+                    if (PROTECTED_PRODUCT_FIELDS.has(key) && hasValue(existing[key])) return;
+                    if (!hasValue(existing[key]) && hasValue(normalizedIncoming[key])) {
+                        safeMerged[key] = normalizedIncoming[key];
+                    }
+                });
+                // Always sync wooId so we maintain the link
+                if (normalizedIncoming.wooId) safeMerged.wooId = normalizedIncoming.wooId;
+                merged[index] = safeMerged;
+            }
+            preservedCount++;
         } else {
             merged.push(normalizedIncoming);
+            newCount++;
         }
     });
 
+    merged._syncStats = { newCount, preservedCount };
     return merged;
 };
 
@@ -1114,7 +1151,7 @@ function dataReducer(state, action) {
                 ...state,
                 config: withReconciledPosProducts({
                     ...state.config,
-                    posProductos: upsertPosProducts(state.config.posProductos || [], [action.payload])
+                    posProductos: upsertPosProducts(state.config.posProductos || [], [action.payload], { forceOverwrite: true })
                 }, state.moldes)
             };
         case ACTION_TYPES.UPDATE_POS_PRODUCT:
@@ -1140,7 +1177,7 @@ function dataReducer(state, action) {
                 ...state,
                 config: withReconciledPosProducts({
                     ...state.config,
-                    posProductos: upsertPosProducts(state.config.posProductos || [], action.payload)
+                    posProductos: upsertPosProducts(state.config.posProductos || [], action.payload, { forceOverwrite: true })
                 }, state.moldes)
             };
         case ACTION_TYPES.SAVE_MERCADERIA_CONTEOS: {
@@ -1213,7 +1250,7 @@ function dataReducer(state, action) {
             );
 
             const mergedProducts = syncMercaderiaWithProducts(
-                upsertPosProducts(state.config.posProductos || [], conteoDerivedProducts),
+                upsertPosProducts(state.config.posProductos || [], conteoDerivedProducts, { forceOverwrite: true }),
                 conteos
             );
             const nextConfig = {
@@ -1853,8 +1890,12 @@ export function DataProvider({ children }) {
                         alertaStockMinimo: 0
                     };
                 });
+                // Pre-compute sync stats before dispatching
+                const existingProducts = stateRef.current.config.posProductos || [];
+                const preview = upsertPosProducts(existingProducts, mapped);
+                const stats = preview._syncStats || { newCount: mapped.length, preservedCount: 0 };
                 dispatch({ type: ACTION_TYPES.IMPORT_WOO_PRODUCTS, payload: mapped });
-                return mapped.length;
+                return stats;
             } catch (err) {
                 console.error('Error fetching WooCommerce products:', err);
                 throw err;

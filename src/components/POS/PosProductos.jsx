@@ -256,8 +256,8 @@ export default function PosProductos() {
     const handleImportFromWeb = async () => {
         setImportingWoo(true);
         try {
-            const count = await fetchWooProducts();
-            alert(`✅ Se importaron/actualizaron ${count} artículos desde WooCommerce con sus precios.`);
+            const stats = await fetchWooProducts();
+            alert(`✅ Sync completado: ${stats.newCount} productos nuevos agregados, ${stats.preservedCount} existentes preservados (stock y precios no se sobreescriben).`);
         } catch (error) {
             console.error(error);
             alert(`❌ Error al importar artículos desde la web: ${error.message}`);
