@@ -43,6 +43,8 @@ export default function PosProductos() {
     const fileInputRef = useRef(null);
     const [dragActive, setDragActive] = useState(false);
     const [importingWoo, setImportingWoo] = useState(false);
+    const [editingStockId, setEditingStockId] = useState(null);
+    const [editingStockValue, setEditingStockValue] = useState('');
 
     const formatCurrency = (value) => {
         const amount = Number(value || 0);
@@ -59,6 +61,24 @@ export default function PosProductos() {
         (p.articuloFabrica || '').toLowerCase().includes(search.toLowerCase()) ||
         (p.codigoBarras || '').toLowerCase().includes(search.toLowerCase())
     );
+
+    // --- Inline Stock Edit ---
+    const startEditingStock = (product) => {
+        setEditingStockId(product.id);
+        setEditingStockValue(String(product.stock || 0));
+    };
+    const saveEditingStock = () => {
+        if (editingStockId) {
+            const newStock = Math.max(0, parseInt(editingStockValue, 10) || 0);
+            updatePosProduct(editingStockId, { stock: newStock });
+            setEditingStockId(null);
+            setEditingStockValue('');
+        }
+    };
+    const handleStockKeyDown = (e) => {
+        if (e.key === 'Enter') saveEditingStock();
+        if (e.key === 'Escape') { setEditingStockId(null); setEditingStockValue(''); }
+    };
 
     // --- Product Modal ---
     const handleOpenModal = (product = null) => {
@@ -303,9 +323,26 @@ export default function PosProductos() {
                                     </div>
                                 </td>
                                 <td>
-                                    <span style={{ color: p.stock <= p.alertaStockMinimo ? 'var(--danger)' : 'inherit', fontWeight: p.stock <= p.alertaStockMinimo ? 'bold' : 'normal' }}>
-                                        {p.stock}
-                                    </span>
+                                    {editingStockId === p.id ? (
+                                        <input
+                                            type="number"
+                                            className="form-input"
+                                            value={editingStockValue}
+                                            onChange={(e) => setEditingStockValue(e.target.value)}
+                                            onBlur={saveEditingStock}
+                                            onKeyDown={handleStockKeyDown}
+                                            autoFocus
+                                            style={{ width: 80, padding: '4px 8px', fontSize: 13, textAlign: 'center' }}
+                                        />
+                                    ) : (
+                                        <span
+                                            onClick={() => startEditingStock(p)}
+                                            title="Click para editar stock"
+                                            style={{ color: p.stock <= p.alertaStockMinimo ? 'var(--danger)' : 'inherit', fontWeight: p.stock <= p.alertaStockMinimo ? 'bold' : 'normal', cursor: 'pointer', borderBottom: '1px dashed var(--text-muted)' }}
+                                        >
+                                            {p.stock}
+                                        </span>
+                                    )}
                                 </td>
                                 <td>${p.precioCosto}</td>
                                 <td style={{ color: 'var(--accent)', fontWeight: 'bold' }}>${p.precioVentaL1}</td>
@@ -373,9 +410,26 @@ export default function PosProductos() {
                         <div className="pos-product-card-grid">
                             <div>
                                 <span className="pos-product-card-label">Stock</span>
-                                <strong style={{ color: p.stock <= p.alertaStockMinimo ? 'var(--danger)' : 'var(--text-primary)' }}>
-                                    {p.stock}
-                                </strong>
+                                {editingStockId === p.id ? (
+                                    <input
+                                        type="number"
+                                        className="form-input"
+                                        value={editingStockValue}
+                                        onChange={(e) => setEditingStockValue(e.target.value)}
+                                        onBlur={saveEditingStock}
+                                        onKeyDown={handleStockKeyDown}
+                                        autoFocus
+                                        style={{ width: 70, padding: '4px 8px', fontSize: 13, textAlign: 'center' }}
+                                    />
+                                ) : (
+                                    <strong
+                                        onClick={() => startEditingStock(p)}
+                                        title="Click para editar stock"
+                                        style={{ color: p.stock <= p.alertaStockMinimo ? 'var(--danger)' : 'var(--text-primary)', cursor: 'pointer', borderBottom: '1px dashed var(--text-muted)' }}
+                                    >
+                                        {p.stock}
+                                    </strong>
+                                )}
                             </div>
                             <div>
                                 <span className="pos-product-card-label">Costo</span>
