@@ -26,14 +26,24 @@ const generateDailyTasks = (userObj, state) => {
     }
 
     if (userObj.role === 'contenido_instagram' || userObj.email === 'erica@celavie.com') {
-        const fotoTasks = state.config.fotoTasks || [];
-        const pendingPhotos = fotoTasks.filter(f => !f.completada);
+        const fotosPrendas = state.config.fotosPrendas || [];
+        const todayPhotos = fotosPrendas.filter(f => (f.uploadedAt || '').slice(0, 10) === today);
+        const recentPhotos = fotosPrendas.slice(0, 10);
+        const photoCount = Math.max(3, todayPhotos.length || recentPhotos.length);
         tasks.push({
             id: `task-ig-${today}`,
-            text: `Crear ${Math.max(3, pendingPhotos.length)} fotos de contenido para Instagram`,
+            text: `Crear ${photoCount} piezas de contenido para Instagram (${fotosPrendas.length} fotos de prendas disponibles)`,
             done: false,
             category: 'instagram'
         });
+        if (todayPhotos.length > 0) {
+            tasks.push({
+                id: `task-ig-new-${today}`,
+                text: `David subió ${todayPhotos.length} fotos nuevas hoy — priorizarlas para contenido`,
+                done: false,
+                category: 'instagram'
+            });
+        }
     }
 
     if (userObj.role === 'fotos' || userObj.email === 'rocio@celavie.com') {
@@ -69,10 +79,15 @@ export default function DailyTasksPanel() {
     const { state, updateConfig } = useData();
     const { user } = useAuth();
     const [collapsed, setCollapsed] = useState(false);
+    const [viewDate, setViewDate] = useState(getTodayKey());
     const today = getTodayKey();
+    const isViewingToday = viewDate === today;
 
     const dailyTasks = state.config.dailyTasks || {};
     const todayTasks = dailyTasks[today] || {};
+    const viewTasks = dailyTasks[viewDate] || {};
+
+    const availableDates = Object.keys(dailyTasks).sort().reverse().slice(0, 7);
 
     const isManagerOrAdmin = user.role === 'admin' || user.role === 'encargada';
 
@@ -124,9 +139,14 @@ export default function DailyTasksPanel() {
     }, [user?.email, today]);
 
     const handleToggleTask = (email, taskId) => {
+        if (!isViewingToday) return; // Can't modify past days
         const userTasks = todayTasks[email] || [];
         const updated = userTasks.map(t =>
-            t.id === taskId ? { ...t, done: !t.done } : t
+            t.id === taskId ? {
+                ...t,
+                done: !t.done,
+                completedAt: !t.done ? new Date().toISOString() : null
+            } : t
         );
         updateConfig({
             dailyTasks: {
@@ -141,9 +161,9 @@ export default function DailyTasksPanel() {
 
     // Determine which tasks to show
     const taskGroups = useMemo(() => {
+        const source = isViewingToday ? todayTasks : viewTasks;
         if (isManagerOrAdmin) {
-            // Show all employees' tasks grouped by person
-            return Object.entries(todayTasks).map(([email, tasks]) => {
+            return Object.entries(source).map(([email, tasks]) => {
                 const known = KNOWN_USERS_MAP[email];
                 return {
                     email,
@@ -153,11 +173,11 @@ export default function DailyTasksPanel() {
             }).filter(g => g.tasks.length > 0);
         } else {
             const email = (user?.email || '').toLowerCase();
-            const tasks = todayTasks[email] || [];
+            const tasks = source[email] || [];
             if (tasks.length === 0) return [];
             return [{ email, name: user?.name || email, tasks }];
         }
-    }, [todayTasks, user, isManagerOrAdmin]);
+    }, [todayTasks, viewTasks, viewDate, user, isManagerOrAdmin]);
 
     if (taskGroups.length === 0) return null;
 
@@ -181,10 +201,10 @@ export default function DailyTasksPanel() {
                     borderBottom: collapsed ? 'none' : '1px solid var(--border-color, rgba(255,255,255,0.06))'
                 }}
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <ClipboardList size={20} style={{ color: 'var(--accent)' }} />
                     <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
-                        Tareas del día
+                        {isViewingToday ? 'Tareas del día' : `Tareas ${viewDate}`}
                     </span>
                     <span style={{
                         fontSize: 12, color: 'var(--text-muted)',
@@ -193,12 +213,29 @@ export default function DailyTasksPanel() {
                     }}>
                         {doneTasks}/{totalTasks}
                     </span>
+                    {availableDates.length > 1 && (
+                        <select
+                            value={viewDate}
+                            onChange={e => { e.stopPropagation(); setViewDate(e.target.value); }}
+                            onClick={e => e.stopPropagation()}
+                            style={{ fontSize: 11, padding: '2px 6px', borderRadius: 6, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                        >
+                            {availableDates.map(d => (
+                                <option key={d} value={d}>{d === today ? 'Hoy' : d}</option>
+                            ))}
+                        </select>
+                    )}
                 </div>
                 {collapsed ? <ChevronDown size={18} style={{ color: 'var(--text-muted)' }} /> : <ChevronUp size={18} style={{ color: 'var(--text-muted)' }} />}
             </div>
 
             {!collapsed && (
                 <div style={{ padding: '12px 20px 16px' }}>
+                    {!isViewingToday && (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontStyle: 'italic' }}>
+                            Historial de tareas — solo lectura
+                        </div>
+                    )}
                     {taskGroups.map(group => (
                         <div key={group.email} style={{ marginBottom: taskGroups.length > 1 ? 16 : 0 }}>
                             {isManagerOrAdmin && (

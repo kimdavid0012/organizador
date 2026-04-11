@@ -8,10 +8,14 @@ export default function FotosPrendasPage() {
     const { state, updateConfig } = useData();
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
+    const canUpload = isAdmin || user?.role === 'contenido_instagram';
     const fileInputRef = useRef(null);
+    const contentFileInputRef = useRef(null);
 
     const fotos = state.config.fotosPrendas || [];
+    const contentFotos = state.config.fotosContenido || [];
     const [selectedFoto, setSelectedFoto] = useState(null);
+    const [activeTab, setActiveTab] = useState('prendas');
 
     const handleUpload = async (event) => {
         const files = Array.from(event.target.files || []);
@@ -35,14 +39,48 @@ export default function FotosPrendasPage() {
         event.target.value = '';
     };
 
-    const deleteFoto = (id) => {
-        if (!window.confirm('¿Eliminar esta foto?')) return;
-        updateConfig({ fotosPrendas: fotos.filter(f => f.id !== id) });
+    const handleContentUpload = async (event) => {
+        const files = Array.from(event.target.files || []);
+        if (!files.length) return;
+
+        const newFotos = await Promise.all(files.map(file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve({
+                id: generateId(),
+                nombre: file.name,
+                dataUrl: reader.result,
+                uploadedAt: new Date().toISOString(),
+                uploadedBy: user.name || user.email,
+                nota: '',
+                type: 'contenido'
+            });
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        })));
+
+        updateConfig({ fotosContenido: [...newFotos, ...contentFotos] });
+        event.target.value = '';
     };
 
-    const updateNota = (id, nota) => {
-        updateConfig({ fotosPrendas: fotos.map(f => f.id === id ? { ...f, nota } : f) });
+    const deleteFoto = (id, type = 'prendas') => {
+        if (!window.confirm('¿Eliminar esta foto?')) return;
+        if (type === 'contenido') {
+            updateConfig({ fotosContenido: contentFotos.filter(f => f.id !== id) });
+        } else {
+            updateConfig({ fotosPrendas: fotos.filter(f => f.id !== id) });
+        }
     };
+
+    const updateNota = (id, nota, type = 'prendas') => {
+        if (type === 'contenido') {
+            updateConfig({ fotosContenido: contentFotos.map(f => f.id === id ? { ...f, nota } : f) });
+        } else {
+            updateConfig({ fotosPrendas: fotos.map(f => f.id === id ? { ...f, nota } : f) });
+        }
+    };
+
+    const activeFotos = activeTab === 'contenido' ? contentFotos : fotos;
+    const activeType = activeTab === 'contenido' ? 'contenido' : 'prendas';
 
     return (
         <div style={{ padding: 'var(--sp-4)', display: 'grid', gap: 16 }}>
@@ -51,27 +89,44 @@ export default function FotosPrendasPage() {
                     <Camera size={22} /> Fotos de Prendas
                 </h2>
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                    David sube fotos de prendas desde el local. Erica las descarga para crear contenido.
+                    David sube fotos de prendas desde el local. Erica las descarga y sube contenido terminado.
                 </p>
-                {isAdmin && (
-                    <div style={{ marginTop: 12 }}>
-                        <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleUpload} />
-                        <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
-                            <Plus size={16} /> Subir Fotos
-                        </button>
-                    </div>
-                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <button className={`btn ${activeTab === 'prendas' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setActiveTab('prendas')}>
+                        Prendas ({fotos.length})
+                    </button>
+                    <button className={`btn ${activeTab === 'contenido' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setActiveTab('contenido')}>
+                        Contenido ({contentFotos.length})
+                    </button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    {isAdmin && activeTab === 'prendas' && (
+                        <>
+                            <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleUpload} />
+                            <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
+                                <Plus size={16} /> Subir Fotos Prendas
+                            </button>
+                        </>
+                    )}
+                    {canUpload && activeTab === 'contenido' && (
+                        <>
+                            <input ref={contentFileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleContentUpload} />
+                            <button className="btn btn-primary" onClick={() => contentFileInputRef.current?.click()}>
+                                <Plus size={16} /> Subir Contenido
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
-            {fotos.length === 0 ? (
+            {activeFotos.length === 0 ? (
                 <div className="glass-panel" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
                     <Image size={48} style={{ opacity: 0.3, marginBottom: 12 }} />
-                    <div>No hay fotos de prendas todavia.</div>
-                    {isAdmin && <div style={{ marginTop: 8 }}>Subi fotos desde el boton de arriba.</div>}
+                    <div>No hay fotos de {activeTab === 'contenido' ? 'contenido' : 'prendas'} todavia.</div>
                 </div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-                    {fotos.map(foto => (
+                    {activeFotos.map(foto => (
                         <div key={foto.id} className="glass-panel" style={{ padding: 0, overflow: 'hidden', borderRadius: 16 }}>
                             <div
                                 style={{ width: '100%', aspectRatio: '1', overflow: 'hidden', cursor: 'pointer', background: 'rgba(255,255,255,0.03)' }}
@@ -88,8 +143,8 @@ export default function FotosPrendasPage() {
                                     <a href={foto.dataUrl} download={foto.nombre} className="btn btn-secondary btn-sm" style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}>
                                         <Download size={14} /> Descargar
                                     </a>
-                                    {isAdmin && (
-                                        <button className="btn btn-ghost btn-danger btn-sm" onClick={() => deleteFoto(foto.id)}>
+                                    {(isAdmin || (canUpload && activeType === 'contenido')) && (
+                                        <button className="btn btn-ghost btn-danger btn-sm" onClick={() => deleteFoto(foto.id, activeType)}>
                                             <Trash2 size={14} />
                                         </button>
                                     )}
