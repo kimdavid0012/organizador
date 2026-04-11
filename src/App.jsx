@@ -600,7 +600,7 @@ function AppContent() {
                             setSoloHoy={setSoloHoy}
                         />
                     )}
-                    {view === 'kanban' && <DailyTasksPanel />}
+                    {<DailyTasksPanel />}
                     {view === 'kanban' && (
                         <KanbanBoard
                             tareas={state.tareas || []}

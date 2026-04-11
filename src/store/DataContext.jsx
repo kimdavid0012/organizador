@@ -605,6 +605,42 @@ const parseWooPrice = (...values) => {
     return 0;
 };
 
+// Infer WooCommerce order traffic source from order metadata
+const inferWooOrderSource = (wooOrder) => {
+    const via = (wooOrder.created_via || '').toLowerCase();
+    if (via === 'instagram' || via === 'ig') return 'Instagram';
+    if (via === 'whatsapp' || via === 'wa') return 'WhatsApp';
+
+    const meta = wooOrder.meta_data || [];
+    const getMeta = (key) => (meta.find(m => m.key === key)?.value || '').toLowerCase();
+
+    const utmSource = getMeta('_wc_order_attribution_utm_source');
+    const utmMedium = getMeta('_wc_order_attribution_utm_medium');
+    const sourceType = getMeta('_wc_order_attribution_source_type');
+    const referrer = getMeta('_wc_order_attribution_referrer');
+    const sessionEntry = getMeta('_wc_order_attribution_session_entry');
+    const origin = getMeta('_wc_order_attribution_origin');
+
+    const allAttribution = [utmSource, utmMedium, sourceType, referrer, sessionEntry, origin].join(' ');
+
+    if (allAttribution.includes('instagram') || allAttribution.includes('/ig') ||
+        utmSource === 'ig' || utmMedium === 'ig' ||
+        referrer.includes('l.instagram.com') || referrer.includes('instagram.com')) return 'Instagram';
+    if (allAttribution.includes('facebook') || allAttribution.includes('fb.com') ||
+        utmSource === 'fb' || referrer.includes('facebook.com') ||
+        referrer.includes('l.facebook.com') || referrer.includes('lm.facebook.com')) return 'Facebook';
+    if (allAttribution.includes('whatsapp') || allAttribution.includes('wa.me') ||
+        referrer.includes('whatsapp.com') || referrer.includes('wa.me')) return 'WhatsApp';
+    if (allAttribution.includes('google') || referrer.includes('google.com') ||
+        sourceType === 'organic') return 'Google';
+    if (sourceType === 'direct' || sourceType === 'typein') return 'Directo';
+    if (sourceType === 'referral') return 'Referido';
+
+    if (via === 'admin') return 'Directo';
+    if (via === 'checkout') return 'Web';
+    return 'Web';
+};
+
 const ACTION_TYPES = {
     SET_DATA: 'SET_DATA',
     ADD_MOLDE: 'ADD_MOLDE',
@@ -1810,29 +1846,6 @@ export function DataProvider({ children }) {
         importPosProducts: (products) => dispatch({ type: ACTION_TYPES.IMPORT_POS_PRODUCTS, payload: products }),
 
         fetchWooOrders: async () => {
-            const inferOrderSource = (wooOrder) => {
-                const via = (wooOrder.created_via || '').toLowerCase();
-                if (via === 'instagram' || via === 'ig') return 'Instagram';
-                if (via === 'whatsapp' || via === 'wa') return 'WhatsApp';
-                if (via === 'checkout') return 'Web';
-
-                // Check meta_data for UTM source
-                const meta = wooOrder.meta_data || [];
-                const utmSource = (meta.find(m => m.key === '_wc_order_attribution_utm_source')?.value || '').toLowerCase();
-                if (utmSource.includes('instagram')) return 'Instagram';
-                if (utmSource.includes('google')) return 'Google';
-                if (utmSource.includes('facebook') || utmSource.includes('fb')) return 'Facebook';
-                if (utmSource.includes('whatsapp')) return 'WhatsApp';
-
-                const sourceType = (meta.find(m => m.key === '_wc_order_attribution_source_type')?.value || '').toLowerCase();
-                if (sourceType === 'organic') return 'Google';
-                if (sourceType === 'direct') return 'Directo';
-                if (sourceType === 'referral') return 'Referido';
-
-                if (via === 'admin') return 'Directo';
-                return 'Web';
-            };
-
             const currentConfig = stateRef.current.config;
             try {
                 const orders = await wooService.fetchOrders(currentConfig);
@@ -1854,7 +1867,7 @@ export function DataProvider({ children }) {
                     estado: o.status === 'processing' ? 'pendiente' : (o.status === 'completed' ? 'listo' : 'pendiente'),
                     paymentStatus: o.status === 'completed' ? 'aprobado' : (o.date_paid ? 'aprobado' : 'pendiente'),
                     fecha: o.date_created,
-                    origen: inferOrderSource(o),
+                    origen: inferWooOrderSource(o),
                     items: o.line_items.map(li => ({
                         id: generateId(),
                         productId: li.product_id || null,
@@ -1870,6 +1883,40 @@ export function DataProvider({ children }) {
                 return mapped.length;
             } catch (err) {
                 console.error('Error fetching WooCommerce orders:', err);
+                throw err;
+            }
+        },
+
+        // Re-sync order sources from WooCommerce for existing orders
+        resyncOrderSources: async () => {
+            const currentConfig = stateRef.current.config;
+            const existingOrders = currentConfig.pedidosOnline || [];
+            const wooOrders = existingOrders.filter(p => p.wooId);
+            if (!wooOrders.length) return 0;
+
+            try {
+                const fetched = await wooService.fetchOrders(currentConfig);
+                const byWooId = new Map(fetched.map(o => [o.id, o]));
+                let updatedCount = 0;
+
+                const updated = existingOrders.map(p => {
+                    if (!p.wooId) return p;
+                    const wooData = byWooId.get(p.wooId);
+                    if (!wooData) return p;
+                    const newOrigen = inferWooOrderSource(wooData);
+                    if (newOrigen !== p.origen) {
+                        updatedCount++;
+                        return { ...p, origen: newOrigen };
+                    }
+                    return p;
+                });
+
+                if (updatedCount > 0) {
+                    dispatch({ type: 'UPDATE_CONFIG', payload: { pedidosOnline: updated } });
+                }
+                return updatedCount;
+            } catch (err) {
+                console.error('Error re-syncing order sources:', err);
                 throw err;
             }
         },

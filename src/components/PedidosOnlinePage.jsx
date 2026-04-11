@@ -6,7 +6,7 @@ import { Plus, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Save, RefreshCw
 import './PedidosOnlinePage.css';
 
 export default function PedidosOnlinePage() {
-    const { state, updateConfig, addPedidoOnline, addPedidoItem, updatePedidoOnlineStatus, updatePedidoItem, fetchWooOrders } = useData();
+    const { state, updateConfig, addPedidoOnline, addPedidoItem, updatePedidoOnlineStatus, updatePedidoItem, fetchWooOrders, resyncOrderSources } = useData();
     const { user } = useAuth();
     const pedidos = state.config?.pedidosOnline || [];
 
@@ -26,10 +26,11 @@ export default function PedidosOnlinePage() {
     // Ensure all orders have an origen field (retroactive fix for pre-existing orders)
     const pedidosConOrigen = useMemo(() => {
         return pedidos.map(p => {
-            if (p.origen) return p;
-            // Infer from available data
-            if (p.wooId) return { ...p, origen: 'Web' };
-            return { ...p, origen: 'Otro' };
+            if (p.origen && p.origen !== 'Otro') return p;
+            // Infer from available data for orders missing origen
+            if (p.wooId && !p.origen) return { ...p, origen: 'Web' };
+            if (!p.origen) return { ...p, origen: 'Otro' };
+            return p;
         });
     }, [pedidos]);
 
@@ -302,15 +303,34 @@ export default function PedidosOnlinePage() {
                         </span>
                     )}
                 </div>
-                <button
-                    className="btn btn-secondary"
-                    onClick={handleFetchWooOrders}
-                    disabled={loadingWoo}
-                    style={{ gap: 8 }}
-                >
-                    <RefreshCw size={16} className={loadingWoo ? 'spin' : ''} />
-                    {loadingWoo ? 'Sincronizando...' : '🔄 Traer de la Web'}
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={handleFetchWooOrders}
+                        disabled={loadingWoo}
+                        style={{ gap: 8 }}
+                    >
+                        <RefreshCw size={16} className={loadingWoo ? 'spin' : ''} />
+                        {loadingWoo ? 'Sincronizando...' : '🔄 Traer de la Web'}
+                    </button>
+                    {user.role === 'admin' && (
+                        <button
+                            className="btn btn-secondary"
+                            onClick={async () => {
+                                try {
+                                    const count = await resyncOrderSources();
+                                    alert(count > 0 ? `✅ Se actualizaron las fuentes de ${count} pedidos.` : 'Las fuentes ya estaban actualizadas.');
+                                } catch (err) {
+                                    alert(`❌ Error: ${err.message}`);
+                                }
+                            }}
+                            style={{ gap: 8, fontSize: 12 }}
+                            title="Re-obtener fuentes de tráfico de WooCommerce para pedidos existentes"
+                        >
+                            🔄 Actualizar Fuentes
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* CHANGE 14 — Filtro por Origen */}

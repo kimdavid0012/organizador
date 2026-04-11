@@ -282,14 +282,25 @@ export default function ClientesPage() {
     const selectedWithEmail = selectedClientes.filter(c => c.email);
     const selectedWithoutEmail = selectedClientes.filter(c => !c.email);
 
-    const handleSendEmail = () => {
+    const CELAVIE_EMAIL = 'celavieindumentaria@gmail.com';
+
+    const handleSendEmail = (method = 'gmail') => {
         const emails = selectedWithEmail.map(c => c.email);
         if (emails.length === 0) {
             alert('Ninguno de los clientes seleccionados tiene email.');
             return;
         }
-        const mailtoUrl = `mailto:?bcc=${emails.join(',')}&subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
-        window.open(mailtoUrl);
+
+        if (method === 'gmail') {
+            // Open Gmail compose directly with celavieindumentaria@gmail.com
+            const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&bcc=${emails.join(',')}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}&from=${encodeURIComponent(CELAVIE_EMAIL)}`;
+            window.open(gmailUrl, '_blank');
+        } else {
+            // Fallback mailto
+            const mailtoUrl = `mailto:?bcc=${emails.join(',')}&subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+            window.open(mailtoUrl);
+        }
+
         setEmailModalOpen(false);
         setEmailSubject('');
         setEmailBody('');
@@ -582,6 +593,21 @@ export default function ClientesPage() {
                         )}
 
                         <div style={{ marginBottom: '12px' }}>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: 'var(--fs-sm)', color: 'var(--text-muted)' }}>Desde:</label>
+                            <div style={{
+                                background: 'rgba(20, 184, 166, 0.08)',
+                                border: '1px solid rgba(20, 184, 166, 0.2)',
+                                borderRadius: 'var(--radius-sm)',
+                                padding: '10px',
+                                fontSize: 'var(--fs-sm)',
+                                color: 'var(--accent)',
+                                fontWeight: 600
+                            }}>
+                                {CELAVIE_EMAIL}
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '12px' }}>
                             <label style={{ display: 'block', marginBottom: '4px', fontSize: 'var(--fs-sm)', color: 'var(--text-muted)' }}>Para (BCC):</label>
                             <div style={{
                                 background: 'var(--bg-input)',
@@ -621,15 +647,27 @@ export default function ClientesPage() {
                             />
                         </div>
 
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)' }}>
+                            Se abrira Gmail con los destinatarios en BCC. Asegurate de estar logueado en celavieindumentaria@gmail.com en el navegador.
+                        </div>
+
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                             <button className="btn btn-secondary" onClick={() => setEmailModalOpen(false)}>Cancelar</button>
                             <button
+                                className="btn btn-secondary"
+                                onClick={() => handleSendEmail('mailto')}
+                                disabled={selectedWithEmail.length === 0}
+                                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 12 }}
+                            >
+                                <Mail size={14} /> Email App
+                            </button>
+                            <button
                                 className="btn btn-primary"
-                                onClick={handleSendEmail}
+                                onClick={() => handleSendEmail('gmail')}
                                 disabled={selectedWithEmail.length === 0}
                                 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                             >
-                                <Mail size={16} /> Enviar ({selectedWithEmail.length})
+                                <Mail size={16} /> Abrir en Gmail ({selectedWithEmail.length})
                             </button>
                         </div>
                     </div>
