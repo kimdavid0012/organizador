@@ -404,9 +404,51 @@ export default function AgentsHub() {
         </div>
       )}
 
+      {/* Always-On Agents Banner */}
+      <div style={{ marginBottom: 16, padding: 16, borderRadius: 14, background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+          Sub-Agentes 24/7 — Siempre Activos
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {TABS.filter(t => t.alwaysOn).map(tab => {
+            const hasData = !!results[tab.id];
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 16px', borderRadius: 10, border: '1px solid',
+                  borderColor: isActive ? tab.color : 'rgba(255,255,255,0.1)',
+                  background: isActive ? `${tab.color}18` : 'rgba(255,255,255,0.04)',
+                  color: isActive ? tab.color : 'var(--text-secondary)',
+                  cursor: 'pointer', fontSize: 13, fontWeight: isActive ? 600 : 400,
+                  whiteSpace: 'nowrap', transition: 'all 0.2s',
+                }}
+              >
+                <tab.icon size={16} />
+                {tab.label}
+                <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 8, background: 'rgba(34,197,94,0.2)', color: '#22c55e', fontWeight: 600 }}>24/7</span>
+                {hasData && <span style={{ fontSize: 10, opacity: 0.7 }}>{timeAgo(results[tab.id]?.timestamp)}</span>}
+                {!hasData && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); runAgent(tab.id); }}
+                    disabled={!!loading}
+                    style={{ background: tab.color, color: '#fff', border: 'none', borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Ejecutar
+                  </button>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, overflowX: 'auto', paddingBottom: 4 }}>
-        {TABS.map(tab => {
+        {TABS.filter(t => !t.alwaysOn).map(tab => {
           const isActive = activeTab === tab.id;
           const hasData = !!results[tab.id];
           const age = hasData ? timeAgo(results[tab.id].timestamp) : '';

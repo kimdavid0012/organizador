@@ -234,8 +234,51 @@ export default function InstagramPlannerPage() {
             )}
 
             {igError && (
-                <div className="glass-panel" style={{ padding: 12, marginBottom: 16, color: '#ef4444', fontSize: 12 }}>
-                    ⚠️ {igError}
+                <div className="glass-panel" style={{ padding: 20, marginBottom: 16, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(239,68,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <RefreshCw size={20} style={{ color: '#ef4444' }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: 15, color: '#ef4444', marginBottom: 4 }}>
+                                Token de Instagram expirado
+                            </div>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
+                                {igError}
+                            </div>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 14 }}>
+                                Para reconectar Instagram necesitas generar un nuevo token desde Meta:
+                                <ol style={{ margin: '8px 0', paddingLeft: 20 }}>
+                                    <li>Ir a <strong>Meta for Developers</strong> &gt; Tu App &gt; Instagram Basic Display</li>
+                                    <li>Generar un nuevo <strong>User Token</strong> de larga duracion</li>
+                                    <li>Copiar el token y pegarlo abajo en Configuracion</li>
+                                </ol>
+                            </div>
+                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={() => {
+                                        const token = prompt('Pega tu nuevo Meta/Instagram Token:');
+                                        if (token && token.trim()) {
+                                            updateConfig({ marketing: { ...(state.config.marketing || {}), metaToken: token.trim() } });
+                                            setIgError('');
+                                            setTimeout(() => loadIgMetrics(), 500);
+                                        }
+                                    }}
+                                    style={{ fontSize: 13, fontWeight: 600 }}
+                                >
+                                    <RefreshCw size={14} /> Ingresar Nuevo Token
+                                </button>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => loadIgMetrics()}
+                                    style={{ fontSize: 13 }}
+                                >
+                                    Reintentar Conexion
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 

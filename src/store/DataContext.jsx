@@ -929,6 +929,7 @@ function dataReducer(state, action) {
                 numeroPedido: action.payload.numeroPedido || '',
                 fecha: new Date().toISOString(),
                 estado: 'pendiente',
+                paymentStatus: 'pendiente',
                 items: [],
                 ...action.payload
             };
@@ -1851,6 +1852,7 @@ export function DataProvider({ children }) {
                     metodoPago: o.payment_method_title,
                     envio: o.shipping_lines[0]?.method_title || 'N/A',
                     estado: o.status === 'processing' ? 'pendiente' : (o.status === 'completed' ? 'listo' : 'pendiente'),
+                    paymentStatus: o.status === 'completed' ? 'aprobado' : (o.date_paid ? 'aprobado' : 'pendiente'),
                     fecha: o.date_created,
                     origen: inferOrderSource(o),
                     items: o.line_items.map(li => ({

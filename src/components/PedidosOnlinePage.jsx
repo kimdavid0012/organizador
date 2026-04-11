@@ -23,10 +23,20 @@ export default function PedidosOnlinePage() {
         Otro: { bg: '#f5f5f5', color: '#616161' },
     };
 
+    // Ensure all orders have an origen field (retroactive fix for pre-existing orders)
+    const pedidosConOrigen = useMemo(() => {
+        return pedidos.map(p => {
+            if (p.origen) return p;
+            // Infer from available data
+            if (p.wooId) return { ...p, origen: 'Web' };
+            return { ...p, origen: 'Otro' };
+        });
+    }, [pedidos]);
+
     const pedidosFiltrados = useMemo(() => {
-        if (filtroOrigen === 'Todos') return pedidos;
-        return pedidos.filter(p => p.origen === filtroOrigen);
-    }, [pedidos, filtroOrigen]);
+        if (filtroOrigen === 'Todos') return pedidosConOrigen;
+        return pedidosConOrigen.filter(p => p.origen === filtroOrigen);
+    }, [pedidosConOrigen, filtroOrigen]);
 
     // CHANGE 15 — Payment Verification
     const [comprobanteModalImg, setComprobanteModalImg] = useState(null);
@@ -315,7 +325,7 @@ export default function PedidosOnlinePage() {
                         {opt}
                         {opt !== 'Todos' && (
                             <span className="origen-filter-count">
-                                {pedidos.filter(p => p.origen === opt).length}
+                                {pedidosConOrigen.filter(p => p.origen === opt).length}
                             </span>
                         )}
                     </button>

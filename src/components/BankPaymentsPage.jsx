@@ -230,7 +230,46 @@ export default function BankPaymentsPage() {
     const allBatchStatuses = useMemo(() => {
         const hardcoded = importStatuses;
         const fromXlsx = xlsxBatchStatuses.filter((xlsxBatch) => !hardcoded.some((batch) => batch.batchId === xlsxBatch.batchId));
-        return [...hardcoded, ...fromXlsx];
+        const allBatches = [...hardcoded, ...fromXlsx];
+
+        // Consolidate batches by month to prevent duplicate month cards
+        const byMonth = new Map();
+        allBatches.forEach((batch) => {
+            // Extract month key from batchId (format: xlsx-YYYY-MM-...) or monthLabel
+            let monthKey = '';
+            if (batch.batchId) {
+                const match = batch.batchId.match(/(\d{4})-(\d{2})/);
+                if (match) monthKey = `${match[1]}-${match[2]}`;
+            }
+            if (!monthKey && batch.monthLabel) {
+                // Try to derive from monthLabel like "Enero 2026"
+                const mIdx = MONTH_LABELS.findIndex(m => batch.monthLabel.startsWith(m));
+                const yearMatch = batch.monthLabel.match(/\d{4}/);
+                if (mIdx >= 0 && yearMatch) monthKey = `${yearMatch[0]}-${String(mIdx + 1).padStart(2, '0')}`;
+            }
+            if (!monthKey) monthKey = batch.batchId || Math.random().toString();
+
+            if (byMonth.has(monthKey)) {
+                const existing = byMonth.get(monthKey);
+                existing.totals.banco += batch.totals.banco;
+                existing.totals.mercadoPago += batch.totals.mercadoPago;
+                existing.totals.combined += batch.totals.combined;
+                existing.totals.count += batch.totals.count;
+                existing.importedCount = (existing.importedCount || 0) + (batch.importedCount || batch.totals.count);
+                existing.alreadyLoaded = existing.alreadyLoaded && batch.alreadyLoaded;
+                existing._batchIds.push(batch.batchId);
+            } else {
+                byMonth.set(monthKey, {
+                    ...batch,
+                    _batchIds: [batch.batchId],
+                    monthLabel: batch.monthLabel || monthKey,
+                    importedCount: batch.importedCount || batch.totals.count,
+                    totals: { ...batch.totals }
+                });
+            }
+        });
+
+        return Array.from(byMonth.values());
     }, [importStatuses, xlsxBatchStatuses]);
 
     const monthlyGroups = useMemo(() => {
@@ -441,7 +480,13 @@ export default function BankPaymentsPage() {
                                         <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 18 }}>{batch.monthLabel || batch.sourceName?.replace(/^.*? - /, '')}</div>
                                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{batch.totals.count} movimientos</div>
                                     </div>
-                                    <button className="btn btn-secondary" onClick={() => importBatch(batch)} disabled={batch.alreadyLoaded}>
+                                    <button className="btn btn-secondary" onClick={() => {
+                                        if (batch._batchIds) batch._batchIds.forEach(bid => {
+                                            const b = [...IMPORT_BATCHES, ...xlsxBatchStatuses].find(x => x.batchId === bid);
+                                            if (b) importBatch(b);
+                                        });
+                                        else importBatch(batch);
+                                    }} disabled={batch.alreadyLoaded}>
                                         <Download size={16} /> {batch.alreadyLoaded ? 'Cargado' : 'Importar'}
                                     </button>
                                 </div>
