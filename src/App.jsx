@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet, Instagram, Zap, Menu
+    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet, Instagram, Zap, Menu, Video
 } from 'lucide-react';
 import { DataProvider, useData } from './store/DataContext';
 import { I18nProvider, useI18n } from './store/I18nContext';
@@ -27,6 +27,8 @@ import BankPaymentsPage from './components/BankPaymentsPage.jsx';
 import InformesPage from './components/InformesPage.jsx';
 import AgentsHub from './components/MarketingAgents/AgentsHub.jsx';
 import SaldoPage from './components/SaldoPage.jsx';
+import TikTokContentPage from './components/TikTokContentPage.jsx';
+import DailyTasksPanel from './components/DailyTasksPanel.jsx';
 import MoldModal from './components/MoldModal';
 import TaskModal from './components/TaskModal';
 import Login from './components/Login';
@@ -406,6 +408,7 @@ function AppContent() {
         { id: 'conteomercaderia', icon: Boxes, label: 'Conteo Mercadería' },
         { id: 'fotos', icon: Camera, label: 'Fotos' },
         { id: 'instagramplanner', icon: Instagram, label: t('navInstagramPlanner') },
+        { id: 'tiktok', icon: Video, label: 'TikTok' },
         { id: 'mesan', icon: BarChart3, label: 'Mesan' },
         { id: 'banking', icon: Landmark, label: 'Banco y MP' },
         { id: 'settings', icon: SettingsIcon, label: t('navConfiguracion') },
@@ -541,6 +544,7 @@ function AppContent() {
                                     <option value="pedidos">🌐 Pedidos Online (Juan)</option>
                                     <option value="marketing">📣 Marketing (Gisela)</option>
                                     <option value="fotos">📸 Fotos (Rocio)</option>
+                                    <option value="contenido_instagram">📷 Instagram (Erica)</option>
                                 </select>
                             )}
 
@@ -594,6 +598,7 @@ function AppContent() {
                             setSoloHoy={setSoloHoy}
                         />
                     )}
+                    {view === 'kanban' && <DailyTasksPanel />}
                     {view === 'kanban' && (
                         <KanbanBoard
                             tareas={state.tareas || []}
@@ -622,6 +627,7 @@ function AppContent() {
                     {view === 'conteomercaderia' && <ConteoMercaderiaPage />}
                     {view === 'fotos' && <FotosPage />}
                     {view === 'instagramplanner' && <InstagramPlannerPage />}
+                    {view === 'tiktok' && <TikTokContentPage />}
                     {view === 'mesan' && <MesanPage />}
                     {view === 'banking' && <BankPaymentsPage />}
                     {view === 'articulos' && <PosProductos />}

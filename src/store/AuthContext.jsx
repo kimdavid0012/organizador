@@ -11,7 +11,8 @@ const KNOWN_USERS = {
     'nadia@celavie.com': { role: 'encargada', name: 'Nadia' },
     'juan@celavie.com': { role: 'pedidos', name: 'Juan' },
     'naara@celavie.com': { role: 'deposito', name: 'Naara' },
-    'rocio@celavie.com': { role: 'fotos', name: 'Rocio' }
+    'rocio@celavie.com': { role: 'fotos', name: 'Rocio' },
+    'erica@celavie.com': { role: 'contenido_instagram', name: 'Erica' }
 };
 
 const KNOWN_USER_SECTIONS = {
@@ -19,11 +20,12 @@ const KNOWN_USER_SECTIONS = {
     'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'informes'],
     'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia'],
     'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia'],
-    'rocio@celavie.com': ['fotos', 'instagramplanner']
+    'rocio@celavie.com': ['fotos', 'tiktok'],
+    'erica@celavie.com': ['instagramplanner', 'fotos', 'library']
 };
 
 // All available sections in the app
-const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'agents', 'paginaweb', 'conteomercaderia', 'fotos', 'instagramplanner', 'mesan', 'banking', 'settings', 'informes', 'saldo'];
+const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'agents', 'paginaweb', 'conteomercaderia', 'fotos', 'instagramplanner', 'tiktok', 'mesan', 'banking', 'settings', 'informes', 'saldo'];
 
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
@@ -32,7 +34,8 @@ const DEFAULT_ROLE_PERMISSIONS = {
     deposito: ['kanban', 'talleres', 'conteomercaderia'],
     pedidos: ['kanban', 'pedidos', 'conteomercaderia'],
     marketing: ['pedidos', 'marketing', 'paginaweb'],
-    fotos: ['fotos', 'instagramplanner'],
+    fotos: ['fotos', 'instagramplanner', 'tiktok'],
+    contenido_instagram: ['instagramplanner', 'fotos', 'library'],
     pendiente: [] // New users get no access until admin assigns a role
 };
 
@@ -54,6 +57,7 @@ const SECTION_LABELS = {
     conteomercaderia: 'Conteo Mercaderia',
     fotos: 'Fotos',
     instagramplanner: 'Instagram Post',
+    tiktok: 'TikTok',
     mesan: 'Mesan',
     banking: 'Banco y MP',
     settings: 'Configuración',
@@ -132,6 +136,8 @@ export function AuthProvider({ children }) {
                         merged.deposito = [...DEFAULT_ROLE_PERMISSIONS.deposito];
                         merged.pedidos = [...DEFAULT_ROLE_PERMISSIONS.pedidos];
                         merged.marketing = [...DEFAULT_ROLE_PERMISSIONS.marketing];
+                        merged.fotos = [...DEFAULT_ROLE_PERMISSIONS.fotos];
+                        merged.contenido_instagram = [...DEFAULT_ROLE_PERMISSIONS.contenido_instagram];
                         setRolePermissions(merged);
                     }
                 } catch (err) {
