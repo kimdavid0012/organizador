@@ -198,7 +198,7 @@ export default function AgentsHub() {
         case 'bugFinder': result = await runBugFinderAgent(state); break;
         case 'bugFixer': result = await runBugFixerAgent(state); break;
         case 'adQualifier': result = await runAdQualifierAgent(state); break;
-        case 'siteTracker': result = await runSiteTrackerAgent(state); break;
+        case 'siteTracker': result = await runSiteTrackerAgent(config, state); break;
         default: return;
       }
       const nextResults = { ...results, [agentId]: result };
@@ -244,7 +244,7 @@ export default function AgentsHub() {
       { id: 'bugFinder', label: 'Bug Finder', fn: () => runBugFinderAgent(state) },
       { id: 'bugFixer', label: 'Bug Fixer', fn: () => runBugFixerAgent(state) },
       { id: 'adQualifier', label: 'Ad Qualifier', fn: () => runAdQualifierAgent(state) },
-      { id: 'siteTracker', label: 'Site Tracker', fn: () => runSiteTrackerAgent(state) },
+      { id: 'siteTracker', label: 'Site Tracker', fn: () => runSiteTrackerAgent(config, state) },
     ];
 
     const allRes = {};
@@ -321,20 +321,26 @@ export default function AgentsHub() {
   const isLoading = loading === activeTab || loading === 'all';
 
   return (
-    <div style={{ padding: '12px 12px', maxWidth: 1100, margin: '0 auto', overflowX: 'hidden' }}>
+    <div style={{ padding: '12px 12px', maxWidth: 1100, width: '100%', boxSizing: 'border-box', margin: '0 auto', overflowX: 'hidden' }}>
       {/* Mobile responsive styles */}
       <style>{`
-        @media (max-width: 480px) {
+        @media (max-width: 768px) {
           .agents-hub-header { flex-direction: column !important; align-items: flex-start !important; }
-          .agents-hub-header button { width: 100%; justify-content: center; }
-          .agents-24-7-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
-          .agents-24-7-bar > div { flex-wrap: nowrap !important; min-width: max-content; }
-          .agents-tabs-row { gap: 4px !important; }
-          .agents-tabs-row button { padding: 8px 10px !important; font-size: 11px !important; }
-          .agents-tabs-row button span { display: none; }
+          .agents-hub-header > button { width: 100% !important; justify-content: center !important; box-sizing: border-box; }
+          .agents-24-7-bar { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; padding-bottom: 8px !important; }
+          .agents-24-7-bar > div { display: flex !important; flex-wrap: nowrap !important; gap: 8px; }
+          .agents-tabs-row { gap: 4px !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; padding-bottom: 8px !important; }
+          .agents-tabs-row button { padding: 8px 10px !important; font-size: 11px !important; flex-shrink: 0 !important; }
+          .agents-tabs-row button > span:not([style]) { display: none !important; }
           .agent-content-area { flex-direction: column !important; }
-          .agent-content-area > div { min-width: 0 !important; flex-basis: auto !important; }
+          .agent-content-area > div { min-width: 0 !important; flex-basis: auto !important; width: 100% !important; }
+          .agents-hub-progress-bar { flex-wrap: wrap !important; }
+          .agents-hub-progress-bar > div { flex: 0 0 calc(25% - 6px) !important; min-width: 20px; }
         }
+        .agents-24-7-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .agents-tabs-row { scrollbar-width: thin; }
+        .agents-tabs-row::-webkit-scrollbar { height: 3px; }
+        .agents-tabs-row::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
       `}</style>
       {/* Header */}
       <div className="agents-hub-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
@@ -423,7 +429,7 @@ export default function AgentsHub() {
         <div style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
           Sub-Agentes 24/7 — Siempre Activos
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'nowrap', minWidth: 'max-content' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'nowrap' }}>
           {TABS.filter(t => t.alwaysOn).map(tab => {
             const hasData = !!results[tab.id];
             const isActive = activeTab === tab.id;

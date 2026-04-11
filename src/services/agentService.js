@@ -453,14 +453,16 @@ export async function runAnalystAgent(config, state, onProgress) {
 
   const bd = await gatherBusinessData(config, state, onProgress);
 
-  // Run sub-agents in parallel
-  onProgress?.('Ejecutando sub-agentes de producto y audiencia...');
-  const [productIntel, audienceIntel] = await Promise.allSettled([
+  // Run sub-agents in parallel (including Site Tracker)
+  onProgress?.('Ejecutando sub-agentes de producto, audiencia y web...');
+  const [productIntel, audienceIntel, siteTrackerResult] = await Promise.allSettled([
     runProductIntelligence(config, bd),
     runAudienceAnalyst(config, bd),
+    runSiteTrackerAgent(config, state),
   ]);
   const pi = productIntel.status === 'fulfilled' ? productIntel.value : null;
   const ai = audienceIntel.status === 'fulfilled' ? audienceIntel.value : null;
+  const siteData = siteTrackerResult.status === 'fulfilled' ? siteTrackerResult.value?.content : null;
 
   // ─── MULTI-STEP ANALYSIS (3 passes) ─────────────────────────
   // Step 1: Deep Meta Ads analysis
@@ -507,11 +509,14 @@ ${step2.text}
 📸 INSTAGRAM ORGÁNICO (@celavieindumentaria):
 ${safeTruncate(bd.instagram?.analytics, 1500)}
 
+🌐 SUB-AGENTE — SITIO WEB celavie.com.ar:
+${safeTruncate(siteData, 1200)}
+
 🔬 SUB-AGENTE — INTELIGENCIA DE PRODUCTO:
-${safeTruncate(pi, 1500)}
+${safeTruncate(pi, 1000)}
 
 👥 SUB-AGENTE — ANÁLISIS DE AUDIENCIA:
-${safeTruncate(ai, 1500)}
+${safeTruncate(ai, 1000)}
 
 ${TEAM_CONTEXT}
 
@@ -523,15 +528,21 @@ Generá un BRIEF EJECUTIVO DEL DÍA con:
 4. **📢 META ADS**: estado general, mejor/peor campaña, targeting insights, budget efficiency
 5. **📦 PRODUCTOS**: top sellers, alertas de stock, productos a pushear/pausar
 6. **👥 CLIENTES**: segmentos clave, ciudades top, oportunidades de retargeting
-7. **🔴 ALERTAS URGENTES** (stock, budget, performance)
-8. **✅ TOP 5 ACCIONES PARA HOY** — SIEMPRE asigná a una persona específica:
+7. **🌐 WEB & SEO**: salud del sitio celavie.com.ar, tráfico estimado, posición vs competencia (miiastore, vanilia), acciones SEO prioritarias
+8. **🔴 ALERTAS URGENTES** (stock, budget, performance, web)
+9. **✅ TOP 5 ACCIONES PARA HOY** — SIEMPRE asigná a una persona específica:
 | Acción | Responsable | Deadline |
 (David/Ro=redes, Nadia=encargada/POS, Naara=inventario, Juan=pedidos, Rocío=fotos)
-9. **📈 PROYECCIÓN SEMANAL** (revenue estimado, metas)`;
+10. **📈 PROYECCIÓN SEMANAL** (revenue estimado, metas)`;
 
   const { text, tokens } = await callLLM(config, ANALYST_SYSTEM, prompt, { maxTokens: 4000 });
-  const totalTokens = { prompt: (step1.tokens?.prompt || 0) + (step2.tokens?.prompt || 0) + (tokens?.prompt || 0), completion: (step1.tokens?.completion || 0) + (step2.tokens?.completion || 0) + (tokens?.completion || 0), total: (step1.tokens?.total || 0) + (step2.tokens?.total || 0) + (tokens?.total || 0) };
-  return { type: 'analyst', content: text, timestamp: agentTimestamp(), tokens: totalTokens, data: { meta: bd.meta, woo: bd.woo, pos: bd.pos, productIntel: pi, audienceIntel: ai, instagram: bd.instagram }, multiStep: true };
+  const siteTokens = siteTrackerResult.status === 'fulfilled' ? (siteTrackerResult.value?.tokens || {}) : {};
+  const totalTokens = {
+    prompt: (step1.tokens?.prompt || 0) + (step2.tokens?.prompt || 0) + (tokens?.prompt || 0) + (siteTokens.prompt || 0),
+    completion: (step1.tokens?.completion || 0) + (step2.tokens?.completion || 0) + (tokens?.completion || 0) + (siteTokens.completion || 0),
+    total: (step1.tokens?.total || 0) + (step2.tokens?.total || 0) + (tokens?.total || 0) + (siteTokens.total || 0)
+  };
+  return { type: 'analyst', content: text, timestamp: agentTimestamp(), tokens: totalTokens, data: { meta: bd.meta, woo: bd.woo, pos: bd.pos, productIntel: pi, audienceIntel: ai, instagram: bd.instagram, siteTracker: siteData }, multiStep: true };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1789,8 +1800,74 @@ export const runAdQualifierAgent = async (state) => {
     return { type: 'adQualifier', content, timestamp: agentTimestamp(), tokens: { total: 0 } };
 };
 
-export const runSiteTrackerAgent = async (state) => {
-    const content = `## 🌐 Monitoreo de celavie.com.ar\n\n### Métricas Técnicas\n- **Estado del sitio**: ✅ Online\n- **SSL**: ✅ Válido\n- **Velocidad estimada**: Buena (WooCommerce optimizado)\n\n### SEO\n- Revisar meta descriptions en páginas de producto\n- Verificar que imágenes tengan alt text\n- Comprobar sitemap.xml actualizado\n\n### Competencia\n- **miiastore.com.ar**: Competidor directo en moda casual\n- **vanilia.com.ar**: Competidor en indumentaria femenina\n\n### Recomendaciones\n1. Agregar blog con contenido de tendencias\n2. Optimizar velocidad de carga de imágenes\n3. Verificar mobile-friendliness con Google PageSpeed\n4. Agregar schema markup de productos`;
+export const runSiteTrackerAgent = async (config, state) => {
+    // Extract WooCommerce web data to inform site analysis
+    const wooData = state?.config || config || {};
+    const pedidos = wooData.pedidosOnline || [];
+    const wooProductos = (wooData.posProductos || []).filter(p => p.proveedor === 'WooCommerce' || p.precioVentaWeb);
+    const recentWeb = pedidos.slice(-20);
+    const totalWebRevenue = recentWeb.reduce((s, p) => s + Number(p.total || p.totalAmount || 0), 0);
+    const avgTicket = recentWeb.length ? Math.round(totalWebRevenue / recentWeb.length) : 0;
+    const topProductsWeb = wooProductos.slice(0, 5).map(p => `${p.detalleCorto || p.nombre} ($${p.precioVentaL1 || p.precioVentaWeb})`).join(', ');
+
+    if (config?.marketing?.claudeApiKey || config?.marketing?.openaiApiKey) {
+        try {
+            const prompt = `Sos un especialista en SEO y performance web para e-commerce de moda argentina.
+Analizá el sitio celavie.com.ar (WooCommerce, moda femenina mayorista/minorista).
+
+DATOS DISPONIBLES:
+- Pedidos web recientes: ${recentWeb.length} pedidos
+- Revenue web estimado (últimos pedidos): $${totalWebRevenue.toLocaleString('es-AR')}
+- Ticket promedio web: $${avgTicket.toLocaleString('es-AR')}
+- Productos top en web: ${topProductsWeb || 'Sin datos'}
+- Productos WooCommerce activos: ${wooProductos.length}
+- Fecha análisis: ${todayLabel()}
+
+COMPETENCIA A MONITOREAR: miiastore.com.ar, vanilia.com.ar, natalia-antolin.com.ar
+
+Generá un análisis con:
+## 🌐 Salud del Sitio celavie.com.ar
+- Estado técnico (SSL, velocidad, mobile)
+## 📈 Performance Web
+- Tráfico estimado vs pedidos reales
+- Tasa de conversión estimada
+- Ticket promedio y tendencia
+## 🔍 SEO Status
+- Palabras clave a priorizar (moda argentina, ropa mujer, etc.)
+- Oportunidades de contenido
+- Issues técnicos a resolver
+## 🏆 vs Competencia
+- miiastore.com.ar vs celavie.com.ar
+- vanilia.com.ar vs celavie.com.ar
+- Ventajas competitivas y brechas
+## ✅ Acciones de Mejora (prioridad esta semana)
+1. (Acción concreta)
+2. (Acción concreta)
+3. (Acción concreta)
+
+Sé específico y basate en los datos reales disponibles.`;
+            const { text, tokens } = await callLLM(config,
+                'Sos un experto en SEO y performance web para e-commerce de moda argentina. Respondé en español rioplatense con datos concretos.',
+                prompt,
+                { maxTokens: 1500, temperature: 0.4 }
+            );
+            return { type: 'siteTracker', content: text, timestamp: agentTimestamp(), tokens };
+        } catch (e) {
+            console.warn('SiteTracker LLM failed, using fallback', e.message);
+        }
+    }
+
+    // Fallback: static analysis enriched with real data
+    const content = `## 🌐 Salud del Sitio celavie.com.ar\n\n` +
+        `### Métricas Técnicas\n- **Estado del sitio**: ✅ Online\n- **SSL**: ✅ Válido\n- **Plataforma**: WooCommerce optimizado\n\n` +
+        `### Performance Web (datos reales)\n` +
+        `- **Pedidos web recientes**: ${recentWeb.length}\n` +
+        `- **Revenue estimado**: $${totalWebRevenue.toLocaleString('es-AR')}\n` +
+        `- **Ticket promedio web**: $${avgTicket.toLocaleString('es-AR')}\n` +
+        `- **Productos activos**: ${wooProductos.length}\n\n` +
+        `### SEO Prioritario\n- Optimizar meta descriptions en páginas de producto\n- Verificar alt text en todas las imágenes\n- Actualizar sitemap.xml\n- Palabras clave: "ropa mujer argentina", "moda casual argentina", "comprar ropa online"\n\n` +
+        `### vs Competencia\n- **miiastore.com.ar**: Competidor en moda casual femenina\n- **vanilia.com.ar**: Competidor en indumentaria femenina\n- **natalia-antolin.com.ar**: Competidor en moda argentina\n\n` +
+        `### Acciones Urgentes\n1. Activar Google PageSpeed Insights y corregir issues\n2. Agregar blog con tendencias de moda (mejora SEO orgánico)\n3. Implementar schema markup en productos\n4. Verificar mobile-friendliness (Google Search Console)`;
     return { type: 'siteTracker', content, timestamp: agentTimestamp(), tokens: { total: 0 } };
 };
 

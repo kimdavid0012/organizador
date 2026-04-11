@@ -342,11 +342,48 @@ body {
         -webkit-overflow-scrolling: touch;
     }
 
-    /* Font size floors */
-    p, span, label, td, th, li, div {
-        font-size: max(inherit, 12px);
+    /* ALL tables scroll on mobile */
+    table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
     }
 
+    /* Prevent any element from pushing page wider */
+    body, #root, .app-container, main {
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+    }
+
+    /* Page containers — prevent horizontal blowout */
+    [class*="page"], [class*="Page"],
+    .settings, .clientes-page, .informes-page {
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+    }
+
+    /* Fix cards min-width so they don't push layout */
+    [class*="card"], [class*="Card"] {
+        min-width: 0 !important;
+    }
+
+    /* Tabs and horizontal scroll bars */
+    .agents-tabs-row,
+    .agents-24-7-bar,
+    [class*="tabs"], [class*="Tabs"],
+    [role="tablist"] {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: thin;
+    }
+    .agents-tabs-row > *,
+    [class*="tabs"] > *,
+    [role="tablist"] > * {
+        flex-shrink: 0;
+    }
+
+    /* Thin scrollbar for all horizontal areas */
     ::-webkit-scrollbar {
         width: 4px;
         height: 4px;
@@ -355,5 +392,10 @@ body {
     ::-webkit-scrollbar-thumb {
         background: rgba(255,255,255,0.15);
         border-radius: 2px;
+    }
+
+    /* Font size floors */
+    p, span, label, td, th, li {
+        font-size: max(inherit, 12px);
     }
 }
