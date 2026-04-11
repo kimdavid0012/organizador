@@ -1921,6 +1921,89 @@ export function DataProvider({ children }) {
             }
         },
 
+        // One-time price migration — April 2026
+        runPriceMigration2026April: () => {
+            const currentConfig = stateRef.current.config;
+            if (currentConfig._priceMigration2026April) return; // Already done
+
+            const priceUpdates = {
+                '6000': { precioVentaL1: 4800, precioVentaL2: 5500 },
+                '6001': { precioVentaL1: 4900, precioVentaL2: 5700 },
+                '6002': { precioVentaL1: 5195, precioVentaL2: 5900 },
+                '6003': { precioVentaL1: 6100, precioVentaL2: 6900 },
+                '6004': { precioVentaL1: 5500, precioVentaL2: 6100 },
+                '6005': { precioVentaL1: 6000, precioVentaL2: 6800 },
+                '6008': { precioVentaL1: 7500, precioVentaL2: 8500 },
+                '6009': { precioVentaL1: 8200, precioVentaL2: 9200 },
+                '6010': { precioVentaL1: 8200, precioVentaL2: 9200 },
+                '6011': { precioVentaL1: 8200, precioVentaL2: 9200 },
+                '6300': { precioVentaL1: 14000, precioVentaL2: 17000 },
+                '6301': { precioVentaL1: 16000, precioVentaL2: 19000 },
+                '6302': { precioVentaL1: 14000, precioVentaL2: 17000 },
+                '6303': { precioVentaL1: 12000, precioVentaL2: 15000 },
+                '6304': { precioVentaL1: 15000, precioVentaL2: 19000 },
+                '6305': { precioVentaL1: 17000, precioVentaL2: 20000 },
+                '6306': { precioVentaL1: 14500, precioVentaL2: 18000 },
+                '6307': { precioVentaL1: 18250, precioVentaL2: 21000 },
+                '6308': { precioVentaL1: 12500, precioVentaL2: 15000 },
+                '6309': { precioVentaL1: 8200, precioVentaL2: 11000 },
+                '6310': { precioVentaL1: 8200, precioVentaL2: 11000 },
+                '6200': { precioVentaL1: 10000, precioVentaL2: 11000 },
+                '6201': { precioVentaL1: 9500, precioVentaL2: 11500 },
+                '6202': { precioVentaL1: 6000, precioVentaL2: 8000 },
+                '6203': { precioVentaL1: 7500, precioVentaL2: 9500 },
+                '6204': { precioVentaL1: 6000, precioVentaL2: 7000 },
+                '6205': { precioVentaL1: 7500, precioVentaL2: 9500 },
+                '6206': { precioVentaL1: 11000, precioVentaL2: 13500 },
+                '6207': { precioVentaL1: 9500, precioVentaL2: 11200 },
+                '6208': { precioVentaL1: 11000, precioVentaL2: 13900 },
+                '6209': { precioVentaL1: 5500, precioVentaL2: 8000 },
+                '6210': { precioVentaL1: 8500, precioVentaL2: 11500 },
+                '6212': { precioVentaL1: 5500, precioVentaL2: 7000 },
+                '6213': { precioVentaL1: 10000, precioVentaL2: 13000 },
+                '4015': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4016': { precioVentaL1: 5000, precioVentaL2: 5600 },
+                '4017': { precioVentaL1: 5000, precioVentaL2: 5600 },
+                '4524': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4526': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4527': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4630': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4651': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4542': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4543': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4545': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4547': { precioVentaL1: 7000, precioVentaL2: 8000 },
+                '4548': { precioVentaL1: 7000, precioVentaL2: 8000 },
+                '4540': { precioVentaL1: 1000, precioVentaL2: 1000 },
+                '4541': { precioVentaL1: 7000, precioVentaL2: 7000 },
+            };
+
+            const products = currentConfig.posProductos || [];
+            let updatedCount = 0;
+            const updatedProducts = products.map(p => {
+                const code = (p.articuloVenta || p.codigoInterno || '').toString().replace(/\D/g, '');
+                if (priceUpdates[code]) {
+                    updatedCount++;
+                    return { ...p, ...priceUpdates[code] };
+                }
+                return p;
+            });
+
+            if (updatedCount > 0) {
+                dispatch({
+                    type: 'UPDATE_CONFIG',
+                    payload: {
+                        posProductos: updatedProducts,
+                        _priceMigration2026April: true
+                    }
+                });
+                console.log(`✅ Price migration: updated ${updatedCount} products`);
+            } else {
+                dispatch({ type: 'UPDATE_CONFIG', payload: { _priceMigration2026April: true } });
+                console.log('Price migration: no matching products found');
+            }
+        },
+
         fetchWooProducts: async () => {
             const currentConfig = stateRef.current.config;
             try {

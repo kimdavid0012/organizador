@@ -206,72 +206,72 @@ export default function AgentsHub() {
       const nextHistory = addToHistory(result);
       persistCache({ ...nextResults, history: nextHistory });
     } catch (err) {
-      setError({ agent: agentId, message: err.message });
+      const friendlyMsg = err.message.includes('rate limit') || err.message.includes('429')
+        ? 'Los agentes están procesando. Por favor esperá un momento antes de ejecutar otro.'
+        : err.message;
+      setError({ agent: agentId, message: friendlyMsg });
     } finally {
       setLoading(null);
       setProgressMsg('');
     }
   };
 
-  // ─── Run ALL agents concurrently with Promise.allSettled ───
+  // ─── Run ALL agents SEQUENTIALLY to avoid rate limits ───
   const runAllAgents = async () => {
     setLoading('all');
     setError(null);
     setCompletedSteps([]);
     const onProg = (msg) => setProgressMsg(msg);
+
+    // All agents to run in order (foundation first, CEO last)
+    const agentQueue = [
+      { id: 'analyst', label: 'Analista', fn: (res) => runAnalystAgent(config, state, onProg) },
+      { id: 'trendScout', label: 'Trend Scout', fn: (res) => runTrendScoutAgent(config, brands, onProg) },
+      { id: 'contentCreator', label: 'Content', fn: (res) => runContentAgent(config, res.analyst, res.trendScout, onProg) },
+      { id: 'strategist', label: 'Estratega', fn: (res) => runStrategistAgent(config, res.analyst, res.trendScout, null, onProg) },
+      { id: 'growth', label: 'Growth', fn: (res) => runGrowthAgent(config, res.analyst, res.trendScout, onProg) },
+      { id: 'paidMedia', label: 'Paid Media', fn: (res) => runPaidMediaAgent(config, res.analyst, onProg) },
+      { id: 'pricing', label: 'Pricing', fn: (res) => runPricingAgent(config, res.analyst, res.trendScout, onProg) },
+      { id: 'inventory', label: 'Inventario', fn: (res) => runInventoryAgent(config, state, res.analyst, res.trendScout, onProg) },
+      { id: 'whatsapp', label: 'WhatsApp', fn: (res) => runWhatsAppAgent(config, res.analyst, res.trendScout, onProg) },
+      { id: 'seo', label: 'SEO', fn: (res) => runSEOAgent(config, res.analyst, onProg) },
+      { id: 'competitor', label: 'Competencia', fn: (res) => runCompetitorAgent(config, brands, onProg) },
+      { id: 'financial', label: 'Finanzas', fn: (res) => runFinancialAgent(config, state, res.analyst, onProg) },
+      { id: 'crm', label: 'CRM', fn: (res) => runCRMAgent(config, res.analyst, onProg) },
+      { id: 'supplyChain', label: 'Proveedores', fn: (res) => runSupplyChainAgent(config, state, res.analyst, onProg) },
+      { id: 'customerSuccess', label: 'Clientes', fn: (res) => runCustomerSuccessAgent(config, res.analyst, onProg) },
+      { id: 'cashflow', label: 'Cash Flow', fn: (res) => runCashFlowAgent(config, state, res.analyst, onProg) },
+      { id: 'bugFinder', label: 'Bug Finder', fn: () => runBugFinderAgent(state) },
+      { id: 'bugFixer', label: 'Bug Fixer', fn: () => runBugFixerAgent(state) },
+      { id: 'adQualifier', label: 'Ad Qualifier', fn: () => runAdQualifierAgent(state) },
+      { id: 'siteTracker', label: 'Site Tracker', fn: () => runSiteTrackerAgent(state) },
+    ];
+
+    const allRes = {};
+    const totalAgents = agentQueue.length + 1; // +1 for CEO at the end
+
     try {
-      // Phase 1: Run foundation agents (analyst + trendScout) first since others depend on them
-      setProgressMsg('Fase 1: Datos base (Analista + Trend Scout)...');
-      const [analystRes, trendRes] = await Promise.allSettled([
-        runAnalystAgent(config, state, onProg),
-        runTrendScoutAgent(config, brands, onProg),
-      ]);
-      const analyst = analystRes.status === 'fulfilled' ? analystRes.value : null;
-      const trendScout = trendRes.status === 'fulfilled' ? trendRes.value : null;
-      if (analyst) { setResults(prev => ({ ...prev, analyst })); addToHistory(analyst); }
-      if (trendScout) { setResults(prev => ({ ...prev, trendScout })); addToHistory(trendScout); }
-      setCompletedSteps(['analyst', 'trendScout'].filter(id => id === 'analyst' ? analyst : trendScout));
-
-      // Phase 2: Run ALL remaining agents concurrently (except master which needs all results)
-      setProgressMsg('Fase 2: Ejecutando todos los agentes en paralelo...');
-      const agentJobs = [
-        { id: 'contentCreator', fn: () => runContentAgent(config, analyst, trendScout, onProg) },
-        { id: 'strategist', fn: () => runStrategistAgent(config, analyst, trendScout, null, onProg) },
-        { id: 'growth', fn: () => runGrowthAgent(config, analyst, trendScout, onProg) },
-        { id: 'paidMedia', fn: () => runPaidMediaAgent(config, analyst, onProg) },
-        { id: 'pricing', fn: () => runPricingAgent(config, analyst, trendScout, onProg) },
-        { id: 'inventory', fn: () => runInventoryAgent(config, state, analyst, trendScout, onProg) },
-        { id: 'whatsapp', fn: () => runWhatsAppAgent(config, analyst, trendScout, onProg) },
-        { id: 'seo', fn: () => runSEOAgent(config, analyst, onProg) },
-        { id: 'competitor', fn: () => runCompetitorAgent(config, brands, onProg) },
-        { id: 'financial', fn: () => runFinancialAgent(config, state, analyst, onProg) },
-        { id: 'crm', fn: () => runCRMAgent(config, analyst, onProg) },
-        { id: 'supplyChain', fn: () => runSupplyChainAgent(config, state, analyst, onProg) },
-        { id: 'customerSuccess', fn: () => runCustomerSuccessAgent(config, analyst, onProg) },
-        { id: 'cashflow', fn: () => runCashFlowAgent(config, state, analyst, onProg) },
-        { id: 'bugFinder', fn: () => runBugFinderAgent(state) },
-        { id: 'bugFixer', fn: () => runBugFixerAgent(state) },
-        { id: 'adQualifier', fn: () => runAdQualifierAgent(state) },
-        { id: 'siteTracker', fn: () => runSiteTrackerAgent(state) },
-      ];
-
-      const settled = await Promise.allSettled(agentJobs.map(j => j.fn()));
-      const allRes = { analyst, trendScout };
-      settled.forEach((result, idx) => {
-        const { id } = agentJobs[idx];
-        if (result.status === 'fulfilled' && result.value) {
-          allRes[id] = result.value;
-          setResults(prev => ({ ...prev, [id]: result.value }));
-          addToHistory(result.value);
-        } else if (result.status === 'rejected') {
-          console.warn(`Agent ${id} failed:`, result.reason?.message || result.reason);
+      for (let i = 0; i < agentQueue.length; i++) {
+        const agent = agentQueue[i];
+        setProgressMsg(`Ejecutando agente ${i + 1} de ${totalAgents}: ${agent.label}...`);
+        setActiveTab(agent.id);
+        try {
+          const result = await agent.fn(allRes);
+          if (result) {
+            allRes[agent.id] = result;
+            setResults(prev => ({ ...prev, [agent.id]: result }));
+            addToHistory(result);
+          }
+        } catch (agentErr) {
+          console.warn(`Agent ${agent.id} failed:`, agentErr.message);
+          // Continue with next agent instead of stopping
         }
-      });
-      setCompletedSteps(Object.keys(allRes));
+        setCompletedSteps(prev => [...prev, agent.id]);
+      }
 
-      // Phase 3: CEO synthesis with all available results
+      // CEO synthesis with all available results
       setActiveTab('master');
-      setProgressMsg('👑 CEO analizando todos los reportes...');
+      setProgressMsg(`Ejecutando agente ${totalAgents} de ${totalAgents}: 👑 CEO...`);
       const master = await runMasterAgent(config, allRes, onProg);
       allRes.master = master;
       setResults(prev => ({ ...prev, ...allRes }));

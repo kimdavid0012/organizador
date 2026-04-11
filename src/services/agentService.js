@@ -54,10 +54,27 @@ Ejemplos:
 - Después de stock: "📚 En criollo: Nos quedan remeras para 5 días más al ritmo actual de ventas, hay que cortar urgente."
 Esta explicación NO reemplaza el dato técnico — va DESPUÉS, como ayuda para el equipo que no maneja la jerga.`;
 
+// ─── Rate limiter for API calls ─────────────────────────────
+const rateLimiter = {
+  lastCallTime: 0,
+  minInterval: 8000, // 8 seconds between calls (safe for 8k tokens/min)
+  async waitForSlot() {
+    const now = Date.now();
+    const elapsed = now - this.lastCallTime;
+    if (elapsed < this.minInterval) {
+      await new Promise(r => setTimeout(r, this.minInterval - elapsed));
+    }
+    this.lastCallTime = Date.now();
+  }
+};
+
 // ─── LLM helper: supports Claude (Anthropic) and OpenAI with retry + timeout ──
 async function callLLM(config, systemPrompt, userPrompt, options = {}) {
   const provider = config.marketing?.llmProvider || 'openai';
-  const { temperature = 0.5, maxTokens = 4000, retries = 2 } = options;
+  const { temperature = 0.5, maxTokens = 2500, retries = 3 } = options;
+
+  // Wait for rate limit slot
+  await rateLimiter.waitForSlot();
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
@@ -90,10 +107,17 @@ async function callLLM(config, systemPrompt, userPrompt, options = {}) {
         data = await response.json();
         if (!response.ok) {
           if (response.status === 429 && attempt < retries) {
-            await new Promise(r => setTimeout(r, (attempt + 1) * 3000));
+            // Exponential backoff: 15s, 30s, 60s for rate limits
+            const waitTime = Math.min(60000, 15000 * Math.pow(2, attempt));
+            await new Promise(r => setTimeout(r, waitTime));
+            rateLimiter.lastCallTime = Date.now();
             continue;
           }
-          throw new Error(data.error?.message || `Claude error ${response.status}`);
+          const errMsg = data.error?.message || `Claude error ${response.status}`;
+          if (response.status === 429) {
+            throw new Error('Los agentes están procesando. Por favor esperá un momento antes de ejecutar otro.');
+          }
+          throw new Error(errMsg);
         }
         text = data.content?.[0]?.text || '';
         usage = data.usage || {};
@@ -124,8 +148,12 @@ async function callLLM(config, systemPrompt, userPrompt, options = {}) {
         data = await response.json();
         if (!response.ok) {
           if (response.status === 429 && attempt < retries) {
-            await new Promise(r => setTimeout(r, (attempt + 1) * 3000));
+            const waitTime = Math.min(60000, 15000 * Math.pow(2, attempt));
+            await new Promise(r => setTimeout(r, waitTime));
             continue;
+          }
+          if (response.status === 429) {
+            throw new Error('Los agentes están procesando. Por favor esperá un momento antes de ejecutar otro.');
           }
           throw new Error(data.error?.message || `OpenAI error ${response.status}`);
         }
@@ -140,7 +168,8 @@ async function callLLM(config, systemPrompt, userPrompt, options = {}) {
       clearTimeout(timeoutId);
       if (err.name === 'AbortError') throw new Error('LLM timeout — la respuesta tardó más de 90s');
       if (attempt === retries) throw err;
-      await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+      const waitTime = Math.min(60000, 5000 * Math.pow(2, attempt));
+      await new Promise(r => setTimeout(r, waitTime));
     }
   }
 }
