@@ -397,7 +397,8 @@ export default function ClientesPage() {
                             onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Buscar por cliente, CUIT, teléfono o provincia..."
                         />
-                        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 2 }}>Top:</span>
                             {[10, 20, 30, 50, 100].map(n => (
                                 <button
                                     key={n}

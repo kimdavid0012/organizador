@@ -461,7 +461,7 @@ export default function AgentsHub() {
       </div>
 
       {/* Tabs */}
-      <div className="agents-tabs-row" style={{ display: 'flex', gap: 8, marginBottom: 20, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
+      <div className="agents-tabs-row" style={{ display: 'flex', gap: 8, marginBottom: 20, overflowX: 'auto', paddingBottom: 8, WebkitOverflowScrolling: 'touch' }}>
         {TABS.filter(t => !t.alwaysOn).map(tab => {
           const isActive = activeTab === tab.id;
           const hasData = !!results[tab.id];
@@ -750,7 +750,17 @@ export default function AgentsHub() {
         </div>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .agents-tabs-row { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
+        .agents-tabs-row::-webkit-scrollbar { height: 4px; }
+        .agents-tabs-row::-webkit-scrollbar-track { background: transparent; }
+        .agents-tabs-row::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+        @media (max-width: 768px) {
+          .agents-tabs-row { padding-bottom: 6px !important; }
+          .agents-tabs-row button { flex-shrink: 0; }
+        }
+      `}</style>
     </div>
   );
 }

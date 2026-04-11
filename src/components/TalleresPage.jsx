@@ -276,6 +276,12 @@ export default function TalleresPage() {
                 score = Math.max(0, Math.round(score));
             }
 
+            // Sum cantidadContada from mercaderiaConteos for this taller
+            const tallerKey = normalizeUpper(name);
+            const ingresadosTotal = mercaderiaConteos
+                .filter(c => normalizeUpper(c.taller) === tallerKey)
+                .reduce((sum, c) => sum + Number(c.cantidadContada || 0), 0);
+
             map[name] = {
                 total: assigned.length,
                 completed: completed.length,
@@ -289,6 +295,7 @@ export default function TalleresPage() {
                 fallados,
                 totalCost,
                 score,
+                ingresadosTotal,
                 moldes: assigned
             };
         });
@@ -415,6 +422,7 @@ export default function TalleresPage() {
                                             <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: 2 }}>
                                                 {s?.total || 0} articulos
                                                 {` · ${s?.completed || 0} ingresados`}
+                                                {s?.ingresadosTotal > 0 ? ` · ${s.ingresadosTotal} prendas` : ''}
                                                 {s?.inProgress?.length ? ` · ${s.inProgress.length} pendientes` : ''}
                                             </div>
                                         </div>
@@ -452,10 +460,11 @@ export default function TalleresPage() {
                                 </span>
                             </h3>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: user?.role === 'admin' ? 'repeat(6, 1fr)' : 'repeat(5, 1fr)', gap: 'var(--sp-3)', marginTop: 'var(--sp-3)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: user?.role === 'admin' ? 'repeat(7, 1fr)' : 'repeat(6, 1fr)', gap: 'var(--sp-3)', marginTop: 'var(--sp-3)' }}>
                                 {[
                                     { value: selectedStats.total, label: 'Asignados', bg: 'var(--accent-light)', color: 'var(--accent)' },
                                     { value: selectedStats.completed, label: 'Ingresados', bg: 'var(--success-bg)', color: 'var(--success)' },
+                                    { value: selectedStats.ingresadosTotal || 0, label: 'Prendas contadas', bg: 'rgba(52,211,153,0.08)', color: 'var(--success)', icon: PackageCheck },
                                     { value: selectedStats.inProgress.length, label: 'Pendientes', bg: 'var(--warning-bg)', color: 'var(--warning)' },
                                     { value: selectedStats.avgDays ?? '—', label: 'Promedio taller', bg: selectedStats.avgDays === null ? 'var(--glass-bg)' : selectedStats.avgDays <= 5 ? 'var(--success-bg)' : selectedStats.avgDays <= 10 ? 'var(--warning-bg)' : 'var(--danger-bg)', color: selectedStats.avgDays === null ? 'var(--text-muted)' : selectedStats.avgDays <= 5 ? 'var(--success)' : selectedStats.avgDays <= 10 ? 'var(--warning)' : 'var(--danger)', suffix: selectedStats.avgDays === null ? '' : 'd' },
                                     { value: selectedStats.fallados || 0, label: 'Fallados', bg: selectedStats.fallados > 0 ? 'var(--danger-bg)' : 'var(--glass-bg)', color: selectedStats.fallados > 0 ? 'var(--danger)' : 'var(--text-muted)' },

@@ -2007,6 +2007,38 @@ export function DataProvider({ children }) {
             }
         },
 
+        // Third migration — ensure ALL L2 prices are higher than L1
+        runPriceMigrationL2Uniform: () => {
+            const currentConfig = stateRef.current.config;
+            if (currentConfig._priceMigrationL2Uniform_2026April) return;
+
+            const products = currentConfig.posProductos || [];
+            let updatedCount = 0;
+            const updatedProducts = products.map(p => {
+                const l1 = Number(p.precioVentaL1 || 0);
+                const l2 = Number(p.precioVentaL2 || 0);
+                if (l1 > 0 && l2 <= l1) {
+                    updatedCount++;
+                    return { ...p, precioVentaL2: Math.round(l1 * 1.15) };
+                }
+                return p;
+            });
+
+            if (updatedCount > 0) {
+                dispatch({
+                    type: 'UPDATE_CONFIG',
+                    payload: {
+                        posProductos: updatedProducts,
+                        _priceMigrationL2Uniform_2026April: true
+                    }
+                });
+                console.log(`✅ L2 uniform migration: fixed ${updatedCount} products where L2 ≤ L1`);
+            } else {
+                dispatch({ type: 'UPDATE_CONFIG', payload: { _priceMigrationL2Uniform_2026April: true } });
+                console.log('L2 uniform migration: all L2 prices already above L1');
+            }
+        },
+
         // Second migration — fix L2 prices that didn't apply
         runPriceMigrationL2Fix: () => {
             const currentConfig = stateRef.current.config;

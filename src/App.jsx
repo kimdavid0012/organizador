@@ -271,7 +271,7 @@ class ErrorBoundary extends React.Component {
 }
 
 function AppContent() {
-    const { state, addMolde, addTarea, syncStatus, updateConfig, runPriceMigration2026April, runPriceMigrationL2Fix, runPriceMigrationL2Force } = useData();
+    const { state, addMolde, addTarea, syncStatus, updateConfig, runPriceMigration2026April, runPriceMigrationL2Fix, runPriceMigrationL2Force, runPriceMigrationL2Uniform } = useData();
     const { moldes, telas, config } = state;
     const { t, lang, changeLang, LANGUAGE_LABELS } = useI18n();
     const { user, users, originalAdmin, logout, switchUser, getAllowedSections } = useAuth(); // Auth integration
@@ -324,6 +324,13 @@ function AppContent() {
     useEffect(() => {
         if (state?.config?.posProductos?.length > 0 && !state?.config?._priceMigrationL2Force_2026April) {
             runPriceMigrationL2Force();
+        }
+    }, [state?.config?.posProductos?.length]);
+
+    // L2 uniform migration — ensure L2 > L1 for all products
+    useEffect(() => {
+        if (state?.config?.posProductos?.length > 0 && !state?.config?._priceMigrationL2Uniform_2026April) {
+            runPriceMigrationL2Uniform();
         }
     }, [state?.config?.posProductos?.length]);
 
