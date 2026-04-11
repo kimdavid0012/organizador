@@ -2007,6 +2007,53 @@ export function DataProvider({ children }) {
             }
         },
 
+        // Second migration — fix L2 prices that didn't apply
+        runPriceMigrationL2Fix: () => {
+            const currentConfig = stateRef.current.config;
+            if (currentConfig._priceMigrationL2Fix_2026April) return;
+
+            const l2Prices = {
+                '6000': 5500, '6001': 5700, '6002': 5900, '6003': 6900,
+                '6004': 6100, '6005': 6800, '6008': 8500, '6009': 9200,
+                '6010': 9200, '6011': 9200, '6300': 17000, '6301': 19000,
+                '6302': 17000, '6303': 15000, '6304': 19000, '6305': 20000,
+                '6306': 18000, '6307': 21000, '6308': 15000, '6309': 11000,
+                '6310': 11000, '6200': 11000, '6201': 11500, '6202': 8000,
+                '6203': 9500, '6204': 7000, '6205': 9500, '6206': 13500,
+                '6207': 11200, '6208': 13900, '6209': 8000, '6210': 11500,
+                '6212': 7000, '6213': 13000, '4015': 7000, '4016': 5600,
+                '4017': 5600, '4524': 7000, '4526': 7000, '4527': 7000,
+                '4630': 7000, '4651': 7000, '4542': 7000, '4543': 7000,
+                '4545': 7000, '4547': 8000, '4548': 8000, '4540': 1000,
+                '4541': 7000
+            };
+
+            const products = currentConfig.posProductos || [];
+            let updatedCount = 0;
+            const updatedProducts = products.map(p => {
+                const code = (p.articuloVenta || p.codigoInterno || '').toString().replace(/\D/g, '');
+                if (l2Prices[code] && Number(p.precioVentaL2 || 0) !== l2Prices[code]) {
+                    updatedCount++;
+                    return { ...p, precioVentaL2: l2Prices[code] };
+                }
+                return p;
+            });
+
+            if (updatedCount > 0) {
+                dispatch({
+                    type: 'UPDATE_CONFIG',
+                    payload: {
+                        posProductos: updatedProducts,
+                        _priceMigrationL2Fix_2026April: true
+                    }
+                });
+                console.log(`✅ L2 price fix migration: updated ${updatedCount} products`);
+            } else {
+                dispatch({ type: 'UPDATE_CONFIG', payload: { _priceMigrationL2Fix_2026April: true } });
+                console.log('L2 price fix migration: all L2 prices already correct or no matches');
+            }
+        },
+
         fetchWooProducts: async () => {
             const currentConfig = stateRef.current.config;
             try {

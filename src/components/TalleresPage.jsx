@@ -281,6 +281,27 @@ export default function TalleresPage() {
 
     const selectedStats = selected ? stats[selected] : null;
 
+    const markAsReceived = (item) => {
+        const today = new Date().toISOString().split('T')[0];
+        const newConteo = {
+            id: `conteo-manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            taller: selected,
+            numeroCorte: item.corteNombre,
+            articuloFabrica: item.codigo,
+            descripcion: item.nombre,
+            cantidadOriginal: item.cantidad,
+            cantidadContada: item.cantidad,
+            fechaIngreso: today,
+            chequeado: false,
+            fallado: 0,
+            comentarioControl: 'Marcado manualmente como recibido',
+            _manualEntry: true
+        };
+        updateConfig({
+            mercaderiaConteos: [...mercaderiaConteos, newConteo]
+        });
+    };
+
     const addTaller = () => {
         const name = normalizeText(newName);
         if (!name || manualTalleres.some((item) => normalizeUpper(item) === normalizeUpper(name))) return;
@@ -352,7 +373,23 @@ export default function TalleresPage() {
                                     >
                                         <Factory style={{ width: 18, height: 18, color: 'var(--accent)', flexShrink: 0 }} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)' }}>{name}</div>
+                                            <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 'var(--fw-semibold)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                {name}
+                                                {s?.total > 0 && (
+                                                    <span style={{
+                                                        fontSize: '9px',
+                                                        fontWeight: 'var(--fw-bold)',
+                                                        padding: '1px 6px',
+                                                        borderRadius: 'var(--radius-sm)',
+                                                        background: s?.inProgress?.length === 0 ? 'var(--success-bg)' : 'var(--warning-bg)',
+                                                        color: s?.inProgress?.length === 0 ? 'var(--success)' : 'var(--warning)',
+                                                        textTransform: 'uppercase',
+                                                        letterSpacing: '0.5px'
+                                                    }}>
+                                                        {s?.inProgress?.length === 0 ? 'Entregó todo' : `${s.inProgress.length} pendiente${s.inProgress.length > 1 ? 's' : ''}`}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: 2 }}>
                                                 {s?.total || 0} articulos
                                                 {` · ${s?.completed || 0} ingresados`}
@@ -435,6 +472,49 @@ export default function TalleresPage() {
                             )}
                         </div>
 
+                        {/* Recent deliveries summary */}
+                        {selectedStats.completed > 0 && (
+                            <div className="settings-section" style={{ marginBottom: 'var(--sp-4)' }}>
+                                <h3 style={{ fontSize: 'var(--fs-sm)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <PackageCheck style={{ width: 16, height: 16, color: 'var(--success)' }} />
+                                    Entregas recibidas ({selectedStats.completed})
+                                </h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-1)', marginTop: 'var(--sp-2)', maxHeight: 200, overflowY: 'auto' }}>
+                                    {selectedStats.moldes
+                                        .filter(item => item.matchedConteoId)
+                                        .sort((a, b) => (b.fechaIngreso || '').localeCompare(a.fechaIngreso || ''))
+                                        .map(item => (
+                                            <div key={item.id} style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 'var(--sp-2)',
+                                                padding: '6px 10px',
+                                                background: 'rgba(52,211,153,0.06)',
+                                                borderRadius: 'var(--radius-sm)',
+                                                fontSize: '11px'
+                                            }}>
+                                                <CheckCircle2 style={{ width: 12, height: 12, color: 'var(--success)', flexShrink: 0 }} />
+                                                <span style={{ flex: 1, fontWeight: 'var(--fw-medium)' }}>{item.nombre}</span>
+                                                <span style={{ color: 'var(--text-secondary)' }}>{item.corteNombre}</span>
+                                                <span style={{ color: 'var(--text-secondary)' }}>{item.cantidad} u.</span>
+                                                <span style={{ color: 'var(--success)', fontWeight: 'var(--fw-semibold)' }}>
+                                                    {item.fechaIngreso || '—'}
+                                                </span>
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
+                                                    ({item.diasIngreso ?? '?'}d)
+                                                </span>
+                                                {item.fallado > 0 && (
+                                                    <span style={{ color: 'var(--danger)', fontWeight: 'var(--fw-bold)' }}>
+                                                        {item.fallado} fall.
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            </div>
+                        )}
+
                         {selectedStats.inProgress.length > 0 && (
                             <div className="settings-section" style={{ marginBottom: 'var(--sp-4)' }}>
                                 <h3 style={{ fontSize: 'var(--fs-sm)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -465,8 +545,19 @@ export default function TalleresPage() {
                                                     <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                                                         {item.corteNombre} · {item.cantidad} prendas
                                                     </div>
-                                                    <div style={{ marginTop: 6, fontSize: '11px', fontWeight: 'var(--fw-bold)', color: isDelayed ? 'var(--danger)' : 'var(--warning)' }}>
-                                                        {item.diasPendientes || 0}d esperando ingreso
+                                                    <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                        <span style={{ fontSize: '11px', fontWeight: 'var(--fw-bold)', color: isDelayed ? 'var(--danger)' : 'var(--warning)' }}>
+                                                            {item.diasPendientes || 0}d esperando ingreso
+                                                        </span>
+                                                        {user?.role === 'admin' && (
+                                                            <button
+                                                                className="btn btn-primary"
+                                                                style={{ fontSize: '9px', padding: '2px 8px', minWidth: 'auto' }}
+                                                                onClick={(e) => { e.stopPropagation(); markAsReceived(item); }}
+                                                            >
+                                                                <CheckCircle2 style={{ width: 10, height: 10 }} /> Recibido
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -541,8 +632,17 @@ export default function TalleresPage() {
                                                 )}
                                                 {item.chequeado && (
                                                     <span className="badge badge-success" style={{ whiteSpace: 'nowrap' }}>
-                                                        <CheckCircle2 style={{ width: 12, height: 12 }} /> Nadia
+                                                        <CheckCircle2 style={{ width: 12, height: 12 }} /> Chequeado
                                                     </span>
+                                                )}
+                                                {!item.matchedConteoId && user?.role === 'admin' && (
+                                                    <button
+                                                        className="btn"
+                                                        style={{ fontSize: '10px', padding: '2px 8px', minWidth: 'auto', background: 'var(--success)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)' }}
+                                                        onClick={() => markAsReceived(item)}
+                                                    >
+                                                        Recibido
+                                                    </button>
                                                 )}
                                                 {item.fallado > 0 && (
                                                     <span className="badge badge-alta" style={{ whiteSpace: 'nowrap' }}>
