@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useData } from '../store/DataContext';
-import { Plus, User, FileText, MapPin, Truck, History, Globe, RefreshCw } from 'lucide-react';
+import { Plus, User, FileText, MapPin, Truck, History, Globe, RefreshCw, Mail, X } from 'lucide-react';
 import ClienteModal from './ClienteModal';
 import { wooService } from '../utils/wooService';
 import { generateId } from '../utils/helpers';
@@ -65,6 +65,10 @@ export default function ClientesPage() {
     const [viewingHistory, setViewingHistory] = useState(null);
     const [importingWoo, setImportingWoo] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [emailModalOpen, setEmailModalOpen] = useState(false);
+    const [emailSubject, setEmailSubject] = useState('');
+    const [emailBody, setEmailBody] = useState('');
 
     const normalizeSearchValue = (value) => (value || '').toString().toLowerCase().trim();
 
@@ -247,6 +251,53 @@ export default function ClientesPage() {
         setIsModalOpen(true);
     };
 
+    const toggleSelect = (id) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        const visibleIds = filteredClientes.map(c => c.id);
+        const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+        if (allSelected) {
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                visibleIds.forEach(id => next.delete(id));
+                return next;
+            });
+        } else {
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                visibleIds.forEach(id => next.add(id));
+                return next;
+            });
+        }
+    };
+
+    const selectedClientes = clientes.filter(c => selectedIds.has(c.id));
+    const selectedWithEmail = selectedClientes.filter(c => c.email);
+    const selectedWithoutEmail = selectedClientes.filter(c => !c.email);
+
+    const handleSendEmail = () => {
+        const emails = selectedWithEmail.map(c => c.email);
+        if (emails.length === 0) {
+            alert('Ninguno de los clientes seleccionados tiene email.');
+            return;
+        }
+        const mailtoUrl = `mailto:?bcc=${emails.join(',')}&subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+        window.open(mailtoUrl);
+        setEmailModalOpen(false);
+        setEmailSubject('');
+        setEmailBody('');
+        setSelectedIds(new Set());
+    };
+
+    const allVisibleSelected = filteredClientes.length > 0 && filteredClientes.every(c => selectedIds.has(c.id));
+
     return (
         <div className="clientes-page">
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -298,6 +349,15 @@ export default function ClientesPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead style={{ position: 'sticky', top: '73px', background: 'var(--bg-panel)', zIndex: 1, borderBottom: '1px solid var(--border-color)' }}>
                                 <tr>
+                                    <th style={{ padding: '12px', textAlign: 'center', width: '40px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={allVisibleSelected}
+                                            onChange={(e) => { e.stopPropagation(); toggleSelectAll(); }}
+                                            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                                            title="Seleccionar todos"
+                                        />
+                                    </th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Nombre / Razón Social</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>CUIT</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Email</th>
@@ -313,11 +373,22 @@ export default function ClientesPage() {
                                         style={{
                                             borderBottom: '1px solid var(--border-color)',
                                             cursor: 'pointer',
-                                            background: viewingHistory?.id === cliente.id ? 'var(--bg-hover)' : 'transparent'
+                                            background: selectedIds.has(cliente.id)
+                                                ? 'rgba(99,102,241,0.1)'
+                                                : viewingHistory?.id === cliente.id ? 'var(--bg-hover)' : 'transparent'
                                         }}
                                         onClick={() => setViewingHistory(cliente)}
                                         className="table-row-hover"
                                     >
+                                        <td style={{ padding: '12px', textAlign: 'center' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.has(cliente.id)}
+                                                onChange={(e) => { e.stopPropagation(); toggleSelect(cliente.id); }}
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                                            />
+                                        </td>
                                         <td style={{ padding: '12px', fontWeight: 'var(--fw-medium)' }}>{cliente.nombre}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{cliente.cuit || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '12px' }}>{cliente.email || '-'}</td>
@@ -423,6 +494,146 @@ export default function ClientesPage() {
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSaveCliente}
                 />
+            )}
+
+            {/* Floating action bar when clients are selected */}
+            {selectedIds.size > 0 && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '24px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'var(--bg-panel)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                    zIndex: 100,
+                    backdropFilter: 'blur(12px)'
+                }}>
+                    <span style={{ fontWeight: 'bold' }}>{selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}</span>
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => setEmailModalOpen(true)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                        <Mail size={16} /> Enviar Email
+                    </button>
+                    <button
+                        className="btn btn-ghost"
+                        onClick={() => setSelectedIds(new Set())}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                        <X size={16} /> Limpiar
+                    </button>
+                </div>
+            )}
+
+            {/* Email compose modal */}
+            {emailModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 200,
+                    backdropFilter: 'blur(4px)'
+                }} onClick={() => setEmailModalOpen(false)}>
+                    <div style={{
+                        background: 'var(--bg-panel)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '24px',
+                        width: '100%',
+                        maxWidth: '560px',
+                        maxHeight: '80vh',
+                        overflowY: 'auto',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
+                    }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Mail size={20} /> Enviar Email Masivo
+                            </h3>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setEmailModalOpen(false)}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {selectedWithoutEmail.length > 0 && (
+                            <div style={{
+                                background: 'rgba(234,179,8,0.15)',
+                                border: '1px solid rgba(234,179,8,0.3)',
+                                borderRadius: 'var(--radius-sm)',
+                                padding: '10px 12px',
+                                marginBottom: '16px',
+                                fontSize: 'var(--fs-sm)',
+                                color: '#eab308'
+                            }}>
+                                {selectedWithoutEmail.length} cliente{selectedWithoutEmail.length !== 1 ? 's' : ''} sin email: {selectedWithoutEmail.map(c => c.nombre).join(', ')}
+                            </div>
+                        )}
+
+                        <div style={{ marginBottom: '12px' }}>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: 'var(--fs-sm)', color: 'var(--text-muted)' }}>Para (BCC):</label>
+                            <div style={{
+                                background: 'var(--bg-input)',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: 'var(--radius-sm)',
+                                padding: '10px',
+                                fontSize: 'var(--fs-sm)',
+                                color: 'var(--text-muted)',
+                                maxHeight: '80px',
+                                overflowY: 'auto'
+                            }}>
+                                {selectedWithEmail.length} destinatario{selectedWithEmail.length !== 1 ? 's' : ''} con email
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '12px' }}>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: 'var(--fs-sm)', color: 'var(--text-muted)' }}>Asunto:</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={emailSubject}
+                                onChange={(e) => setEmailSubject(e.target.value)}
+                                placeholder="Asunto del email..."
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: 'var(--fs-sm)', color: 'var(--text-muted)' }}>Mensaje:</label>
+                            <textarea
+                                className="form-input"
+                                value={emailBody}
+                                onChange={(e) => setEmailBody(e.target.value)}
+                                placeholder="Escribi el cuerpo del email..."
+                                rows={6}
+                                style={{ width: '100%', resize: 'vertical' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            <button className="btn btn-secondary" onClick={() => setEmailModalOpen(false)}>Cancelar</button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleSendEmail}
+                                disabled={selectedWithEmail.length === 0}
+                                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                                <Mail size={16} /> Enviar ({selectedWithEmail.length})
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             <style jsx>{`

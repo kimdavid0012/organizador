@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet, Instagram, Zap
+    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet, Instagram, Zap, Menu
 } from 'lucide-react';
 import { DataProvider, useData } from './store/DataContext';
 import { I18nProvider, useI18n } from './store/I18nContext';
@@ -287,6 +287,7 @@ function AppContent() {
     const [editingMolde, setEditingMolde] = useState(null);
     const [dailyQuote, setDailyQuote] = useState('');
     const [showDailyQuote, setShowDailyQuote] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const storage = getStorageUsage();
 
@@ -427,8 +428,32 @@ function AppContent() {
 
     return (
         <div className="app">
+            {/* Mobile hamburger button */}
+            <button
+                className="mobile-hamburger"
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Abrir menú"
+            >
+                <Menu size={22} />
+            </button>
+
+            {/* Mobile sidebar overlay backdrop */}
+            {mobileMenuOpen && (
+                <div
+                    className="sidebar-overlay-backdrop"
+                    onClick={() => setMobileMenuOpen(false)}
+                />
+            )}
+
             <div className="app-body">
-                <aside className="sidebar">
+                <aside className={`sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`}>
+                    <button
+                        className="sidebar-close-btn"
+                        onClick={() => setMobileMenuOpen(false)}
+                        aria-label="Cerrar menú"
+                    >
+                        <XIcon size={20} />
+                    </button>
                     <div className="sidebar-brand">
                         <div className="sidebar-brand-icon">
                             <Scissors size={20} />
@@ -451,7 +476,7 @@ function AppContent() {
                             <div
                                 key={item.id}
                                 className={`sidebar-item ${view === item.id ? 'active' : ''}`}
-                                onClick={() => setView(item.id)}
+                                onClick={() => { setView(item.id); setMobileMenuOpen(false); }}
                             >
                                 <item.icon />
                                 <span>{item.label}</span>
@@ -558,7 +583,7 @@ function AppContent() {
                     </div>
                 </aside>
 
-                <div className="main-content">
+                <div className="main-content">
                     {(view === 'kanban' || view === 'library') && (
                         <Header
                             filters={filters}

@@ -1,14 +1,88 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { useData } from '../store/DataContext';
 import { useAuth } from '../store/AuthContext';
 import { generateId, formatDate } from '../utils/helpers';
-import { Plus, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Save, RefreshCw } from 'lucide-react';
+import { Plus, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Save, RefreshCw, Camera, X, Check } from 'lucide-react';
 import './PedidosOnlinePage.css';
 
 export default function PedidosOnlinePage() {
-    const { state, addPedidoOnline, addPedidoItem, updatePedidoOnlineStatus, updatePedidoItem, fetchWooOrders } = useData();
+    const { state, updateConfig, addPedidoOnline, addPedidoItem, updatePedidoOnlineStatus, updatePedidoItem, fetchWooOrders } = useData();
     const { user } = useAuth();
     const pedidos = state.config?.pedidosOnline || [];
+
+    // CHANGE 14 — Order Source Filter
+    const [filtroOrigen, setFiltroOrigen] = useState('Todos');
+    const origenOptions = ['Todos', 'Instagram', 'WhatsApp', 'Directo', 'Modatex', 'Web', 'Otro'];
+
+    const origenColors = {
+        Instagram: { bg: '#fce4ec', color: '#c2185b' },
+        WhatsApp: { bg: '#e8f5e9', color: '#2e7d32' },
+        Directo: { bg: '#e3f2fd', color: '#1565c0' },
+        Modatex: { bg: '#fff3e0', color: '#e65100' },
+        Web: { bg: '#ede7f6', color: '#4527a0' },
+        Otro: { bg: '#f5f5f5', color: '#616161' },
+    };
+
+    const pedidosFiltrados = useMemo(() => {
+        if (filtroOrigen === 'Todos') return pedidos;
+        return pedidos.filter(p => p.origen === filtroOrigen);
+    }, [pedidos, filtroOrigen]);
+
+    // CHANGE 15 — Payment Verification
+    const [comprobanteModalImg, setComprobanteModalImg] = useState(null);
+    const fileInputRefs = useRef({});
+
+    const pendingPaymentCount = useMemo(() =>
+        pedidos.filter(p => p.paymentStatus === 'comprobante_subido').length
+    , [pedidos]);
+
+    const updatePedidoPayment = (pedidoId, changes) => {
+        const updated = pedidos.map(p => p.id === pedidoId ? { ...p, ...changes } : p);
+        updateConfig({ pedidosOnline: updated });
+    };
+
+    const paymentStatusConfig = {
+        pendiente: { label: 'Pago Pendiente', bg: 'rgba(251,191,36,0.15)', color: 'var(--warning)' },
+        comprobante_subido: { label: 'Comprobante Subido', bg: 'rgba(59,130,246,0.15)', color: '#3b82f6' },
+        aprobado: { label: 'Pago Aprobado', bg: 'rgba(34,197,94,0.15)', color: 'var(--success)' },
+        rechazado: { label: 'Pago Rechazado', bg: 'rgba(239,68,68,0.15)', color: 'var(--error)' },
+    };
+
+    const handleComprobanteUpload = async (pedidoId, event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            updatePedidoPayment(pedidoId, {
+                paymentStatus: 'comprobante_subido',
+                comprobanteFoto: reader.result,
+                comprobanteUploadedAt: new Date().toISOString(),
+            });
+        };
+        reader.readAsDataURL(file);
+        event.target.value = '';
+    };
+
+    const handleApprovePayment = (e, pedidoId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePedidoPayment(pedidoId, {
+            paymentStatus: 'aprobado',
+            paymentApprovedAt: new Date().toISOString(),
+            paymentApprovedBy: user.name || user.email || user.role,
+        });
+        updatePedidoOnlineStatus(pedidoId, 'listo');
+    };
+
+    const handleRejectPayment = (e, pedidoId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePedidoPayment(pedidoId, {
+            paymentStatus: 'rechazado',
+        });
+    };
+
+    const canUploadComprobante = user.role === 'encargada' || user.role === 'admin';
     const posProductos = state.config?.posProductos || [];
 
     const [loadingWoo, setLoadingWoo] = useState(false);
@@ -209,8 +283,15 @@ export default function PedidosOnlinePage() {
 
     return (
         <div className="pedidos-page">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <h2 className="pedidos-page-title" style={{ margin: 0 }}>Pedidos Online</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <h2 className="pedidos-page-title" style={{ margin: 0 }}>Pedidos Online</h2>
+                    {pendingPaymentCount > 0 && (
+                        <span className="payment-pending-count-badge">
+                            {pendingPaymentCount} comprobante{pendingPaymentCount > 1 ? 's' : ''} por aprobar
+                        </span>
+                    )}
+                </div>
                 <button
                     className="btn btn-secondary"
                     onClick={handleFetchWooOrders}
@@ -220,6 +301,25 @@ export default function PedidosOnlinePage() {
                     <RefreshCw size={16} className={loadingWoo ? 'spin' : ''} />
                     {loadingWoo ? 'Sincronizando...' : '🔄 Traer de la Web'}
                 </button>
+            </div>
+
+            {/* CHANGE 14 — Filtro por Origen */}
+            <div className="origen-filter-bar">
+                {origenOptions.map(opt => (
+                    <button
+                        key={opt}
+                        type="button"
+                        className={`origen-filter-btn ${filtroOrigen === opt ? 'active' : ''}`}
+                        onClick={() => setFiltroOrigen(opt)}
+                    >
+                        {opt}
+                        {opt !== 'Todos' && (
+                            <span className="origen-filter-count">
+                                {pedidos.filter(p => p.origen === opt).length}
+                            </span>
+                        )}
+                    </button>
+                ))}
             </div>
 
             {canCreateOrder && (
@@ -318,20 +418,28 @@ export default function PedidosOnlinePage() {
             )}
 
             <div className="pedidos-list">
-                {pedidos.length === 0 && (
+                {pedidosFiltrados.length === 0 && (
                     <div className="empty-state">No hay pedidos registrados.</div>
                 )}
-                {pedidos.map(pedido => (
+                {pedidosFiltrados.map(pedido => {
+                    const origenStyle = origenColors[pedido.origen] || origenColors.Otro;
+                    const pStatus = pedido.paymentStatus || 'pendiente';
+                    const pConfig = paymentStatusConfig[pStatus] || paymentStatusConfig.pendiente;
+
+                    return (
                     <div key={pedido.id} className={`pedido-card card estado-${pedido.estado}`}>
                         <div className="pedido-header" onClick={() => setExpandedPedidoId(expandedPedidoId === pedido.id ? null : pedido.id)}>
                             <div className="pedido-info">
                                 <span className="pedido-numero">{pedido.numeroPedido}</span>
                                 <span className="pedido-cliente">{pedido.cliente}</span>
                                 {pedido.origen && (
-                                    <span className="badge" style={{ background: 'var(--accent-light)', color: 'var(--accent)', marginLeft: 8 }}>
+                                    <span className="badge origen-badge" style={{ background: origenStyle.bg, color: origenStyle.color, marginLeft: 8 }}>
                                         {pedido.origen}
                                     </span>
                                 )}
+                                <span className="badge payment-status-badge" style={{ background: pConfig.bg, color: pConfig.color, marginLeft: 4 }}>
+                                    {pConfig.label}
+                                </span>
                                 <span className="pedido-fecha" style={{ marginLeft: 'auto', marginRight: 16 }}>{formatDate(pedido.fecha)}</span>
                             </div>
                             <div className="pedido-actions">
@@ -339,6 +447,43 @@ export default function PedidosOnlinePage() {
                                 {pedido.estado === 'listo-juan' && <span className="badge" style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--warning)' }}><CheckCircle size={14} /> Listo Juan</span>}
                                 {pedido.estado === 'listo' && <span className="badge badge-success"><CheckCircle size={14} /> Listo Nadia</span>}
                                 {pedido.estado === 'incompleto' && <span className="badge badge-error"><AlertCircle size={14} /> Incompleto</span>}
+
+                                {/* Upload comprobante button (encargada + admin) */}
+                                {canUploadComprobante && pStatus !== 'aprobado' && (
+                                    <label
+                                        className="btn-comprobante-upload"
+                                        title="Subir comprobante de pago"
+                                        onClick={e => e.stopPropagation()}
+                                    >
+                                        <Camera size={16} />
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            style={{ display: 'none' }}
+                                            ref={el => { fileInputRefs.current[pedido.id] = el; }}
+                                            onChange={e => handleComprobanteUpload(pedido.id, e)}
+                                        />
+                                    </label>
+                                )}
+
+                                {/* Comprobante thumbnail + approve/reject (admin only) */}
+                                {user.role === 'admin' && pStatus === 'comprobante_subido' && pedido.comprobanteFoto && (
+                                    <div className="comprobante-review-inline" onClick={e => e.stopPropagation()}>
+                                        <img
+                                            src={pedido.comprobanteFoto}
+                                            alt="Comprobante"
+                                            className="comprobante-thumb"
+                                            onClick={() => setComprobanteModalImg(pedido.comprobanteFoto)}
+                                        />
+                                        <button className="btn-approve-payment" title="Aprobar pago" onClick={e => handleApprovePayment(e, pedido.id)}>
+                                            <Check size={14} />
+                                        </button>
+                                        <button className="btn-reject-payment" title="Rechazar pago" onClick={e => handleRejectPayment(e, pedido.id)}>
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                )}
+
                                 {expandedPedidoId === pedido.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                             </div>
                         </div>
@@ -603,8 +748,20 @@ export default function PedidosOnlinePage() {
                             </div>
                         )}
                     </div>
-                ))}
+                );})}
             </div>
+
+            {/* Comprobante full-size modal */}
+            {comprobanteModalImg && (
+                <div className="comprobante-modal-overlay" onClick={() => setComprobanteModalImg(null)}>
+                    <div className="comprobante-modal-content" onClick={e => e.stopPropagation()}>
+                        <button className="comprobante-modal-close" onClick={() => setComprobanteModalImg(null)}>
+                            <X size={24} />
+                        </button>
+                        <img src={comprobanteModalImg} alt="Comprobante de pago" />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -257,6 +257,7 @@
     .pos-btn-group .btn {
         justify-content: center;
         width: 100%;
+        min-height: 44px;
     }
 
     .pos-table-container {

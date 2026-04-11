@@ -448,6 +448,77 @@ const buildAssistantSnapshot = (state) => {
     };
 };
 
+const buildFullDashboardContext = (state) => {
+    const config = state?.config || {};
+    const sections = [];
+
+    // 1. Products & Stock summary
+    const products = Array.isArray(config.posProductos) ? config.posProductos : [];
+    const activeProducts = products.filter(p => p.activo);
+    const lowStock = products.filter(p => p.stock <= (p.alertaStockMinimo || 0) && p.stock !== 999);
+    const stockByArticle = products
+        .filter(p => p.stock !== 999 && p.stock > 0)
+        .map(p => `${p.articuloVenta || p.codigoInterno}: ${p.stock} un`)
+        .join(', ');
+    sections.push(`STOCK ACTUAL: ${activeProducts.length} artículos activos. Stock total: ${products.reduce((s, p) => s + (p.stock === 999 ? 0 : (p.stock || 0)), 0)} unidades. Bajo stock: ${lowStock.length}. Detalle: ${stockByArticle.slice(0, 1500)}`);
+
+    // 2. Online orders summary
+    const pedidos = Array.isArray(config.pedidosOnline) ? config.pedidosOnline : [];
+    const pendientes = pedidos.filter(p => p.estado === 'pendiente');
+    const listos = pedidos.filter(p => p.estado === 'listo');
+    const bySource = {};
+    pedidos.forEach(p => { bySource[p.origen || 'Sin origen'] = (bySource[p.origen || 'Sin origen'] || 0) + 1; });
+    const sourceBreakdown = Object.entries(bySource).map(([k, v]) => `${k}: ${v}`).join(', ');
+    const totalRevenue = pedidos.reduce((s, p) => s + Number(p.monto || 0), 0);
+    const biggestOrder = [...pedidos].sort((a, b) => Number(b.monto || 0) - Number(a.monto || 0))[0];
+    sections.push(`PEDIDOS ONLINE: ${pedidos.length} total (${pendientes.length} pendientes, ${listos.length} listos). Por origen: ${sourceBreakdown}. Facturación total: $${totalRevenue.toLocaleString('es-AR')}. Pedido más grande: ${biggestOrder ? `${biggestOrder.cliente || biggestOrder.clienteNombre || 'N/A'} $${Number(biggestOrder.monto || 0).toLocaleString('es-AR')}` : 'N/A'}`);
+
+    // 3. POS Sales
+    const ventas = Array.isArray(config.posVentas) ? config.posVentas : [];
+    const today = new Date().toISOString().slice(0, 10);
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const ventasHoy = ventas.filter(v => (v.fecha || '').slice(0, 10) === today);
+    const totalVentasHoy = ventasHoy.reduce((s, v) => s + Number(v.total || v.totalFinal || 0), 0);
+    const totalVentasMes = ventas.filter(v => (v.fecha || '').slice(0, 7) === thisMonth).reduce((s, v) => s + Number(v.total || v.totalFinal || 0), 0);
+    sections.push(`VENTAS POS: ${ventas.length} ventas totales. Hoy: ${ventasHoy.length} ventas ($${totalVentasHoy.toLocaleString('es-AR')}). Este mes: $${totalVentasMes.toLocaleString('es-AR')}`);
+
+    // 4. Clients
+    const clientes = Array.isArray(config.clientes) ? config.clientes : [];
+    sections.push(`CLIENTES: ${clientes.length} registrados`);
+
+    // 5. Bank payments
+    const bankPayments = Array.isArray(config.bankPayments) ? config.bankPayments : [];
+    const thisMonthBank = bankPayments.filter(b => (b.fecha || '').slice(0, 7) === thisMonth);
+    const totalBankThisMonth = thisMonthBank.reduce((s, b) => s + Number(b.monto || 0), 0);
+    sections.push(`BANCO Y MP: ${bankPayments.length} movimientos totales. Este mes: $${totalBankThisMonth.toLocaleString('es-AR')}`);
+
+    // 6. MESAN
+    const mesanMov = Array.isArray(config.mesanMovimientos) ? config.mesanMovimientos : [];
+    const mesanVentas = Array.isArray(config.mesanVentasDiarias) ? config.mesanVentasDiarias : [];
+    sections.push(`MESAN: ${mesanMov.length} movimientos, ${mesanVentas.length} días con ventas registradas`);
+
+    // 7. Mercaderia conteos
+    const conteos = Array.isArray(config.mercaderiaConteos) ? config.mercaderiaConteos : [];
+    sections.push(`CONTEO MERCADERÍA: ${conteos.length} registros de conteo`);
+
+    // 8. Agent results
+    const agentsCache = config.agentsCache || {};
+    const agentSummaries = Object.entries(agentsCache)
+        .filter(([, v]) => v?.result || v?.content)
+        .map(([k, v]) => `${k}: ${((v.result || v.content) || '').slice(0, 400)}`)
+        .join('\n');
+    if (agentSummaries) {
+        sections.push(`ÚLTIMOS REPORTES DE AGENTES AI:\n${agentSummaries.slice(0, 1500)}`);
+    }
+
+    // Truncate total to ~4000 chars
+    let result = sections.join('\n\n');
+    if (result.length > 4000) {
+        result = result.slice(0, 3997) + '...';
+    }
+    return result;
+};
+
 const buildSystemPrompt = ({ lang, user, state, allowedActionList, isNadiaProfile, dashboardSnapshot }) => `Sos "CELA IA", la asistente interna del sistema CELAVIE.
 
 IDIOMA:
@@ -457,8 +528,12 @@ IDIOMA:
 - Si dudás, usá el idioma actual de la interfaz: ${lang}.
 
 ROL PRINCIPAL:
-- No sos solo un chatbot: sos una guía experta del sistema.
+- No sos solo un chatbot: sos una guía experta del sistema con acceso completo a todos los datos del negocio en tiempo real.
 - Tenés que operar como un "Jarvis" del negocio: entender lo que está pasando en el dashboard, absorber los datos actuales y responder en base a esos datos.
+- Podés responder preguntas sobre stock, ventas, pedidos, clientes, gastos, marketing y las recomendaciones de los agentes AI.
+- Cuando te pregunten por un artículo (ej: "6300"), buscá en los datos de stock por codigoInterno o articuloVenta.
+- Cuando te pregunten por ventas, usá los datos de POS y pedidos online.
+- Cuando te pregunten por pedidos por origen (ej: "Instagram"), usá el desglose por origen de los pedidos online.
 - Tenés que orientar a cada usuario sobre qué pantalla usar, qué paso sigue y qué dato falta.
 - Antes de ejecutar cambios, explicá brevemente qué vas a hacer si eso ayuda a evitar errores.
 - Cuando te pidan una acción concreta, ejecutala usando etiquetas <action>JSON</action>.
@@ -600,7 +675,10 @@ Los agentes AI generan reportes automáticos. Si el usuario pregunta sobre un re
 - "CEO" = decisiones del día, tareas asignadas al equipo
 Si el usuario no entiende un término de marketing (ROAS, CTR, CPC, etc), explicalo en criollo simple.
 
-SNAPSHOT OPERATIVO ACTUAL:
+DATOS ACTUALES DEL NEGOCIO (resumen legible):
+${buildFullDashboardContext(state)}
+
+SNAPSHOT OPERATIVO DETALLADO:
 ${JSON.stringify(dashboardSnapshot, null, 2)}
 
 ÚLTIMOS REPORTES DE AGENTES AI (agentsCache):

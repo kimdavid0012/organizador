@@ -64,10 +64,11 @@
         backdrop-filter: blur(12px);
     }
     .pos-nav-btn {
-        font-size: 11px;
-        padding: 8px 12px;
+        font-size: 12px;
+        padding: 10px 14px;
         white-space: nowrap;
         flex-shrink: 0;
+        min-height: 44px;
     }
     .pos-content {
         padding: 8px 8px 84px;

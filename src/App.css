@@ -536,6 +536,55 @@
     border-left: 3px solid var(--info);
 }
 
+/* ========= MOBILE HAMBURGER BUTTON ========= */
+.mobile-hamburger {
+    display: none;
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 9995;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-sm);
+}
+
+/* ========= SIDEBAR CLOSE BUTTON (mobile only) ========= */
+.sidebar-close-btn {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+}
+
+.sidebar-close-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+
+/* ========= SIDEBAR OVERLAY BACKDROP ========= */
+.sidebar-overlay-backdrop {
+    display: none;
+}
+
 /* ========= RESPONSIVE - TABLET ========= */
 @media (max-width: 900px) {
     .sidebar {
@@ -589,9 +638,76 @@
         flex-direction: column;
     }
 
-    /* Hide desktop sidebar on mobile */
+    /* Mobile hamburger visible */
+    .mobile-hamburger {
+        display: flex;
+    }
+
+    /* Sidebar close button visible */
+    .sidebar-close-btn {
+        display: flex;
+    }
+
+    /* Sidebar as overlay on mobile */
     .sidebar {
-        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 280px;
+        min-width: 280px;
+        z-index: 10001;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: none;
+    }
+
+    .sidebar.sidebar-open {
+        transform: translateX(0);
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Restore sidebar text that tablet hides */
+    .sidebar.sidebar-open .sidebar-brand h1,
+    .sidebar.sidebar-open .sidebar-brand span,
+    .sidebar.sidebar-open .sidebar-item span,
+    .sidebar.sidebar-open .sidebar-storage-label,
+    .sidebar.sidebar-open .sidebar-storage,
+    .sidebar.sidebar-open .sidebar-divider {
+        display: initial;
+    }
+
+    .sidebar.sidebar-open .sidebar-brand {
+        justify-content: flex-start;
+        padding: var(--sp-3) var(--sp-5);
+    }
+
+    .sidebar.sidebar-open .sidebar-item {
+        justify-content: flex-start;
+        padding: var(--sp-3) var(--sp-5);
+        border-left: 3px solid transparent;
+    }
+
+    .sidebar.sidebar-open .sidebar-item.active {
+        border-left-color: var(--accent);
+        border-radius: 0;
+        margin: 0;
+    }
+
+    .sidebar.sidebar-open .sidebar-item.active::after {
+        display: block;
+    }
+
+    /* Sidebar overlay backdrop */
+    .sidebar-overlay-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 10000;
+        animation: fadeIn 0.2s ease;
     }
 
     /* Show mobile bottom nav */
@@ -611,6 +727,7 @@
     /* ---- Header ---- */
     .header {
         padding: var(--sp-2) var(--sp-3) !important;
+        padding-left: 56px !important; /* space for hamburger */
         flex-wrap: wrap;
         gap: 8px;
     }
@@ -626,8 +743,8 @@
 
     .header select,
     .header .btn {
-        font-size: 11px !important;
-        padding: 4px 8px !important;
+        font-size: 12px !important;
+        padding: 6px 10px !important;
     }
 
     /* ---- Modal ---- */
@@ -768,6 +885,15 @@
     .glass-panel {
         padding: var(--sp-3) !important;
         border-radius: var(--radius-md) !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* ---- Cards/forms full-width ---- */
+    .form-group,
+    .pedido-card,
+    .pos-product-card {
+        width: 100%;
     }
 
     .informes-page {
@@ -849,19 +975,38 @@
         overflow-wrap: anywhere;
     }
 
-    /* ---- Buttons ---- */
+    /* ---- Buttons (touch targets) ---- */
     .btn {
-        padding: 8px 12px;
+        padding: 10px 14px;
+        font-size: 13px;
+        min-height: 44px;
+    }
+
+    .btn-sm {
+        padding: 8px 10px;
+        font-size: 12px;
+        min-height: 38px;
+    }
+
+    .btn-icon {
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    /* ---- Tables (horizontal scroll wrapper) ---- */
+    table {
         font-size: 12px;
     }
 
-    /* ---- Tables ---- */
-    table {
-        font-size: 11px;
+    table th, table td {
+        padding: 8px 10px !important;
     }
 
-    table th, table td {
-        padding: 6px 8px !important;
+    /* Generic table overflow wrapper */
+    .table-responsive,
+    .pos-table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     /* ---- Marketing scorecard ---- */
@@ -908,12 +1053,14 @@
     gap: 2px;
     padding: 6px 8px;
     color: var(--text-muted);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 500;
     cursor: pointer;
     border-radius: 8px;
     transition: all 0.2s;
     min-width: 48px;
+    min-height: 44px;
+    justify-content: center;
 }
 
 .mobile-nav-item.active {

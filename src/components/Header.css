@@ -189,6 +189,7 @@
 @media (max-width: 768px) {
     .header {
         padding: 8px 12px;
+        padding-left: 56px; /* space for hamburger */
         gap: 6px;
     }
     .header-filters {
@@ -197,8 +198,14 @@
     }
     .header-filters select,
     .header-filters .btn {
-        font-size: 11px;
-        padding: 4px 8px;
+        font-size: 12px;
+        padding: 6px 10px;
+        min-height: 38px;
+    }
+    .header-filter-btn {
+        min-height: 38px;
+        padding: 6px 10px;
+        font-size: 12px;
     }
     .search-wrapper {
         width: 100%;
