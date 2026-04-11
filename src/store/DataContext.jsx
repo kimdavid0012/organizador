@@ -119,7 +119,8 @@ const PROTECTED_PRODUCT_FIELDS = new Set([
     'stock', 'stockPorColor', 'articuloVenta', 'articuloFabrica',
     'precioCosto', 'precioVentaL1', 'precioVentaL2', 'precioVentaL3',
     'precioVentaL4', 'precioVentaL5', 'precioVentaWeb',
-    'alertaStockMinimo', 'mercaderiaConteos'
+    'alertaStockMinimo', 'mercaderiaConteos',
+    'detalleCorto', 'tela', 'nombre'
 ]);
 
 const hasValue = (value) => {
@@ -1085,6 +1086,8 @@ function dataReducer(state, action) {
             const existing = state.config.posProductos || [];
             const incoming = action.payload;
             const merged = upsertPosProducts(existing, incoming);
+            const stats = merged._syncStats || { newCount: 0, preservedCount: 0 };
+            console.log(`✅ Sync protegido: ${stats.preservedCount} productos existentes preservados (precios/stock intactos), ${stats.newCount} nuevos importados`);
 
             return {
                 ...state,
