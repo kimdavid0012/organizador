@@ -321,7 +321,7 @@ export default function AgentsHub() {
   const isLoading = loading === activeTab || loading === 'all';
 
   return (
-    <div style={{ padding: '12px 12px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '12px 12px', maxWidth: 1100, margin: '0 auto', overflowX: 'hidden' }}>
       {/* Mobile responsive styles */}
       <style>{`
         @media (max-width: 480px) {

@@ -1964,21 +1964,21 @@ export function DataProvider({ children }) {
                 '6210': { precioVentaL1: 8500, precioVentaL2: 11500 },
                 '6212': { precioVentaL1: 5500, precioVentaL2: 7000 },
                 '6213': { precioVentaL1: 10000, precioVentaL2: 13000 },
-                '4015': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4015': { precioVentaL1: 7000, precioVentaL2: 8000 },
                 '4016': { precioVentaL1: 5000, precioVentaL2: 5600 },
                 '4017': { precioVentaL1: 5000, precioVentaL2: 5600 },
-                '4524': { precioVentaL1: 7000, precioVentaL2: 7000 },
-                '4526': { precioVentaL1: 7000, precioVentaL2: 7000 },
-                '4527': { precioVentaL1: 7000, precioVentaL2: 7000 },
-                '4630': { precioVentaL1: 7000, precioVentaL2: 7000 },
-                '4651': { precioVentaL1: 7000, precioVentaL2: 7000 },
-                '4542': { precioVentaL1: 7000, precioVentaL2: 7000 },
-                '4543': { precioVentaL1: 7000, precioVentaL2: 7000 },
-                '4545': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4524': { precioVentaL1: 7000, precioVentaL2: 8000 },
+                '4526': { precioVentaL1: 7000, precioVentaL2: 8000 },
+                '4527': { precioVentaL1: 7000, precioVentaL2: 8000 },
+                '4630': { precioVentaL1: 7000, precioVentaL2: 8000 },
+                '4651': { precioVentaL1: 7000, precioVentaL2: 8000 },
+                '4542': { precioVentaL1: 7000, precioVentaL2: 8000 },
+                '4543': { precioVentaL1: 7000, precioVentaL2: 8000 },
+                '4545': { precioVentaL1: 7000, precioVentaL2: 8000 },
                 '4547': { precioVentaL1: 7000, precioVentaL2: 8000 },
                 '4548': { precioVentaL1: 7000, precioVentaL2: 8000 },
-                '4540': { precioVentaL1: 1000, precioVentaL2: 1000 },
-                '4541': { precioVentaL1: 7000, precioVentaL2: 7000 },
+                '4540': { precioVentaL1: 1000, precioVentaL2: 1200 },
+                '4541': { precioVentaL1: 7000, precioVentaL2: 8000 },
             };
 
             const products = currentConfig.posProductos || [];
@@ -2053,11 +2053,11 @@ export function DataProvider({ children }) {
                 '6310': 11000, '6200': 11000, '6201': 11500, '6202': 8000,
                 '6203': 9500, '6204': 7000, '6205': 9500, '6206': 13500,
                 '6207': 11200, '6208': 13900, '6209': 8000, '6210': 11500,
-                '6212': 7000, '6213': 13000, '4015': 7000, '4016': 5600,
-                '4017': 5600, '4524': 7000, '4526': 7000, '4527': 7000,
-                '4630': 7000, '4651': 7000, '4542': 7000, '4543': 7000,
-                '4545': 7000, '4547': 8000, '4548': 8000, '4540': 1000,
-                '4541': 7000
+                '6212': 7000, '6213': 13000, '4015': 8000, '4016': 5600,
+                '4017': 5600, '4524': 8000, '4526': 8000, '4527': 8000,
+                '4630': 8000, '4651': 8000, '4542': 8000, '4543': 8000,
+                '4545': 8000, '4547': 8000, '4548': 8000, '4540': 1200,
+                '4541': 8000
             };
 
             const products = currentConfig.posProductos || [];
@@ -2086,7 +2086,7 @@ export function DataProvider({ children }) {
             }
         },
 
-        // Third migration — force-reset ALL L2 prices (overrides previous migrations)
+        // Third migration — force-reset ALL L2 prices for 6xxx products (overrides previous migrations)
         runPriceMigrationL2Force: () => {
             const currentConfig = stateRef.current.config;
             if (currentConfig._priceMigrationL2Force_2026April) return;
@@ -2149,6 +2149,43 @@ export function DataProvider({ children }) {
                 }
             });
             console.log(`✅ L2 force migration: updated ${updatedCount} products`);
+        },
+
+        // Fourth migration — fix 4xxx products where L2 was incorrectly set equal to L1
+        runPriceMigrationL2Fix2: () => {
+            const currentConfig = stateRef.current.config;
+            if (currentConfig._priceMigrationL2Fix2_2026April) return;
+
+            const l2Corrections = {
+                '4015': 8000, '4524': 8000, '4526': 8000, '4527': 8000,
+                '4630': 8000, '4651': 8000, '4542': 8000, '4543': 8000,
+                '4545': 8000, '4540': 1200, '4541': 8000
+            };
+
+            const products = currentConfig.posProductos || [];
+            let updatedCount = 0;
+            const updatedProducts = products.map(p => {
+                const code = (p.articuloVenta || p.codigoInterno || '').toString().replace(/\D/g, '');
+                if (l2Corrections[code] && Number(p.precioVentaL2 || 0) !== l2Corrections[code]) {
+                    updatedCount++;
+                    return { ...p, precioVentaL2: l2Corrections[code] };
+                }
+                return p;
+            });
+
+            if (updatedCount > 0) {
+                dispatch({
+                    type: 'UPDATE_CONFIG',
+                    payload: {
+                        posProductos: updatedProducts,
+                        _priceMigrationL2Fix2_2026April: true
+                    }
+                });
+                console.log(`✅ L2 price fix2 migration: updated ${updatedCount} products with correct L2 > L1 values`);
+            } else {
+                dispatch({ type: 'UPDATE_CONFIG', payload: { _priceMigrationL2Fix2_2026April: true } });
+                console.log('L2 price fix2 migration: all L2 prices already correct or no matches');
+            }
         },
 
         fetchWooProducts: async () => {

@@ -271,7 +271,7 @@ class ErrorBoundary extends React.Component {
 }
 
 function AppContent() {
-    const { state, addMolde, addTarea, syncStatus, updateConfig, runPriceMigration2026April, runPriceMigrationL2Fix, runPriceMigrationL2Force, runPriceMigrationL2Uniform } = useData();
+    const { state, addMolde, addTarea, syncStatus, updateConfig, runPriceMigration2026April, runPriceMigrationL2Fix, runPriceMigrationL2Force, runPriceMigrationL2Uniform, runPriceMigrationL2Fix2 } = useData();
     const { moldes, telas, config } = state;
     const { t, lang, changeLang, LANGUAGE_LABELS } = useI18n();
     const { user, users, originalAdmin, logout, switchUser, getAllowedSections } = useAuth(); // Auth integration
@@ -331,6 +331,13 @@ function AppContent() {
     useEffect(() => {
         if (state?.config?.posProductos?.length > 0 && !state?.config?._priceMigrationL2Uniform_2026April) {
             runPriceMigrationL2Uniform();
+        }
+    }, [state?.config?.posProductos?.length]);
+
+    // L2 price fix2 — set exact L2 values for 4xxx products
+    useEffect(() => {
+        if (state?.config?.posProductos?.length > 0 && !state?.config?._priceMigrationL2Fix2_2026April) {
+            runPriceMigrationL2Fix2();
         }
     }, [state?.config?.posProductos?.length]);
 

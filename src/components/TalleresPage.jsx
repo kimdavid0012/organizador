@@ -154,6 +154,8 @@ export default function TalleresPage() {
             grouped[name] = [];
         });
 
+        const globalUsedConteoIds = new Set();
+
         cortes.forEach((corte) => {
             const corteNumber = extractCorteNumber(corte?.nombre);
             const corteDate = corte?.fecha || '';
@@ -209,6 +211,7 @@ export default function TalleresPage() {
 
                 if (matchedConteo?.id) {
                     usedConteoIds.add(matchedConteo.id);
+                    globalUsedConteoIds.add(matchedConteo.id);
                 }
 
                 const diasIngreso = diffDays(corteDate, matchedConteo?.fechaIngreso);
@@ -241,8 +244,39 @@ export default function TalleresPage() {
             });
         });
 
+        // Add unmatched mercaderiaConteos as standalone "ingresado" records
+        mercaderiaConteos.forEach((conteo) => {
+            if (globalUsedConteoIds.has(conteo.id)) return;
+            const tallerName = formatTallerLabel(conteo.taller);
+            if (!tallerName) return;
+            grouped[tallerName] = grouped[tallerName] || [];
+            grouped[tallerName].push({
+                id: `conteo-standalone-${conteo.id}`,
+                moldeId: null,
+                nombre: conteo.descripcion || conteo.articuloFabrica || conteo.articuloVenta || '(conteo directo)',
+                codigo: conteo.articuloFabrica || conteo.articuloVenta || '',
+                categoria: '',
+                corteNombre: conteo.numeroCorte || '',
+                corteNumero: extractCorteNumber(conteo.numeroCorte),
+                fechaCorte: '',
+                fechaIngreso: conteo.fechaIngreso || '',
+                estado: 'ingresado',
+                cantidad: Number(conteo.cantidadOriginal || 0),
+                costoTaller: 0,
+                pagadoTaller: false,
+                fallado: Number(conteo.fallado || 0),
+                cantidadContada: Number(conteo.cantidadContada || 0),
+                comentarioControl: conteo.comentarioControl || '',
+                chequeado: Boolean(conteo.chequeado),
+                diasIngreso: null,
+                diasPendientes: null,
+                img: null,
+                matchedConteoId: conteo.id
+            });
+        });
+
         return grouped;
-    }, [talleres, cortes, moldeMap, conteosByTaller]);
+    }, [talleres, cortes, moldeMap, conteosByTaller, mercaderiaConteos]);
 
     const stats = useMemo(() => {
         const map = {};
