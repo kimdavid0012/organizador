@@ -1809,6 +1809,29 @@ export function DataProvider({ children }) {
         importPosProducts: (products) => dispatch({ type: ACTION_TYPES.IMPORT_POS_PRODUCTS, payload: products }),
 
         fetchWooOrders: async () => {
+            const inferOrderSource = (wooOrder) => {
+                const via = (wooOrder.created_via || '').toLowerCase();
+                if (via === 'instagram' || via === 'ig') return 'Instagram';
+                if (via === 'whatsapp' || via === 'wa') return 'WhatsApp';
+                if (via === 'checkout') return 'Web';
+
+                // Check meta_data for UTM source
+                const meta = wooOrder.meta_data || [];
+                const utmSource = (meta.find(m => m.key === '_wc_order_attribution_utm_source')?.value || '').toLowerCase();
+                if (utmSource.includes('instagram')) return 'Instagram';
+                if (utmSource.includes('google')) return 'Google';
+                if (utmSource.includes('facebook') || utmSource.includes('fb')) return 'Facebook';
+                if (utmSource.includes('whatsapp')) return 'WhatsApp';
+
+                const sourceType = (meta.find(m => m.key === '_wc_order_attribution_source_type')?.value || '').toLowerCase();
+                if (sourceType === 'organic') return 'Google';
+                if (sourceType === 'direct') return 'Directo';
+                if (sourceType === 'referral') return 'Referido';
+
+                if (via === 'admin') return 'Directo';
+                return 'Web';
+            };
+
             const currentConfig = stateRef.current.config;
             try {
                 const orders = await wooService.fetchOrders(currentConfig);
@@ -1829,6 +1852,7 @@ export function DataProvider({ children }) {
                     envio: o.shipping_lines[0]?.method_title || 'N/A',
                     estado: o.status === 'processing' ? 'pendiente' : (o.status === 'completed' ? 'listo' : 'pendiente'),
                     fecha: o.date_created,
+                    origen: inferOrderSource(o),
                     items: o.line_items.map(li => ({
                         id: generateId(),
                         productId: li.product_id || null,

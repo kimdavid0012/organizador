@@ -432,11 +432,9 @@ export default function PedidosOnlinePage() {
                             <div className="pedido-info">
                                 <span className="pedido-numero">{pedido.numeroPedido}</span>
                                 <span className="pedido-cliente">{pedido.cliente}</span>
-                                {pedido.origen && (
-                                    <span className="badge origen-badge" style={{ background: origenStyle.bg, color: origenStyle.color, marginLeft: 8 }}>
-                                        {pedido.origen}
-                                    </span>
-                                )}
+                                <span className="badge origen-badge" style={{ background: origenStyle.bg, color: origenStyle.color, marginLeft: 8 }}>
+                                    {pedido.origen || 'Sin origen'}
+                                </span>
                                 <span className="badge payment-status-badge" style={{ background: pConfig.bg, color: pConfig.color, marginLeft: 4 }}>
                                     {pConfig.label}
                                 </span>
@@ -510,7 +508,7 @@ export default function PedidosOnlinePage() {
                                         </div>
                                         <div className="detail-item">
                                             <span className="detail-label">Origen</span>
-                                            <span className="detail-value">{pedido.origen || '-'}</span>
+                                            <span className="detail-value">{pedido.origen || 'Sin origen'}</span>
                                         </div>
                                     </div>
                                 )}

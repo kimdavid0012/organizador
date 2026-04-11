@@ -3,7 +3,7 @@ import {
   Zap, BarChart3, Globe, Instagram, Brain, Play, Loader2, Clock,
   ChevronDown, ChevronRight, Plus, X, Trash2, RefreshCw, Copy, Check,
   AlertCircle, Rocket, Target, DollarSign, Package, MessageCircle, Search, Eye, Calculator, Mail, Crown,
-  Truck, Heart, Banknote, Bot
+  Truck, Heart, Banknote, Bot, Wrench
 } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import {
@@ -25,7 +25,11 @@ import {
   runCustomerSuccessAgent,
   runCashFlowAgent,
   runCEOAutoDaily,
-  shouldAutoRun
+  shouldAutoRun,
+  runBugFinderAgent,
+  runBugFixerAgent,
+  runAdQualifierAgent,
+  runSiteTrackerAgent
 } from '../../services/agentService';
 
 const TABS = [
@@ -46,6 +50,10 @@ const TABS = [
   { id: 'customerSuccess', label: 'Clientes', icon: Heart, color: '#f43f5e', desc: 'Retención y satisfacción' },
   { id: 'cashflow', label: 'Cash Flow', icon: Banknote, color: '#059669', desc: 'Flujo de caja diario' },
   { id: 'master', label: '👑 CEO', icon: Crown, color: '#fbbf24', desc: 'Director General AI — decide y delega' },
+  { id: 'bugFinder', label: 'Bug Finder', icon: AlertCircle, color: '#ef4444', desc: 'Monitorea errores en el dashboard', alwaysOn: true },
+  { id: 'bugFixer', label: 'Bug Fixer', icon: Wrench, color: '#f97316', desc: 'Intenta corregir bugs automáticamente', alwaysOn: true },
+  { id: 'adQualifier', label: 'Ad Qualifier', icon: Target, color: '#8b5cf6', desc: 'Califica la calidad de campañas activas', alwaysOn: true },
+  { id: 'siteTracker', label: 'Site Tracker', icon: Globe, color: '#06b6d4', desc: 'Monitorea celavie.com.ar: SEO, velocidad, keywords', alwaysOn: true },
 ];
 
 const DEFAULT_BRANDS = ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
@@ -146,6 +154,10 @@ export default function AgentsHub() {
     if (c.customerSuccess) setResults(prev => ({ ...prev, customerSuccess: c.customerSuccess }));
     if (c.cashflow) setResults(prev => ({ ...prev, cashflow: c.cashflow }));
     if (c.master) setResults(prev => ({ ...prev, master: c.master }));
+    if (c.bugFinder) setResults(prev => ({ ...prev, bugFinder: c.bugFinder }));
+    if (c.bugFixer) setResults(prev => ({ ...prev, bugFixer: c.bugFixer }));
+    if (c.adQualifier) setResults(prev => ({ ...prev, adQualifier: c.adQualifier }));
+    if (c.siteTracker) setResults(prev => ({ ...prev, siteTracker: c.siteTracker }));
     if (c.history) setHistory(c.history);
     if (c.trendScoutBrands) setBrands(c.trendScoutBrands);
   }, [config.agentsCache]);
@@ -183,6 +195,10 @@ export default function AgentsHub() {
         case 'customerSuccess': result = await runCustomerSuccessAgent(config, results.analyst, onProgress); break;
         case 'cashflow': result = await runCashFlowAgent(config, state, results.analyst, onProgress); break;
         case 'master': result = await runMasterAgent(config, results, onProgress); break;
+        case 'bugFinder': result = await runBugFinderAgent(state); break;
+        case 'bugFixer': result = await runBugFixerAgent(state); break;
+        case 'adQualifier': result = await runAdQualifierAgent(state); break;
+        case 'siteTracker': result = await runSiteTrackerAgent(state); break;
         default: return;
       }
       const nextResults = { ...results, [agentId]: result };
@@ -197,76 +213,70 @@ export default function AgentsHub() {
     }
   };
 
-  // ─── Run all agents in sequence ────────────────────────────
+  // ─── Run ALL agents concurrently with Promise.allSettled ───
   const runAllAgents = async () => {
     setLoading('all');
     setError(null);
     setCompletedSteps([]);
+    const onProg = (msg) => setProgressMsg(msg);
     try {
-      const onProgress = (msg) => setProgressMsg(msg);
-      setActiveTab('analyst');
-      const analyst = await runAnalystAgent(config, state, onProgress);
-      setResults(prev => ({ ...prev, analyst }));
-      addToHistory(analyst);
-      setCompletedSteps(['analyst']);
-
-      setActiveTab('trendScout');
-      const trendScout = await runTrendScoutAgent(config, brands, onProgress);
-      setResults(prev => ({ ...prev, trendScout }));
-      addToHistory(trendScout);
-      setCompletedSteps(['analyst', 'trendScout']);
-
-      setActiveTab('contentCreator');
-      const content = await runContentAgent(config, analyst, trendScout, onProgress);
-      setResults(prev => ({ ...prev, contentCreator: content }));
-      addToHistory(content);
-      setCompletedSteps(['analyst', 'trendScout', 'contentCreator']);
-
-      setActiveTab('strategist');
-      const strategist = await runStrategistAgent(config, analyst, trendScout, content, onProgress);
-      setResults(prev => ({ ...prev, strategist }));
-      addToHistory(strategist);
-      setCompletedSteps(['analyst', 'trendScout', 'contentCreator', 'strategist']);
-
-      // 5. Growth Hacker
-      setActiveTab('growth');
-      const growth = await runGrowthAgent(config, analyst, trendScout, onProgress);
-      setResults(prev => ({ ...prev, growth }));
-      addToHistory(growth);
-      setCompletedSteps(['analyst', 'trendScout', 'contentCreator', 'strategist', 'growth']);
-
-      // 6. Paid Media
-      setActiveTab('paidMedia');
-      const paidMedia = await runPaidMediaAgent(config, analyst, onProgress);
-      setResults(prev => ({ ...prev, paidMedia }));
-      addToHistory(paidMedia);
-      setCompletedSteps(prev => [...prev, 'paidMedia']);
-
-      // 7-9. New agents in parallel
-      setProgressMsg('Ejecutando agentes de proveedores, clientes y cash flow...');
-      const [supplyRes, custRes, cashRes] = await Promise.allSettled([
-        runSupplyChainAgent(config, state, analyst, onProgress),
-        runCustomerSuccessAgent(config, analyst, onProgress),
-        runCashFlowAgent(config, state, analyst, onProgress),
+      // Phase 1: Run foundation agents (analyst + trendScout) first since others depend on them
+      setProgressMsg('Fase 1: Datos base (Analista + Trend Scout)...');
+      const [analystRes, trendRes] = await Promise.allSettled([
+        runAnalystAgent(config, state, onProg),
+        runTrendScoutAgent(config, brands, onProg),
       ]);
-      if (supplyRes.status === 'fulfilled') { setResults(prev => ({ ...prev, supplyChain: supplyRes.value })); addToHistory(supplyRes.value); }
-      if (custRes.status === 'fulfilled') { setResults(prev => ({ ...prev, customerSuccess: custRes.value })); addToHistory(custRes.value); }
-      if (cashRes.status === 'fulfilled') { setResults(prev => ({ ...prev, cashflow: cashRes.value })); addToHistory(cashRes.value); }
-      setCompletedSteps(prev => [...prev, 'supplyChain', 'customerSuccess', 'cashflow']);
+      const analyst = analystRes.status === 'fulfilled' ? analystRes.value : null;
+      const trendScout = trendRes.status === 'fulfilled' ? trendRes.value : null;
+      if (analyst) { setResults(prev => ({ ...prev, analyst })); addToHistory(analyst); }
+      if (trendScout) { setResults(prev => ({ ...prev, trendScout })); addToHistory(trendScout); }
+      setCompletedSteps(['analyst', 'trendScout'].filter(id => id === 'analyst' ? analyst : trendScout));
 
-      // 10. CEO synthesis
+      // Phase 2: Run ALL remaining agents concurrently (except master which needs all results)
+      setProgressMsg('Fase 2: Ejecutando todos los agentes en paralelo...');
+      const agentJobs = [
+        { id: 'contentCreator', fn: () => runContentAgent(config, analyst, trendScout, onProg) },
+        { id: 'strategist', fn: () => runStrategistAgent(config, analyst, trendScout, null, onProg) },
+        { id: 'growth', fn: () => runGrowthAgent(config, analyst, trendScout, onProg) },
+        { id: 'paidMedia', fn: () => runPaidMediaAgent(config, analyst, onProg) },
+        { id: 'pricing', fn: () => runPricingAgent(config, analyst, trendScout, onProg) },
+        { id: 'inventory', fn: () => runInventoryAgent(config, state, analyst, trendScout, onProg) },
+        { id: 'whatsapp', fn: () => runWhatsAppAgent(config, analyst, trendScout, onProg) },
+        { id: 'seo', fn: () => runSEOAgent(config, analyst, onProg) },
+        { id: 'competitor', fn: () => runCompetitorAgent(config, brands, onProg) },
+        { id: 'financial', fn: () => runFinancialAgent(config, state, analyst, onProg) },
+        { id: 'crm', fn: () => runCRMAgent(config, analyst, onProg) },
+        { id: 'supplyChain', fn: () => runSupplyChainAgent(config, state, analyst, onProg) },
+        { id: 'customerSuccess', fn: () => runCustomerSuccessAgent(config, analyst, onProg) },
+        { id: 'cashflow', fn: () => runCashFlowAgent(config, state, analyst, onProg) },
+        { id: 'bugFinder', fn: () => runBugFinderAgent(state) },
+        { id: 'bugFixer', fn: () => runBugFixerAgent(state) },
+        { id: 'adQualifier', fn: () => runAdQualifierAgent(state) },
+        { id: 'siteTracker', fn: () => runSiteTrackerAgent(state) },
+      ];
+
+      const settled = await Promise.allSettled(agentJobs.map(j => j.fn()));
+      const allRes = { analyst, trendScout };
+      settled.forEach((result, idx) => {
+        const { id } = agentJobs[idx];
+        if (result.status === 'fulfilled' && result.value) {
+          allRes[id] = result.value;
+          setResults(prev => ({ ...prev, [id]: result.value }));
+          addToHistory(result.value);
+        } else if (result.status === 'rejected') {
+          console.warn(`Agent ${id} failed:`, result.reason?.message || result.reason);
+        }
+      });
+      setCompletedSteps(Object.keys(allRes));
+
+      // Phase 3: CEO synthesis with all available results
       setActiveTab('master');
       setProgressMsg('👑 CEO analizando todos los reportes...');
-      const allRes = { analyst, trendScout, contentCreator: content, strategist, growth, paidMedia,
-        supplyChain: supplyRes.status === 'fulfilled' ? supplyRes.value : null,
-        customerSuccess: custRes.status === 'fulfilled' ? custRes.value : null,
-        cashflow: cashRes.status === 'fulfilled' ? cashRes.value : null,
-      };
-      const master = await runMasterAgent(config, allRes, onProgress);
-      const finalResults = { ...allRes, master };
-      setResults(finalResults);
+      const master = await runMasterAgent(config, allRes, onProg);
+      allRes.master = master;
+      setResults(prev => ({ ...prev, ...allRes }));
       const nextHistory = addToHistory(master);
-      persistCache({ ...finalResults, history: nextHistory, lastCEOAutoRun: new Date().toISOString().split('T')[0] });
+      persistCache({ ...allRes, history: nextHistory, lastCEOAutoRun: new Date().toISOString().split('T')[0] });
       setCompletedSteps(prev => [...prev, 'master']);
     } catch (err) {
       setError({ agent: 'all', message: err.message });
@@ -416,6 +426,7 @@ export default function AgentsHub() {
             >
               <tab.icon size={16} />
               {tab.label}
+              {tab.alwaysOn && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 8, background: 'rgba(34,197,94,0.2)', color: '#22c55e', fontWeight: 600 }}>24/7</span>}
               {hasData && <span style={{ fontSize: 10, opacity: 0.7 }}>{age}</span>}
             </button>
           );

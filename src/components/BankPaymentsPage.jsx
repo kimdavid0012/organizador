@@ -235,15 +235,26 @@ export default function BankPaymentsPage() {
 
     const monthlyGroups = useMemo(() => {
         const grouped = new Map();
+        const seen = new Set();
 
         filteredEntries.forEach((entry) => {
-            const monthKey = getMonthKey(entry.fecha);
-            if (!monthKey) return;
+            // Normalise fecha to YYYY-MM-DD so datetime strings don't create separate day keys
+            const normDate = (entry.fecha || '').slice(0, 10);
+            const monthKey = getMonthKey(normDate);
+            if (!monthKey || monthKey.length < 7) return;
+
+            // De-duplicate entries by id when present
+            if (entry.id) {
+                if (seen.has(entry.id)) return;
+                seen.add(entry.id);
+            }
+
             if (!grouped.has(monthKey)) grouped.set(monthKey, { monthKey, entries: [], byDay: new Map() });
             const monthGroup = grouped.get(monthKey);
             monthGroup.entries.push(entry);
-            if (!monthGroup.byDay.has(entry.fecha)) monthGroup.byDay.set(entry.fecha, []);
-            monthGroup.byDay.get(entry.fecha).push(entry);
+            const dayKey = normDate;
+            if (!monthGroup.byDay.has(dayKey)) monthGroup.byDay.set(dayKey, []);
+            monthGroup.byDay.get(dayKey).push(entry);
         });
 
         return Array.from(grouped.values())

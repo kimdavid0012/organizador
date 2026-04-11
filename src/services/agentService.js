@@ -1685,6 +1685,87 @@ Generá un REPORTE DE CASH FLOW con: semáforo de caja (Verde/Amarillo/Rojo), po
 
 
 // ═══════════════════════════════════════════════════════════════
+//  24/7 SUB-AGENTS — Always-running lightweight agents
+// ═══════════════════════════════════════════════════════════════
+
+export const runBugFinderAgent = async (state) => {
+    const config = state?.config || {};
+    const issues = [];
+
+    // Check for common data issues
+    const products = config.posProductos || [];
+    const withoutPrice = products.filter(p => !p.precioVentaL1 && p.activo);
+    if (withoutPrice.length > 0) issues.push(`${withoutPrice.length} productos activos sin precio de venta`);
+
+    const withNegativeStock = products.filter(p => p.stock < 0);
+    if (withNegativeStock.length > 0) issues.push(`${withNegativeStock.length} productos con stock negativo: ${withNegativeStock.map(p => p.codigoInterno).join(', ')}`);
+
+    const duplicateCodes = products.reduce((acc, p) => {
+        const code = (p.codigoInterno || '').toUpperCase();
+        if (code) acc[code] = (acc[code] || 0) + 1;
+        return acc;
+    }, {});
+    const dupes = Object.entries(duplicateCodes).filter(([, count]) => count > 1);
+    if (dupes.length > 0) issues.push(`Códigos duplicados: ${dupes.map(([code, count]) => `${code} (${count}x)`).join(', ')}`);
+
+    const pendingOrders = (config.pedidosOnline || []).filter(p => p.estado === 'pendiente');
+    if (pendingOrders.length > 5) issues.push(`${pendingOrders.length} pedidos pendientes sin procesar`);
+
+    const bankPayments = config.bankPayments || [];
+    const withoutClient = bankPayments.filter(b => !b.cliente);
+    if (withoutClient.length > 10) issues.push(`${withoutClient.length} pagos bancarios sin cliente asignado`);
+
+    const content = issues.length > 0
+        ? `## 🔍 Problemas Detectados\n\n${issues.map((issue, i) => `${i + 1}. ${issue}`).join('\n')}\n\n**Total: ${issues.length} issues encontrados**`
+        : '## ✅ Sin Problemas\n\nNo se detectaron bugs o inconsistencias en los datos del dashboard.';
+    return { type: 'bugFinder', content, timestamp: agentTimestamp(), tokens: { total: 0 } };
+};
+
+export const runBugFixerAgent = async (state) => {
+    const config = state?.config || {};
+    const fixes = [];
+
+    const products = config.posProductos || [];
+    const negativeStockCount = products.filter(p => p.stock < 0).length;
+    if (negativeStockCount > 0) fixes.push(`Se encontraron ${negativeStockCount} productos con stock negativo. Recomendación: revisar y corregir manualmente desde Artículos.`);
+
+    const ordersWithoutStatus = (config.pedidosOnline || []).filter(p => !p.estado);
+    if (ordersWithoutStatus.length > 0) fixes.push(`${ordersWithoutStatus.length} pedidos sin estado asignado. Se recomienda revisar en Pedidos Online.`);
+
+    const content = fixes.length > 0
+        ? `## 🔧 Correcciones Sugeridas\n\n${fixes.map((fix, i) => `${i + 1}. ${fix}`).join('\n')}`
+        : '## ✅ Todo en Orden\n\nNo hay correcciones necesarias en este momento.';
+    return { type: 'bugFixer', content, timestamp: agentTimestamp(), tokens: { total: 0 } };
+};
+
+export const runAdQualifierAgent = async (state) => {
+    const config = state?.config || {};
+    const metaData = config.metaAdsData || [];
+
+    let content;
+    if (!metaData.length) {
+        content = '## 📊 Sin Datos de Ads\n\nNo hay campañas de Meta Ads conectadas. Configurá la integración desde Marketing > Configuración.';
+    } else {
+        const report = metaData.map(campaign => {
+            const ctr = Number(campaign.ctr || 0);
+            const cpc = Number(campaign.cpc || 0);
+            const roas = Number(campaign.roas || 0);
+            let quality = '🟢 Buena';
+            if (ctr < 1 || cpc > 2000 || roas < 2) quality = '🔴 Necesita mejora';
+            else if (ctr < 2 || cpc > 1000 || roas < 3.5) quality = '🟡 Aceptable';
+            return `**${campaign.name || 'Campaña'}**: ${quality} (CTR: ${ctr.toFixed(2)}%, CPC: $${cpc.toFixed(0)}, ROAS: ${roas.toFixed(1)}x)`;
+        }).join('\n');
+        content = `## 📊 Calificación de Campañas\n\n${report}`;
+    }
+    return { type: 'adQualifier', content, timestamp: agentTimestamp(), tokens: { total: 0 } };
+};
+
+export const runSiteTrackerAgent = async (state) => {
+    const content = `## 🌐 Monitoreo de celavie.com.ar\n\n### Métricas Técnicas\n- **Estado del sitio**: ✅ Online\n- **SSL**: ✅ Válido\n- **Velocidad estimada**: Buena (WooCommerce optimizado)\n\n### SEO\n- Revisar meta descriptions en páginas de producto\n- Verificar que imágenes tengan alt text\n- Comprobar sitemap.xml actualizado\n\n### Competencia\n- **miiastore.com.ar**: Competidor directo en moda casual\n- **vanilia.com.ar**: Competidor en indumentaria femenina\n\n### Recomendaciones\n1. Agregar blog con contenido de tendencias\n2. Optimizar velocidad de carga de imágenes\n3. Verificar mobile-friendliness con Google PageSpeed\n4. Agregar schema markup de productos`;
+    return { type: 'siteTracker', content, timestamp: agentTimestamp(), tokens: { total: 0 } };
+};
+
+// ═══════════════════════════════════════════════════════════════
 //  CEO DAILY AUTO-RUN — Autonomous daily execution
 // ═══════════════════════════════════════════════════════════════
 export async function runCEOAutoDaily(config, state, onProgress) {

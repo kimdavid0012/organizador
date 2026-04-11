@@ -372,9 +372,11 @@ export default function PosProductos() {
                                     <button className="btn btn-ghost btn-sm" onClick={() => handleOpenModal(p)}>
                                         <Edit2 size={16} />
                                     </button>
-                                    <button className="btn btn-ghost btn-danger btn-sm" onClick={() => handleDelete(p.id)}>
-                                        <Trash2 size={16} />
-                                    </button>
+                                    {canEdit && (
+                                        <button className="btn btn-ghost btn-danger btn-sm" onClick={() => handleDelete(p.id)}>
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -472,9 +474,11 @@ export default function PosProductos() {
                             <button className="btn btn-secondary" onClick={() => handleOpenModal(p)}>
                                 <Edit2 size={16} /> Editar
                             </button>
-                            <button className="btn btn-ghost btn-danger" onClick={() => handleDelete(p.id)}>
-                                <Trash2 size={16} /> Eliminar
-                            </button>
+                            {canEdit && (
+                                <button className="btn btn-ghost btn-danger" onClick={() => handleDelete(p.id)}>
+                                    <Trash2 size={16} /> Eliminar
+                                </button>
+                            )}
                         </div>
                     </article>
                 ))}
