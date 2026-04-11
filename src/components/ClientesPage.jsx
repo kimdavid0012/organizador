@@ -69,14 +69,64 @@ export default function ClientesPage() {
     const [emailModalOpen, setEmailModalOpen] = useState(false);
     const [emailSubject, setEmailSubject] = useState('');
     const [emailBody, setEmailBody] = useState('');
+    const [topFilter, setTopFilter] = useState(null);
 
     const normalizeSearchValue = (value) => (value || '').toString().toLowerCase().trim();
 
-    const filteredClientes = useMemo(() => {
-        const query = normalizeSearchValue(searchTerm);
-        if (!query) return clientes;
+    // Calculate total spend per client for Top N filtering
+    const clientesConTotal = useMemo(() => {
+        return clientes.map(cliente => {
+            const nombre = normalizeClientMatch(cliente.nombre);
+            const telefono = normalizeWooPhone(cliente.telefono);
+            const wooId = String(cliente.wooId || '').trim();
 
-        return clientes.filter((cliente) => (
+            let total = Number(cliente.totalCompras || 0);
+
+            // Sum from POS ventas
+            (posVentas || []).forEach(venta => {
+                const vNombre = normalizeClientMatch(venta.clienteNombre || venta.nombreCliente || venta.cliente?.nombre || venta.cliente || '');
+                const vTel = normalizeWooPhone(venta.clienteTelefono || venta.telefonoCliente || venta.cliente?.telefono || '');
+                const vId = String(venta.clienteId || '').trim();
+                if (
+                    (vId && vId === String(cliente.id)) ||
+                    (nombre && vNombre && nombre === vNombre) ||
+                    (telefono && vTel && telefono === vTel)
+                ) {
+                    total += Number(venta.total || venta.totalFinal || 0);
+                }
+            });
+
+            // Sum from online orders
+            (pedidosOnline || []).forEach(pedido => {
+                const pNombre = normalizeClientMatch(
+                    pedido.clienteNombre || ((pedido.billing?.first_name || pedido.billing?.last_name) ? `${pedido.billing?.first_name || ''} ${pedido.billing?.last_name || ''}` : pedido.billing?.first_name || pedido.email || '')
+                );
+                const pWooId = String(pedido.customer_id || pedido.wooCustomerId || '').trim();
+                if (
+                    (wooId && pWooId && wooId === pWooId) ||
+                    (nombre && pNombre && nombre === pNombre)
+                ) {
+                    total += Number(pedido.total || pedido.totalAmount || 0);
+                }
+            });
+
+            return { ...cliente, _totalSpend: total };
+        });
+    }, [clientes, posVentas, pedidosOnline]);
+
+    const filteredClientes = useMemo(() => {
+        let list = clientesConTotal;
+
+        // Apply top N filter
+        if (topFilter) {
+            const sorted = [...list].sort((a, b) => b._totalSpend - a._totalSpend);
+            list = sorted.slice(0, topFilter);
+        }
+
+        const query = normalizeSearchValue(searchTerm);
+        if (!query) return list;
+
+        return list.filter((cliente) => (
             [
                 cliente.nombre,
                 cliente.cuit,
@@ -85,7 +135,7 @@ export default function ClientesPage() {
                 cliente.email
             ].some((value) => normalizeSearchValue(value).includes(query))
         ));
-    }, [clientes, searchTerm]);
+    }, [clientesConTotal, searchTerm, topFilter]);
 
     const ventasClienteSeleccionado = useMemo(() => {
         if (!viewingHistory) return [];
@@ -347,6 +397,35 @@ export default function ClientesPage() {
                             onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Buscar por cliente, CUIT, teléfono o provincia..."
                         />
+                        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                            {[10, 20, 30, 50, 100].map(n => (
+                                <button
+                                    key={n}
+                                    onClick={() => setTopFilter(topFilter === n ? null : n)}
+                                    style={{
+                                        padding: '4px 12px', borderRadius: 16, border: '1px solid',
+                                        borderColor: topFilter === n ? 'var(--accent)' : 'var(--border-color)',
+                                        background: topFilter === n ? 'var(--accent)' : 'transparent',
+                                        color: topFilter === n ? '#fff' : 'var(--text-secondary)',
+                                        fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                                    }}
+                                >
+                                    Top {n}
+                                </button>
+                            ))}
+                            <button
+                                onClick={() => setTopFilter(null)}
+                                style={{
+                                    padding: '4px 12px', borderRadius: 16, border: '1px solid',
+                                    borderColor: !topFilter ? 'var(--accent)' : 'var(--border-color)',
+                                    background: !topFilter ? 'var(--accent)' : 'transparent',
+                                    color: !topFilter ? '#fff' : 'var(--text-secondary)',
+                                    fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                                }}
+                            >
+                                Todos ({clientes.length})
+                            </button>
+                        </div>
                     </div>
                     {clientes.length === 0 ? (
                         <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -375,6 +454,7 @@ export default function ClientesPage() {
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Teléfono</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Provincia</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Descuento</th>
+                                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>Total Compras</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -406,6 +486,9 @@ export default function ClientesPage() {
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{normalizeWooPhone(cliente.telefono) || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{cliente.provincia || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--accent)' }}>{cliente.descuento ? `${cliente.descuento}%` : '-'}</td>
+                                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: 600, color: cliente._totalSpend > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                                            {cliente._totalSpend > 0 ? `$${Math.round(cliente._totalSpend).toLocaleString('es-AR')}` : '-'}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

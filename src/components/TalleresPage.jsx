@@ -117,19 +117,34 @@ export default function TalleresPage() {
 
     const conteosByTaller = useMemo(() => {
         const map = new Map();
+        const byTallerOnly = new Map();
+        const byCorteOnly = new Map(); // fallback: conteos without taller, grouped by corte number
+        const allConteos = [...mercaderiaConteos]; // broadest fallback
 
         mercaderiaConteos.forEach((item) => {
             const taller = normalizeUpper(item.taller);
-            if (!taller) return;
+            const corteNum = extractCorteNumber(item.numeroCorte);
 
-            const signature = [extractCorteNumber(item.numeroCorte), taller].join('|');
-            if (!map.has(signature)) {
-                map.set(signature, []);
+            if (taller) {
+                // Group by corte+taller
+                if (corteNum) {
+                    const signature = [corteNum, taller].join('|');
+                    if (!map.has(signature)) map.set(signature, []);
+                    map.get(signature).push(item);
+                }
+                // Group by taller only
+                if (!byTallerOnly.has(taller)) byTallerOnly.set(taller, []);
+                byTallerOnly.get(taller).push(item);
+            } else {
+                // No taller — index by corte number for fallback
+                if (corteNum) {
+                    if (!byCorteOnly.has(corteNum)) byCorteOnly.set(corteNum, []);
+                    byCorteOnly.get(corteNum).push(item);
+                }
             }
-            map.get(signature).push(item);
         });
 
-        return map;
+        return { byCorteAndTaller: map, byTallerOnly, byCorteOnly, allConteos };
     }, [mercaderiaConteos]);
 
     const tallerRecords = useMemo(() => {
@@ -159,7 +174,14 @@ export default function TalleresPage() {
                 const comparableArticleCandidates = articleCandidates.map(normalizeComparable).filter(Boolean);
 
                 const groupKey = [corteNumber, normalizeUpper(tallerName)].join('|');
-                const groupConteos = (conteosByTaller.get(groupKey) || []).filter((conteo) => !usedConteoIds.has(conteo.id));
+                // Priority: corte+taller → taller-only → corte-only (no taller) → all conteos
+                const primaryConteos = conteosByTaller.byCorteAndTaller.get(groupKey) || [];
+                const tallerOnlyConteos = conteosByTaller.byTallerOnly.get(normalizeUpper(tallerName)) || [];
+                const corteOnlyConteos = corteNumber ? (conteosByTaller.byCorteOnly.get(corteNumber) || []) : [];
+                let candidatePool = primaryConteos.length > 0 ? primaryConteos
+                    : tallerOnlyConteos.length > 0 ? tallerOnlyConteos
+                    : corteOnlyConteos;
+                const groupConteos = candidatePool.filter((conteo) => !usedConteoIds.has(conteo.id));
 
                 let matchedConteo = null;
                 let matchedScore = 0;
@@ -177,7 +199,7 @@ export default function TalleresPage() {
                     }
                 }
 
-                if (matchedConteo && matchedScore < 60) {
+                if (matchedConteo && matchedScore < 40) {
                     matchedConteo = null;
                 }
 

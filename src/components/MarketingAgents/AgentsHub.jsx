@@ -321,9 +321,23 @@ export default function AgentsHub() {
   const isLoading = loading === activeTab || loading === 'all';
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '12px 12px', maxWidth: 1100, margin: '0 auto' }}>
+      {/* Mobile responsive styles */}
+      <style>{`
+        @media (max-width: 480px) {
+          .agents-hub-header { flex-direction: column !important; align-items: flex-start !important; }
+          .agents-hub-header button { width: 100%; justify-content: center; }
+          .agents-24-7-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+          .agents-24-7-bar > div { flex-wrap: nowrap !important; min-width: max-content; }
+          .agents-tabs-row { gap: 4px !important; }
+          .agents-tabs-row button { padding: 8px 10px !important; font-size: 11px !important; }
+          .agents-tabs-row button span { display: none; }
+          .agent-content-area { flex-direction: column !important; }
+          .agent-content-area > div { min-width: 0 !important; flex-basis: auto !important; }
+        }
+      `}</style>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+      <div className="agents-hub-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Zap size={22} color="#fff" />
@@ -405,11 +419,11 @@ export default function AgentsHub() {
       )}
 
       {/* Always-On Agents Banner */}
-      <div style={{ marginBottom: 16, padding: 16, borderRadius: 14, background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)' }}>
+      <div className="agents-24-7-bar" style={{ marginBottom: 16, padding: 16, borderRadius: 14, background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
           Sub-Agentes 24/7 — Siempre Activos
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'nowrap', minWidth: 'max-content' }}>
           {TABS.filter(t => t.alwaysOn).map(tab => {
             const hasData = !!results[tab.id];
             const isActive = activeTab === tab.id;
@@ -447,7 +461,7 @@ export default function AgentsHub() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, overflowX: 'auto', paddingBottom: 4 }}>
+      <div className="agents-tabs-row" style={{ display: 'flex', gap: 8, marginBottom: 20, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
         {TABS.filter(t => !t.alwaysOn).map(tab => {
           const isActive = activeTab === tab.id;
           const hasData = !!results[tab.id];
@@ -476,7 +490,7 @@ export default function AgentsHub() {
       </div>
 
       {/* Agent Content Area */}
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+      <div className="agent-content-area" style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
         {/* Main panel */}
         <div style={{ flex: '1 1 650px', minWidth: 0 }}>
           {/* Agent header + run button */}
