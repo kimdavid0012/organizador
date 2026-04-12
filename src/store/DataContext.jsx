@@ -172,6 +172,16 @@ const upsertPosProducts = (existingProducts = [], incomingProducts = [], options
             }
             preservedCount++;
         } else {
+            // Guard: skip entries with clearly invalid/truncated codes.
+            // Valid product codes in this system are 4-digit numeric (4xxx/5xxx/6xxx)
+            // or alphanumeric. Pure-numeric codes shorter than 4 chars with no
+            // articuloVenta are artifacts of corrupted sync data (e.g. "6", "62", "620").
+            const ci = (normalizedIncoming.codigoInterno || '').trim();
+            const av = (normalizedIncoming.articuloVenta || '').trim();
+            if (!av && /^\d+$/.test(ci) && ci.length < 4) {
+                console.warn('[upsertPosProducts] Skipping product with truncated code:', ci, normalizedIncoming.detalleCorto || '');
+                return;
+            }
             merged.push(normalizedIncoming);
             newCount++;
         }
