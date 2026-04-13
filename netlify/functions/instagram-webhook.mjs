@@ -31,15 +31,14 @@ export default async (req, context) => {
     
     console.log("📩 WEBHOOK RECEIVED");
     console.log("📩 Object:", body.object);
-    console.log("📩 Entry count:", (body.entry || []).length);
     console.log("📩 Full body:", JSON.stringify(body));
 
-    try {
-      await processWebhook(body);
-      console.log("✅ processWebhook completed");
-    } catch (err) {
-      console.error("❌ Error processing webhook:", err.message, err.stack);
-    }
+    // Process in background - return 200 immediately to Meta
+    context.waitUntil(
+      processWebhook(body).catch(err => 
+        console.error("❌ Error:", err.message, err.stack)
+      )
+    );
 
     return new Response("EVENT_RECEIVED", { status: 200 });
   }
