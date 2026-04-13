@@ -21,14 +21,24 @@ export default async (req, context) => {
 
   // ===== POST: Incoming Webhook Events =====
   if (req.method === "POST") {
-    const body = await req.json();
-    console.log("📩 Webhook received:", JSON.stringify(body, null, 2));
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error("❌ Failed to parse body:", e);
+      return new Response("BAD_REQUEST", { status: 400 });
+    }
+    
+    console.log("📩 WEBHOOK RECEIVED");
+    console.log("📩 Object:", body.object);
+    console.log("📩 Entry count:", (body.entry || []).length);
+    console.log("📩 Full body:", JSON.stringify(body));
 
-    // Process - respond 200 immediately is important for Meta
     try {
       await processWebhook(body);
+      console.log("✅ processWebhook completed");
     } catch (err) {
-      console.error("❌ Error processing webhook:", err);
+      console.error("❌ Error processing webhook:", err.message, err.stack);
     }
 
     return new Response("EVENT_RECEIVED", { status: 200 });
@@ -48,6 +58,9 @@ async function processWebhook(body) {
   const IG_ACCESS_TOKEN = process.env.IG_ACCESS_TOKEN;
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
+  console.log("🔑 IG_ACCESS_TOKEN exists:", !!IG_ACCESS_TOKEN);
+  console.log("🔑 ANTHROPIC_API_KEY exists:", !!ANTHROPIC_API_KEY);
+
   if (!IG_ACCESS_TOKEN || !ANTHROPIC_API_KEY) {
     console.error("❌ Missing env vars: IG_ACCESS_TOKEN or ANTHROPIC_API_KEY");
     return;
@@ -55,8 +68,13 @@ async function processWebhook(body) {
 
   if (body.object === "instagram") {
     for (const entry of body.entry || []) {
+      console.log("📌 Entry ID:", entry.id);
+      console.log("📌 Messaging events:", (entry.messaging || []).length);
+      console.log("📌 Changes:", (entry.changes || []).length);
+      
       // ----- Direct Messages (DMs) -----
       for (const msgEvent of entry.messaging || []) {
+        console.log("💬 msgEvent:", JSON.stringify(msgEvent));
         if (msgEvent.message && !msgEvent.message.is_echo) {
           const senderId = msgEvent.sender.id;
           const text = msgEvent.message.text;
@@ -64,6 +82,7 @@ async function processWebhook(body) {
 
           if (text) {
             const reply = await generateReply(text, "dm", ANTHROPIC_API_KEY);
+            console.log("🤖 Claude reply:", reply);
             await sendInstagramDM(senderId, reply, IG_ACCESS_TOKEN);
           }
         }
@@ -71,6 +90,7 @@ async function processWebhook(body) {
 
       // ----- Comments -----
       for (const change of entry.changes || []) {
+        console.log("💬 change:", JSON.stringify(change));
         if (change.field === "comments") {
           const commentId = change.value.id;
           const commentText = change.value.text;
@@ -78,11 +98,14 @@ async function processWebhook(body) {
 
           if (commentText && commentId) {
             const reply = await generateReply(commentText, "comment", ANTHROPIC_API_KEY);
+            console.log("🤖 Claude reply:", reply);
             await replyToComment(commentId, reply, IG_ACCESS_TOKEN);
           }
         }
       }
     }
+  } else {
+    console.log("⚠️ Not instagram object:", body.object);
   }
 }
 
