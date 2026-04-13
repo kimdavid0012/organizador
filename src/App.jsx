@@ -272,7 +272,8 @@ class ErrorBoundary extends React.Component {
 }
 
 function AppContent() {
-    const { state, addMolde, addTarea, syncStatus, updateConfig, runPriceMigration2026April, runPriceMigrationL2Fix, runPriceMigrationL2Force, runPriceMigrationL2Uniform, runPriceMigrationL2Fix2 } = useData();
+    const { state, addMolde, addTarea, syncStatus, updateConfig, runPriceMigration2026April, runPriceMigrationL2Fix, runPriceMigrationL2Force, runPriceMigrationL2Uniform, runPriceMigrationL2Fix2, forceSaveNow } = useData();
+    const [saveStatus, setSaveStatus] = React.useState('idle'); // idle | saving | saved | error
     const { moldes, telas, config } = state;
     const { t, lang, changeLang, LANGUAGE_LABELS } = useI18n();
     const { user, users, originalAdmin, logout, switchUser, getAllowedSections } = useAuth(); // Auth integration
@@ -713,6 +714,53 @@ function AppContent() {
 
             {/* Mobile Bottom Navigation */}
             <MobileNav navItems={navItems} view={view} setView={setView} />
+
+            {/* Global floating Guardar button */}
+            {view !== 'yuliya' && (
+                <button
+                    onClick={async () => {
+                        console.log('[Guardar] Botón presionado — guardando en Firestore...');
+                        setSaveStatus('saving');
+                        const ok = await forceSaveNow();
+                        console.log('[Guardar] Resultado:', ok ? 'OK' : 'ERROR');
+                        setSaveStatus(ok ? 'saved' : 'error');
+                        setTimeout(() => setSaveStatus('idle'), 2500);
+                    }}
+                    disabled={saveStatus === 'saving'}
+                    style={{
+                        position: 'fixed',
+                        bottom: 'calc(68px + env(safe-area-inset-bottom, 0px))',
+                        right: 16,
+                        zIndex: 9000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '10px 16px',
+                        borderRadius: 24,
+                        border: 'none',
+                        cursor: saveStatus === 'saving' ? 'not-allowed' : 'pointer',
+                        fontWeight: 700,
+                        fontSize: 13,
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                        background: saveStatus === 'saved' ? '#16a34a' : saveStatus === 'error' ? '#dc2626' : '#15803d',
+                        color: '#fff',
+                        transition: 'background 0.2s',
+                        opacity: saveStatus === 'saving' ? 0.7 : 1,
+                    }}
+                >
+                    {saveStatus === 'saving' && <span style={{ width: 14, height: 14, border: '2px solid #fff', borderTop: '2px solid transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />}
+                    {saveStatus === 'saved' && <span style={{ fontSize: 14 }}>✓</span>}
+                    {saveStatus === 'error' && <span style={{ fontSize: 14 }}>✗</span>}
+                    {saveStatus === 'idle' && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                    )}
+                    {saveStatus === 'idle' ? 'Guardar' : saveStatus === 'saving' ? 'Guardando...' : saveStatus === 'saved' ? 'Guardado ✓' : 'Error'}
+                </button>
+            )}
         </div>
     );
 }

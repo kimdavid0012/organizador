@@ -1527,19 +1527,26 @@ export function DataProvider({ children }) {
     }, [mergeBestLocalState, mergeProtectedState, updateSyncStatus]);
 
     // One-time migration: seed Yuliya initial data into Firestore if not yet loaded
+    // Re-triggers if Firestore has fewer than 10 rows (incomplete seed)
     useEffect(() => {
         const YULIYA_FLAG = '_yuliyaDataLoaded';
-        if (localStorage.getItem(YULIYA_FLAG)) return;
 
         const seedYuliya = async () => {
             try {
                 const ref = doc(db, 'app-data', 'yuliya');
                 const snap = await getDoc(ref);
-                if (!snap.exists() || !(snap.data()?.rows?.length > 0)) {
+                const existingRows = snap.exists() ? (snap.data()?.rows?.length ?? 0) : 0;
+                if (!snap.exists() || existingRows < 10) {
                     await setDoc(ref, { rows: YULIYA_INITIAL_DATA });
-                    console.log('[Yuliya migration] Seeded', YULIYA_INITIAL_DATA.length, 'rows into app-data/yuliya');
+                    console.log('[Yuliya migration] Seeded', YULIYA_INITIAL_DATA.length, 'rows into app-data/yuliya (was', existingRows, ')');
+                    localStorage.removeItem(YULIYA_FLAG);
+                    localStorage.setItem(YULIYA_FLAG, '1');
+                } else {
+                    if (!localStorage.getItem(YULIYA_FLAG)) {
+                        console.log('[Yuliya migration] Already has', existingRows, 'rows — skipping seed');
+                        localStorage.setItem(YULIYA_FLAG, '1');
+                    }
                 }
-                localStorage.setItem(YULIYA_FLAG, '1');
             } catch (err) {
                 console.warn('[Yuliya migration] Failed:', err.message);
             }
@@ -2337,6 +2344,35 @@ export function DataProvider({ children }) {
         saveReservation: (reserva) => dispatch({ type: ACTION_TYPES.SAVE_RESERVATION, payload: reserva }),
         deleteReservation: (id) => dispatch({ type: ACTION_TYPES.DELETE_RESERVATION, payload: id }),
 
+        forceSaveNow: async () => {
+            if (!stateRef.current) return false;
+            try {
+                const { saveDataToFirestore } = await import('./storage');
+                const currentState = stampStateForPersistence(
+                    mergeProtectedState(stateRef.current, lastKnownCloudState.current),
+                    currentRevisionRef.current,
+                    'cloud'
+                );
+                console.log('[forceSaveNow] Saving to Firestore immediately...');
+                await saveDataToFirestore(currentState);
+                lastKnownCloudState.current = currentState;
+                pendingCloudSave.current = false;
+                pendingChangesCount.current = 0;
+                setPendingLocalChangesFlag(false);
+                updateSyncStatus({
+                    pendingChanges: 0,
+                    hasPendingWrites: false,
+                    lastCloudSaveAt: new Date().toISOString(),
+                    lastError: null
+                });
+                console.log('[forceSaveNow] Firestore save OK');
+                return true;
+            } catch (err) {
+                console.error('[forceSaveNow] Error:', err);
+                updateSyncStatus({ lastError: err.message || 'Error al guardar' });
+                return false;
+            }
+        },
         exportBackupNow: () => downloadBackupJSON(stateRef.current),
         recoverRicherLocalData: async () => {
             const beforeCounts = getCriticalCounts(stateRef.current);

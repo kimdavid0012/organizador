@@ -1330,3 +1330,7 @@
         align-items: flex-start;
     }
 }
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
