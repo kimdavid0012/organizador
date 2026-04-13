@@ -62,44 +62,61 @@ async function processWebhook(body) {
   console.log("🔑 ANTHROPIC_API_KEY exists:", !!ANTHROPIC_API_KEY);
 
   if (!IG_ACCESS_TOKEN || !ANTHROPIC_API_KEY) {
-    console.error("❌ Missing env vars: IG_ACCESS_TOKEN or ANTHROPIC_API_KEY");
+    console.error("❌ Missing env vars");
     return;
   }
 
   if (body.object === "instagram") {
     for (const entry of body.entry || []) {
       console.log("📌 Entry ID:", entry.id);
-      console.log("📌 Messaging events:", (entry.messaging || []).length);
-      console.log("📌 Changes:", (entry.changes || []).length);
-      
-      // ----- Direct Messages (DMs) -----
-      for (const msgEvent of entry.messaging || []) {
-        console.log("💬 msgEvent:", JSON.stringify(msgEvent));
-        if (msgEvent.message && !msgEvent.message.is_echo) {
-          const senderId = msgEvent.sender.id;
-          const text = msgEvent.message.text;
-          console.log(`💬 DM from ${senderId}: ${text}`);
+      console.log("📌 Changes:", JSON.stringify(entry.changes || []));
+      console.log("📌 Messaging:", JSON.stringify(entry.messaging || []));
 
-          if (text) {
-            const reply = await generateReply(text, "dm", ANTHROPIC_API_KEY);
-            console.log("🤖 Claude reply:", reply);
-            await sendInstagramDM(senderId, reply, IG_ACCESS_TOKEN);
+      // ── Instagram Business API: messages & comments come via changes ──
+      for (const change of entry.changes || []) {
+        console.log("📨 Change field:", change.field);
+        console.log("📨 Change value:", JSON.stringify(change.value));
+
+        // ----- Direct Messages (DMs) via changes -----
+        if (change.field === "messages") {
+          const val = change.value;
+          if (val.message && val.sender) {
+            const senderId = val.sender.id;
+            const text = val.message.text;
+            console.log(`💬 DM from ${senderId}: ${text}`);
+
+            if (text) {
+              const reply = await generateReply(text, "dm", ANTHROPIC_API_KEY);
+              console.log("🤖 Claude reply:", reply);
+              await sendInstagramDM(senderId, reply, IG_ACCESS_TOKEN);
+            }
           }
         }
-      }
 
-      // ----- Comments -----
-      for (const change of entry.changes || []) {
-        console.log("💬 change:", JSON.stringify(change));
+        // ----- Comments via changes -----
         if (change.field === "comments") {
-          const commentId = change.value.id;
-          const commentText = change.value.text;
+          const commentId = change.value?.id;
+          const commentText = change.value?.text;
           console.log(`💬 Comment ${commentId}: ${commentText}`);
 
           if (commentText && commentId) {
             const reply = await generateReply(commentText, "comment", ANTHROPIC_API_KEY);
             console.log("🤖 Claude reply:", reply);
             await replyToComment(commentId, reply, IG_ACCESS_TOKEN);
+          }
+        }
+      }
+
+      // ── Fallback: Messenger-style messaging array (some API versions) ──
+      for (const msgEvent of entry.messaging || []) {
+        console.log("💬 messaging event:", JSON.stringify(msgEvent));
+        if (msgEvent.message && !msgEvent.message.is_echo) {
+          const senderId = msgEvent.sender.id;
+          const text = msgEvent.message.text;
+          if (text) {
+            const reply = await generateReply(text, "dm", ANTHROPIC_API_KEY);
+            console.log("🤖 Claude reply:", reply);
+            await sendInstagramDM(senderId, reply, IG_ACCESS_TOKEN);
           }
         }
       }
