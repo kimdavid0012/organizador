@@ -38,6 +38,7 @@ import PosProductos from './components/POS/PosProductos';
 import { AuthProvider, useAuth } from './store/AuthContext';
 import AIAssistant from './components/AIAssistant';
 import YuliyaPage from './components/YuliyaPage';
+import OfflineIndicator from './components/OfflineIndicator';
 import { firebaseConfigured, firebaseConfigMissingKeys } from './store/firebase';
 import './App.css';
 
@@ -471,6 +472,7 @@ function AppContent() {
 
     return (
         <div className="app">
+            <OfflineIndicator />
             {/* Mobile hamburger button */}
             <button
                 className="mobile-hamburger"

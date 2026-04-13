@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { db, firestoreOfflineReady } from './firebase';
+import { saveAppDataLocally, initSyncManager } from '../utils/syncManager';
 import {
     DEFAULT_DATA,
     loadDataFromLocal,
@@ -1526,6 +1527,15 @@ export function DataProvider({ children }) {
         };
     }, [mergeBestLocalState, mergeProtectedState, updateSyncStatus]);
 
+    // Init offline sync manager (additive — does not replace Firebase logic)
+    useEffect(() => {
+        const cleanup = initSyncManager(async (data) => {
+            const { saveDataToFirestore } = await import('./storage');
+            await saveDataToFirestore(data);
+        });
+        return cleanup;
+    }, []);
+
     // One-time migration: seed Yuliya initial data into Firestore if not yet loaded
     // Re-triggers if Firestore has fewer than 10 rows (incomplete seed)
     useEffect(() => {
@@ -1689,6 +1699,8 @@ export function DataProvider({ children }) {
                     // Firebase es la base, local solo enriquece con datos que Firebase no tiene
                     const merged = mergeProtectedState(fullData, localRecoveryData);
                     dispatch({ type: ACTION_TYPES.SET_DATA, payload: merged });
+                    // Also back up Firebase data to organizador-local IndexedDB
+                    saveAppDataLocally(merged).catch(() => {});
                     currentRevisionRef.current = remoteRevision;
                     initialized.current = true;
                 } catch (err) {
@@ -1740,6 +1752,8 @@ export function DataProvider({ children }) {
         );
         try { saveDataToLocal(persistableState); } catch (localErr) { console.warn('localStorage backup failed (non-critical):', localErr.message); }
         try { saveProtectedSessionSnapshot(persistableState); } catch (snapErr) { console.warn('Session snapshot failed (non-critical):', snapErr.message); }
+        // Also persist to organizador-local IndexedDB (additive offline layer)
+        saveAppDataLocally(persistableState).catch(() => {});
         localChangeTimestamp.current = Date.now();
         pendingCloudSave.current = true;
         pendingChangesCount.current += 1;
