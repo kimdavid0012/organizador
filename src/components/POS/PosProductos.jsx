@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Plus, Edit2, Trash2, Upload, Search, FileSpreadsheet } from 'lucide-react';
+import { Plus, Edit2, Trash2, Upload, Search, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import { useAuth } from '../../store/AuthContext';
 import { generateId, getProductThumb } from '../../utils/helpers';
@@ -28,7 +28,7 @@ const DEFAULT_PRODUCT = {
 };
 
 export default function PosProductos() {
-    const { state, addPosProduct, updatePosProduct, deletePosProduct, importPosProducts, fetchWooProducts } = useData();
+    const { state, addPosProduct, updatePosProduct, deletePosProduct, bulkDeletePosProducts, importPosProducts, fetchWooProducts } = useData();
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
     const canEdit = isAdmin || user?.role === 'encargada';
@@ -39,6 +39,8 @@ export default function PosProductos() {
     const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
     const [formData, setFormData] = useState(DEFAULT_PRODUCT);
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
     const fileInputRef = useRef(null);
     const [dragActive, setDragActive] = useState(false);
@@ -138,6 +140,29 @@ export default function PosProductos() {
         if (window.confirm("¿Estás seguro de eliminar este producto?")) {
             deletePosProduct(id);
         }
+    };
+
+    // --- Multi-select / Bulk delete ---
+    const toggleSelect = (id) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+    const isAllSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.has(p.id));
+    const toggleSelectAll = () => {
+        if (isAllSelected) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredProducts.map(p => p.id)));
+        }
+    };
+    const handleBulkDeleteConfirm = () => {
+        bulkDeletePosProducts(Array.from(selectedIds));
+        setSelectedIds(new Set());
+        setShowBulkConfirm(false);
     };
 
     const handleActivateAll = () => {
@@ -300,6 +325,17 @@ export default function PosProductos() {
                 <table className="pos-table">
                     <thead>
                         <tr>
+                            {canEdit && (
+                                <th style={{ width: 40, paddingRight: 0 }}>
+                                    <input
+                                        type="checkbox"
+                                        className="bulk-checkbox"
+                                        checked={isAllSelected}
+                                        onChange={toggleSelectAll}
+                                        title="Seleccionar todos"
+                                    />
+                                </th>
+                            )}
                             <th>Art. Local</th>
                             <th>Art. Fabrica</th>
                             <th>Barras</th>
@@ -315,7 +351,17 @@ export default function PosProductos() {
                     </thead>
                     <tbody>
                         {filteredProducts.map(p => (
-                            <tr key={p.id} className="pos-table-row">
+                            <tr key={p.id} className={`pos-table-row${selectedIds.has(p.id) ? ' row-selected' : ''}`}>
+                                {canEdit && (
+                                    <td style={{ paddingRight: 0 }}>
+                                        <input
+                                            type="checkbox"
+                                            className="bulk-checkbox"
+                                            checked={selectedIds.has(p.id)}
+                                            onChange={() => toggleSelect(p.id)}
+                                        />
+                                    </td>
+                                )}
                                 <td style={{ fontWeight: 'bold' }}>{p.articuloVenta || p.codigoInterno}</td>
                                 <td>{p.articuloFabrica || '-'}</td>
                                 <td>{p.codigoBarras || '-'}</td>
@@ -382,7 +428,7 @@ export default function PosProductos() {
                         ))}
                         {filteredProducts.length === 0 && (
                             <tr>
-                                <td colSpan={11} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                <td colSpan={canEdit ? 12 : 11} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                                     No se encontraron productos. Añade uno nuevo o importa desde Excel.
                                 </td>
                             </tr>
@@ -393,9 +439,17 @@ export default function PosProductos() {
 
             <div className="pos-product-cards">
                 {filteredProducts.map(p => (
-                    <article key={`card-${p.id}`} className="pos-product-card">
+                    <article key={`card-${p.id}`} className={`pos-product-card${selectedIds.has(p.id) ? ' card-selected' : ''}`}>
                         <div className="pos-product-card-top">
-                            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                            {canEdit && (
+                                <input
+                                    type="checkbox"
+                                    className="bulk-checkbox card-checkbox"
+                                    checked={selectedIds.has(p.id)}
+                                    onChange={() => toggleSelect(p.id)}
+                                />
+                            )}
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flex: 1 }}>
                                 <div style={{
                                     width: 64,
                                     height: 64,
@@ -489,6 +543,43 @@ export default function PosProductos() {
                     </div>
                 )}
             </div>
+
+            {/* Floating bulk action bar */}
+            {canEdit && selectedIds.size > 0 && (
+                <div className="bulk-action-bar">
+                    <span className="bulk-count">{selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}</span>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>
+                        Deseleccionar todo
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => setShowBulkConfirm(true)}>
+                        <Trash2 size={15} /> Eliminar seleccionados
+                    </button>
+                </div>
+            )}
+
+            {/* Bulk delete confirmation dialog */}
+            {showBulkConfirm && (
+                <div className="pos-modal-overlay">
+                    <div className="pos-modal" style={{ maxWidth: 420 }}>
+                        <div className="pos-modal-header">
+                            <h3>Confirmar eliminación</h3>
+                            <button className="btn btn-ghost" onClick={() => setShowBulkConfirm(false)}>✕</button>
+                        </div>
+                        <div className="pos-modal-body" style={{ display: 'block', padding: '1.25rem 1.5rem' }}>
+                            <p style={{ color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                                ¿Estás seguro de eliminar <strong>{selectedIds.size} artículo{selectedIds.size !== 1 ? 's' : ''}</strong>?<br />
+                                <span style={{ color: 'var(--danger)', fontSize: 'var(--fs-sm)' }}>Esta acción no se puede deshacer.</span>
+                            </p>
+                        </div>
+                        <div className="pos-modal-footer">
+                            <button className="btn btn-secondary" onClick={() => setShowBulkConfirm(false)}>Cancelar</button>
+                            <button className="btn btn-danger" onClick={handleBulkDeleteConfirm}>
+                                <Trash2 size={15} /> Eliminar {selectedIds.size} artículo{selectedIds.size !== 1 ? 's' : ''}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Product Edit/Create Modal */}
             {isModalOpen && (

@@ -691,6 +691,7 @@ const ACTION_TYPES = {
     ADD_POS_PRODUCT: 'ADD_POS_PRODUCT',
     UPDATE_POS_PRODUCT: 'UPDATE_POS_PRODUCT',
     DELETE_POS_PRODUCT: 'DELETE_POS_PRODUCT',
+    BULK_DELETE_POS_PRODUCTS: 'BULK_DELETE_POS_PRODUCTS',
     IMPORT_POS_PRODUCTS: 'IMPORT_POS_PRODUCTS',
 
     // Clientes
@@ -1222,6 +1223,16 @@ function dataReducer(state, action) {
                     posProductos: (state.config.posProductos || []).filter((product) => product.id !== action.payload)
                 }, state.moldes)
             };
+        case ACTION_TYPES.BULK_DELETE_POS_PRODUCTS: {
+            const idsToDelete = new Set(action.payload);
+            return {
+                ...state,
+                config: withReconciledPosProducts({
+                    ...state.config,
+                    posProductos: (state.config.posProductos || []).filter((product) => !idsToDelete.has(product.id))
+                }, state.moldes)
+            };
+        }
         case ACTION_TYPES.IMPORT_POS_PRODUCTS:
             return {
                 ...state,
@@ -1856,6 +1867,7 @@ export function DataProvider({ children }) {
         addPosProduct: (product) => dispatch({ type: ACTION_TYPES.ADD_POS_PRODUCT, payload: product }),
         updatePosProduct: (id, changes) => dispatch({ type: ACTION_TYPES.UPDATE_POS_PRODUCT, payload: { id, changes } }),
         deletePosProduct: (id) => dispatch({ type: ACTION_TYPES.DELETE_POS_PRODUCT, payload: id }),
+        bulkDeletePosProducts: (ids) => dispatch({ type: ACTION_TYPES.BULK_DELETE_POS_PRODUCTS, payload: ids }),
         importPosProducts: (products) => dispatch({ type: ACTION_TYPES.IMPORT_POS_PRODUCTS, payload: products }),
 
         fetchWooOrders: async () => {
