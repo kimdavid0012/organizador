@@ -1,0 +1,276 @@
+.yuliya-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    padding: var(--sp-4);
+    box-sizing: border-box;
+}
+
+.yuliya-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    font-size: var(--fs-md);
+}
+
+/* ---- Header ---- */
+.yuliya-header {
+    flex-shrink: 0;
+    margin-bottom: var(--sp-3);
+}
+
+.yuliya-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    flex-wrap: wrap;
+    margin-bottom: var(--sp-2);
+}
+
+.yuliya-title {
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-semibold);
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.yuliya-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    flex-wrap: wrap;
+}
+
+.yuliya-save-status {
+    font-size: var(--fs-xs);
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    font-weight: var(--fw-medium);
+}
+.yuliya-save-status.saved {
+    background: var(--success-bg);
+    color: var(--success);
+}
+.yuliya-save-status.unsaved {
+    background: var(--warning-bg);
+    color: var(--warning);
+}
+
+.yuliya-subtitle {
+    font-size: var(--fs-sm);
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* ---- Table container ---- */
+.yuliya-table-wrap {
+    flex: 1;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ---- Table ---- */
+.yuliya-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+}
+
+/* ---- Headers ---- */
+.yuliya-th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: rgba(20, 20, 35, 0.97);
+    color: var(--text-secondary);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 10px 8px;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border-light);
+    text-align: left;
+    user-select: none;
+}
+
+.yuliya-th.sticky {
+    z-index: 5;
+}
+
+.yuliya-th.formula-col {
+    color: #60a5fa;
+}
+
+/* Action column */
+.yuliya-col-action {
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
+    padding: 0;
+    position: sticky;
+    left: 0;
+    z-index: 6 !important;
+    background: rgba(20, 20, 35, 0.97) !important;
+}
+
+/* ---- Rows ---- */
+.yuliya-tr.even { background: rgba(255, 255, 255, 0.015); }
+.yuliya-tr.odd  { background: rgba(255, 255, 255, 0.035); }
+
+.yuliya-tr:hover .yuliya-td { background: rgba(20, 184, 166, 0.06); }
+
+/* ---- Cells ---- */
+.yuliya-td {
+    padding: 0;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+    font-size: var(--fs-sm);
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.yuliya-td.sticky {
+    position: sticky;
+    z-index: 2;
+    background: inherit;
+}
+
+.yuliya-td.editable-cell {
+    cursor: pointer;
+}
+.yuliya-td.editable-cell:hover {
+    background: rgba(255,255,255,0.05) !important;
+}
+
+/* Formula cells */
+.yuliya-td.formula-cell {
+    background: rgba(96, 165, 250, 0.08) !important;
+    color: #93c5fd;
+    font-weight: var(--fw-medium);
+    padding: 0 8px;
+    line-height: 36px;
+    text-align: right;
+}
+
+.yuliya-tr:hover .yuliya-td.formula-cell {
+    background: rgba(96, 165, 250, 0.14) !important;
+}
+
+.yuliya-cell-display {
+    display: block;
+    padding: 0 8px;
+    line-height: 36px;
+    min-height: 36px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.yuliya-empty {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+/* ---- Inline editor ---- */
+.yuliya-cell-input {
+    width: 100%;
+    height: 34px;
+    padding: 4px 8px;
+    background: rgba(20, 184, 166, 0.12);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: var(--fs-sm);
+    font-family: var(--font-family);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.2);
+    box-sizing: border-box;
+}
+.yuliya-cell-input::-webkit-outer-spin-button,
+.yuliya-cell-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+}
+
+/* ---- Action (delete) column ---- */
+.yuliya-col-action.yuliya-td {
+    text-align: center;
+    padding: 0 4px;
+}
+
+.yuliya-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+    opacity: 0;
+}
+.yuliya-tr:hover .yuliya-delete-btn {
+    opacity: 1;
+}
+.yuliya-delete-btn:hover {
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+/* ---- Totals footer ---- */
+.yuliya-totals {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+}
+
+.yuliya-total-cell {
+    background: rgba(20, 20, 35, 0.97) !important;
+    border-top: 1px solid var(--border-light);
+    padding: 6px 8px;
+    font-size: var(--fs-sm);
+    color: var(--text-primary);
+    text-align: right;
+}
+
+.yuliya-totals .yuliya-col-action {
+    background: rgba(20, 20, 35, 0.97) !important;
+}
+
+/* ---- Footer ---- */
+.yuliya-footer {
+    flex-shrink: 0;
+    padding-top: var(--sp-3);
+    display: flex;
+    gap: var(--sp-2);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+    .yuliya-page {
+        padding: var(--sp-3);
+    }
+    .yuliya-title {
+        font-size: var(--fs-lg);
+    }
+    .yuliya-title-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .yuliya-header-actions {
+        width: 100%;
+    }
+}

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet, Instagram, Zap, Menu, Video
+    LayoutDashboard, BookOpen, Scissors, Settings as SettingsIcon, HardDrive, Globe, Factory, UserCheck, PackageOpen, Users, Store, Megaphone, ShoppingCart, MoreHorizontal, X as XIcon, Boxes, Camera, Landmark, BarChart3, FileText, Wallet, Instagram, Zap, Menu, Video, TableProperties
 } from 'lucide-react';
 import { DataProvider, useData } from './store/DataContext';
 import { I18nProvider, useI18n } from './store/I18nContext';
@@ -37,6 +37,7 @@ import ClientesPage from './components/ClientesPage';
 import PosProductos from './components/POS/PosProductos';
 import { AuthProvider, useAuth } from './store/AuthContext';
 import AIAssistant from './components/AIAssistant';
+import YuliyaPage from './components/YuliyaPage';
 import { firebaseConfigured, firebaseConfigMissingKeys } from './store/firebase';
 import './App.css';
 
@@ -451,6 +452,7 @@ function AppContent() {
         { id: 'settings', icon: SettingsIcon, label: t('navConfiguracion') },
         { id: 'informes', icon: FileText, label: t('navInformes') },
         { id: 'saldo', icon: Wallet, label: t('navSaldo') },
+        ...(user.role === 'admin' ? [{ id: 'yuliya', icon: TableProperties, label: 'Yuliya' }] : []),
     ];
 
     if (user.role !== 'admin') {
@@ -672,6 +674,7 @@ function AppContent() {
                     {view === 'clientes' && <ClientesPage />}
                     {view === 'informes' && <InformesPage />}
                     {view === 'saldo' && <SaldoPage />}
+                    {view === 'yuliya' && <YuliyaPage />}
                 </div>
             </div>
 
