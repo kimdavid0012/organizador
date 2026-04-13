@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { db, firestoreOfflineReady } from './firebase';
 import {
     DEFAULT_DATA,
@@ -20,6 +20,7 @@ import { generateId } from '../utils/helpers';
 import { wooService } from '../utils/wooService';
 import { metaService } from '../utils/metaService';
 import { ARTICLE_CODE_PAIRS } from '../data/articleCodePairs';
+import YULIYA_INITIAL_DATA from '../data/yuliyaInitialData';
 
 const DataContext = createContext(null);
 
@@ -1525,6 +1526,28 @@ export function DataProvider({ children }) {
         };
     }, [mergeBestLocalState, mergeProtectedState, updateSyncStatus]);
 
+    // One-time migration: seed Yuliya initial data into Firestore if not yet loaded
+    useEffect(() => {
+        const YULIYA_FLAG = '_yuliyaDataLoaded';
+        if (localStorage.getItem(YULIYA_FLAG)) return;
+
+        const seedYuliya = async () => {
+            try {
+                const ref = doc(db, 'app-data', 'yuliya');
+                const snap = await getDoc(ref);
+                if (!snap.exists() || !(snap.data()?.rows?.length > 0)) {
+                    await setDoc(ref, { rows: YULIYA_INITIAL_DATA });
+                    console.log('[Yuliya migration] Seeded', YULIYA_INITIAL_DATA.length, 'rows into app-data/yuliya');
+                }
+                localStorage.setItem(YULIYA_FLAG, '1');
+            } catch (err) {
+                console.warn('[Yuliya migration] Failed:', err.message);
+            }
+        };
+
+        void seedYuliya();
+    }, []);
+
     useEffect(() => {
         const persistRecoverySnapshot = () => {
             if (!stateRef.current) return;
@@ -1693,9 +1716,12 @@ export function DataProvider({ children }) {
         if (!state || !initialized.current) return;
 
         if (isFromFirestore.current) {
+            console.log('[DataContext] State change from Firestore — skip save');
             isFromFirestore.current = false;
             return;
         }
+
+        console.log('[DataContext] Local state change — queuing save (rev:', currentRevisionRef.current + 1, ')');
 
         // SIEMPRE guardar a localStorage inmediatamente como backup
         const nextRevision = currentRevisionRef.current + 1;
@@ -1727,8 +1753,10 @@ export function DataProvider({ children }) {
                     'cloud'
                 );
                 const { saveDataToFirestore } = await import('./storage');
+                console.log('[DataContext] Saving to Firestore — revision:', currentRevisionRef.current);
                 justSaved.current = true;
                 await saveDataToFirestore(currentState);
+                console.log('[DataContext] Firestore save OK — revision:', currentRevisionRef.current);
                 lastKnownCloudState.current = currentState;
                 if (!navigator.onLine) {
                     updateSyncStatus({
