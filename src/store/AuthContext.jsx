@@ -25,7 +25,7 @@ const KNOWN_USER_SECTIONS = {
 };
 
 // All available sections in the app
-const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'agents', 'paginaweb', 'conteomercaderia', 'fotos', 'fotosprendas', 'instagramplanner', 'tiktok', 'mesan', 'banking', 'settings', 'informes', 'saldo'];
+const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'agents', 'paginaweb', 'conteomercaderia', 'fotos', 'fotosprendas', 'instagramplanner', 'tiktok', 'mesan', 'banking', 'settings', 'informes', 'saldo', 'yuliya'];
 
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
