@@ -1,8 +1,23 @@
 // Instagram Webhook - Netlify Serverless Function
-// Handles Meta webhook verification + incoming IG messages/comments
-// Responds using Claude AI via Anthropic API
+// Handles Meta webhook verification + incoming IG messages/comments.
 
-const VERIFY_TOKEN = "celavie_webhook_2026";
+const GRAPH_API_VERSION = "v21.0";
+const FALLBACK_VERIFY_TOKEN = "celavie_webhook_2026";
+
+const getEnv = (key) => {
+  if (typeof Netlify !== "undefined" && Netlify.env?.get) {
+    return Netlify.env.get(key);
+  }
+  return process.env[key];
+};
+
+const maskValue = (value = "") => {
+  if (!value) return "";
+  if (value.length <= 8) return "***";
+  return `${value.slice(0, 4)}...${value.slice(-4)}`;
+};
+
+const getVerifyToken = () => getEnv("META_VERIFY_TOKEN") || FALLBACK_VERIFY_TOKEN;
 
 export default async (req, context) => {
   // ===== GET: Meta Webhook Verification =====
@@ -12,7 +27,7 @@ export default async (req, context) => {
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
 
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    if (mode === "subscribe" && token === getVerifyToken()) {
       console.log("✅ Webhook verified");
       return new Response(challenge, { status: 200 });
     }
@@ -54,14 +69,21 @@ export const config = {
 // Process incoming webhook events
 // ──────────────────────────────────────────────
 async function processWebhook(body) {
-  const IG_ACCESS_TOKEN = process.env.IG_ACCESS_TOKEN;
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  const IG_ACCESS_TOKEN = getEnv("IG_ACCESS_TOKEN");
+  const ANTHROPIC_API_KEY = getEnv("ANTHROPIC_API_KEY");
+  const IG_BUSINESS_ID = getEnv("IG_BUSINESS_ID") || getEnv("IG_USER_ID") || "me";
 
   console.log("🔑 IG_ACCESS_TOKEN exists:", !!IG_ACCESS_TOKEN);
   console.log("🔑 ANTHROPIC_API_KEY exists:", !!ANTHROPIC_API_KEY);
+  console.log("🔑 IG sender id:", IG_BUSINESS_ID === "me" ? "me" : maskValue(IG_BUSINESS_ID));
 
-  if (!IG_ACCESS_TOKEN || !ANTHROPIC_API_KEY) {
-    console.error("❌ Missing env vars");
+  const missing = [
+    !IG_ACCESS_TOKEN ? "IG_ACCESS_TOKEN" : null,
+    !ANTHROPIC_API_KEY ? "ANTHROPIC_API_KEY" : null
+  ].filter(Boolean);
+
+  if (missing.length) {
+    console.error("❌ Missing env vars:", missing.join(", "));
     return;
   }
 
@@ -78,17 +100,19 @@ async function processWebhook(body) {
 
         // ----- Direct Messages (DMs) via changes -----
         if (change.field === "messages") {
-          const val = change.value;
-          if (val.message && val.sender) {
-            const senderId = val.sender.id;
-            const text = val.message.text;
-            console.log(`💬 DM from ${senderId}: ${text}`);
+          const messageEvents = extractMessageEvents(change.value);
+          console.log("💬 Message events found:", messageEvents.length);
 
-            if (text) {
-              const reply = await generateReply(text, "dm", ANTHROPIC_API_KEY);
-              console.log("🤖 Claude reply:", reply);
-              await sendInstagramDM(senderId, reply, IG_ACCESS_TOKEN);
+          for (const event of messageEvents) {
+            if (!event.text || !event.senderId) {
+              console.log("⚠️ Message event without sender/text:", JSON.stringify(event));
+              continue;
             }
+
+            console.log(`💬 DM from ${event.senderId}: ${event.text}`);
+            const reply = await generateReply(event.text, "dm", ANTHROPIC_API_KEY);
+            console.log("🤖 Claude reply:", reply);
+            await sendInstagramDM(IG_BUSINESS_ID, event.senderId, reply, IG_ACCESS_TOKEN);
           }
         }
 
@@ -115,7 +139,7 @@ async function processWebhook(body) {
           if (text) {
             const reply = await generateReply(text, "dm", ANTHROPIC_API_KEY);
             console.log("🤖 Claude reply:", reply);
-            await sendInstagramDM(senderId, reply, IG_ACCESS_TOKEN);
+            await sendInstagramDM(IG_BUSINESS_ID, senderId, reply, IG_ACCESS_TOKEN);
           }
         }
       }
@@ -125,10 +149,32 @@ async function processWebhook(body) {
   }
 }
 
+function extractMessageEvents(value = {}) {
+  const events = [];
+
+  if (value.message || value.sender) {
+    events.push({
+      senderId: value.sender?.id || value.from?.id || value.recipient?.id || "",
+      text: value.message?.text || value.text || ""
+    });
+  }
+
+  const nestedMessages = Array.isArray(value.messages) ? value.messages : [];
+  for (const message of nestedMessages) {
+    events.push({
+      senderId: message.from?.id || message.sender?.id || value.sender?.id || "",
+      text: message.text?.body || message.text || message.message?.text || ""
+    });
+  }
+
+  return events;
+}
+
 // ──────────────────────────────────────────────
 // Generate reply using Claude
 // ──────────────────────────────────────────────
 async function generateReply(userMessage, msgContext, apiKey) {
+  const model = getEnv("ANTHROPIC_MODEL") || "claude-sonnet-4-20250514";
   const systemPrompt = `Sos el asistente de atención al cliente de CELAVIE, una marca de ropa femenina mayorista ubicada en Flores, Buenos Aires, Argentina.
 
 INFORMACIÓN CLAVE:
@@ -156,7 +202,7 @@ REGLAS:
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model,
         max_tokens: 300,
         system: systemPrompt,
         messages: [
@@ -169,6 +215,11 @@ REGLAS:
     });
 
     const data = await response.json();
+    if (!response.ok) {
+      console.error("Claude API error response:", response.status, JSON.stringify(data));
+      return "Hola, gracias por tu mensaje. Te respondemos a la brevedad.";
+    }
+
     return data.content?.[0]?.text || "¡Hola! Gracias por tu mensaje. Te respondemos pronto 💜";
   } catch (err) {
     console.error("❌ Claude API error:", err);
@@ -176,24 +227,31 @@ REGLAS:
   }
 }
 
-// ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
 // Send Instagram DM
 // ──────────────────────────────────────────────
-async function sendInstagramDM(recipientId, message, accessToken) {
+async function sendInstagramDM(igBusinessId, recipientId, message, accessToken) {
   try {
     const response = await fetch(
-      `https://graph.instagram.com/v21.0/me/messages`,
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${igBusinessId}/messages`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
+          messaging_type: "RESPONSE",
           recipient: { id: recipientId },
-          message: { text: message },
-          access_token: accessToken,
+          message: { text: message }
         }),
       }
     );
     const data = await response.json();
+    if (!response.ok) {
+      console.error("❌ Instagram DM send failed:", response.status, JSON.stringify(data));
+      return;
+    }
     console.log("📤 DM sent:", JSON.stringify(data));
   } catch (err) {
     console.error("❌ Error sending DM:", err);
@@ -206,17 +264,23 @@ async function sendInstagramDM(recipientId, message, accessToken) {
 async function replyToComment(commentId, message, accessToken) {
   try {
     const response = await fetch(
-      `https://graph.instagram.com/v21.0/${commentId}/replies`,
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${commentId}/replies`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
-          message: message,
-          access_token: accessToken,
+          message: message
         }),
       }
     );
     const data = await response.json();
+    if (!response.ok) {
+      console.error("❌ Instagram comment reply failed:", response.status, JSON.stringify(data));
+      return;
+    }
     console.log("📤 Comment reply sent:", JSON.stringify(data));
   } catch (err) {
     console.error("❌ Error replying to comment:", err);
