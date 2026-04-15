@@ -153,6 +153,7 @@ export default function MarketingSection() {
     const [selectedCampaign, setSelectedCampaign] = useState(null);
     const [dailyInsights, setDailyInsights] = useState(null);
     const [loadingDaily, setLoadingDaily] = useState(false);
+    const [showPausedCampaigns, setShowPausedCampaigns] = useState(false);
     const canvasRef = useRef(null);
 
     useEffect(() => {
@@ -911,7 +912,7 @@ export default function MarketingSection() {
                             <Zap size={18} color="#f59e0b" /> Campañas (últimos 30 días)
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {campaigns.map(camp => {
+                            {campaigns.filter(c => c.status === 'ACTIVE').map(camp => {
                                 const campInsight = getInsight(camp);
                                 const campStatus = getStatusColor(camp.status);
                                 const isExpanded = expandedCampaign === camp.id;
@@ -1004,6 +1005,26 @@ export default function MarketingSection() {
                                     </div>
                                 );
                             })}
+
+                            {/* Paused Campaigns - Collapsible */}
+                            {campaigns.filter(c => c.status === 'PAUSED').length > 0 && (
+                                <div style={{ marginTop: 8 }}>
+                                    <button onClick={() => setShowPausedCampaigns(!showPausedCampaigns)} style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600, width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>⏸️ Pausadas ({campaigns.filter(c => c.status === 'PAUSED').length})</span>
+                                        <span>{showPausedCampaigns ? '▼' : '▶'}</span>
+                                    </button>
+                                    {showPausedCampaigns && campaigns.filter(c => c.status === 'PAUSED').map(camp => {
+                                        const ci = getInsight(camp);
+                                        const cs = getStatusColor(camp.status);
+                                        return (<div key={camp.id} style={{ padding: 10, background: 'rgba(245,158,11,0.03)', borderRadius: 8, border: '1px solid rgba(245,158,11,0.1)', marginTop: 4 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ fontWeight: 600, fontSize: 13, opacity: 0.7 }}>{camp.name}</div>
+                                                <span style={{ padding: '2px 8px', borderRadius: 4, background: cs.bg, color: cs.color, fontSize: 11 }}>{cs.label}</span>
+                                            </div>
+                                        </div>);
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
 
