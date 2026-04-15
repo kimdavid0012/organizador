@@ -141,6 +141,14 @@ export default function MarketingSection() {
     const marketingCache = config.marketingCache || {};
 
     const [loading, setLoading] = useState(false);
+    const [datePreset, setDatePreset] = useState('last_30d');
+    const [customSince, setCustomSince] = useState('');
+    const [customUntil, setCustomUntil] = useState('');
+    const getDateRange = () => {
+        if (datePreset === 'custom' && customSince && customUntil) return { since: customSince, until: customUntil };
+        return { preset: datePreset };
+    };
+    const dateLabel = datePreset === 'custom' ? `${customSince} → ${customUntil}` : { last_7d: '7 días', last_14d: '14 días', last_30d: '30 días', last_90d: '90 días', this_month: 'Este mes', last_month: 'Mes pasado' }[datePreset] || '30 días';
     const [accountInsights, setAccountInsights] = useState(marketingCache.accountInsights || null);
     const [campaigns, setCampaigns] = useState(marketingCache.campaigns?.length ? marketingCache.campaigns : null);
     const [expandedCampaign, setExpandedCampaign] = useState(null);
@@ -252,8 +260,8 @@ export default function MarketingSection() {
         setLoading(true);
         try {
             const [insights, camps] = await Promise.all([
-                metaService.fetchAdInsights(config),
-                metaService.fetchCampaigns(config),
+                metaService.fetchAdInsights(config, getDateRange()),
+                metaService.fetchCampaigns(config, getDateRange()),
             ]);
             setAccountInsights(insights);
             setCampaigns(camps);
@@ -734,6 +742,26 @@ export default function MarketingSection() {
                     </div>
                 )}
             </div>
+
+            {/* Date Range Filter */}
+            {marketing.metaToken && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>📅 Período:</span>
+                    {['last_7d', 'last_14d', 'last_30d', 'last_90d', 'this_month', 'last_month', 'custom'].map(p => (
+                        <button key={p} onClick={() => setDatePreset(p)}
+                            style={{ padding: '4px 10px', fontSize: 11, borderRadius: 6, border: datePreset === p ? '1px solid var(--accent)' : '1px solid var(--border-color)', background: datePreset === p ? 'rgba(99,102,241,0.15)' : 'transparent', color: datePreset === p ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: datePreset === p ? 600 : 400 }}>
+                            {{ last_7d: '7d', last_14d: '14d', last_30d: '30d', last_90d: '90d', this_month: 'Este mes', last_month: 'Mes pasado', custom: 'Personalizado' }[p]}
+                        </button>
+                    ))}
+                    {datePreset === 'custom' && (
+                        <>
+                            <input type="date" value={customSince} onChange={e => setCustomSince(e.target.value)} style={{ padding: '4px 8px', fontSize: 11, borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }} />
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>→</span>
+                            <input type="date" value={customUntil} onChange={e => setCustomUntil(e.target.value)} style={{ padding: '4px 8px', fontSize: 11, borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }} />
+                        </>
+                    )}
+                </div>
+            )}
 
             {!marketing.metaToken ? (
                 <div className="glass-panel" style={{ padding: 40, textAlign: 'center' }}>
