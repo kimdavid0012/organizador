@@ -254,6 +254,11 @@ async function gatherBusinessData(config, state, onProgress) {
     );
   } catch (e) { console.warn('Data collector: Meta unavailable', e.message); }
 
+  // ── Meta Regional Breakdown ──
+  try {
+    data.metaRegions = await metaService.fetchInsightsByRegion(config);
+  } catch (e) { data.metaRegions = []; }
+
   // ── WooCommerce ──
   onProgress?.('Recopilando WooCommerce...');
   try {
@@ -854,6 +859,12 @@ Analizás datos granulares de campañas, ad sets y ads para dar recomendaciones 
 Respondé en español rioplatense. Formato: markdown con headers ## y tablas/bullets con datos.`;
 
 export async function runPaidMediaAgent(config, analystData, onProgress) {
+  // Calculate average product margin for ROAS analysis
+  const products = config.posProductos || [];
+  const withCost = products.filter(p => p.precioCosto > 0 && p.precioVentaL1 > 0);
+  const avgMargin = withCost.length > 0
+    ? withCost.reduce((s, p) => s + ((p.precioVentaL1 - p.precioCosto) / p.precioVentaL1 * 100), 0) / withCost.length
+    : 0;
   // API key handled by callLLM
   // Key validation handled by callLLM
 
@@ -892,6 +903,9 @@ export async function runPaidMediaAgent(config, analystData, onProgress) {
   let accountInsights = null;
   try { accountInsights = await metaService.fetchAdInsights(config); } catch {}
 
+  let regionInsights = [];
+  try { regionInsights = await metaService.fetchInsightsByRegion(config); } catch {}
+
   onProgress?.('Generando recomendaciones de optimización...');
 
   const prompt = `Fecha: ${todayLabel()}
@@ -899,21 +913,41 @@ export async function runPaidMediaAgent(config, analystData, onProgress) {
 📊 ACCOUNT-LEVEL INSIGHTS (30 días):
 ${safeTruncate(accountInsights)}
 
+💰 MARGEN PROMEDIO DE PRODUCTO: ${avgMargin.toFixed(1)}% (${withCost.length} productos con costo de ${products.length} total)
+Para ROAS REAL usar: (Revenue × Margen%) / Inversión Ads
+
 📌 CAMPAÑAS ACTIVAS CON DETALLE COMPLETO:
 ${safeTruncate(campaignDetails, 4000)}
 
 📈 CONTEXTO DEL ANALISTA:
 ${safeContentTruncate(analystData, 1500)}
 
+📍 RENDIMIENTO POR PROVINCIA (Meta Ads):
+${safeTruncate(regionInsights.map(r => `${r.region}: spend $${r.spend}, reach ${r.reach}, clicks ${r.clicks}`).join('\n'), 1000)}
+
 ${BRAND_CONTEXT}
 Budget mensual estimado: calcular desde los daily budgets de las campañas
 
 ───────────────────────
+REGLA DE MÉTRICAS POR OBJETIVO DE CAMPAÑA:
+- CONVERSIONS/SALES: Evaluar por ROAS, CPA, Revenue, Pedidos generados
+- TRAFFIC/LINK_CLICKS: Evaluar por CTR, CPC, Clicks, Landing Page Views
+- REACH/AWARENESS: Evaluar por CPM, Frequency, Reach, Impressions
+- ENGAGEMENT: Evaluar por Cost per Engagement, Interactions, Shares, Comments
+- LEAD_GENERATION: Evaluar por Cost per Lead, Leads, Conversion Rate
+Siempre identificar el objetivo de cada campaña y aplicar las métricas correspondientes. NO evaluar campañas de awareness con métricas de conversión.
+
+REGLA DE CATEGORIZACIÓN DE FUENTES DE PEDIDOS:
+- DIRECTO = www.celavie.com.ar, celavie.com.ar, web (usuario entró directo)
+- ORGÁNICO = búsqueda orgánica Google (google / organic)
+- META ADS = facebook, instagram, facebook.com, instagram.com, fb, ig (paid)
+- OTROS = referido (bing, yahoo, otros sitios)
+
 Generá un **REPORTE DE PAID MEDIA** detallado:
 
 ## 💰 RESUMEN DE INVERSIÓN
 - Spend total hoy / 7d / 30d
-- ROAS por período
+- ROAS por período — IMPORTANTE: calcular ROAS REAL = (Revenue Web Total - Costo de Producción) / Inversión Ads. No usar el ROAS de Meta directamente, ya que NO contempla el costo de producción de las prendas. Si hay datos de costos por artículo del dashboard, usarlos para calcular margen real.
 - CPA (Costo por Adquisición) si hay datos de conversión
 - Budget utilizado vs disponible
 
@@ -931,6 +965,13 @@ Para cada campaña activa (INCLUIR TODAS, no omitir ninguna):
 - Audiencias saturadas (frequency alta)
 - Oportunidades de targeting no exploradas
 - Lookalike recommendations
+
+## 📍 ANÁLISIS POR PROVINCIA
+| Provincia | Spend | Reach | Clicks | CPC | Rating |
+- Top 5 provincias que mejor rinden
+- Provincias con alto gasto y bajo resultado
+- RECOMENDACIÓN: Qué provincias targetear en próximas campañas y por qué
+- FORECAST: Provincias con potencial no explotado basado en datos de pedidos
 
 ## 🎨 CREATIVE ANALYSIS
 - Señales de creative fatigue (CTR bajando, frequency subiendo)
@@ -1731,6 +1772,133 @@ Generá un REPORTE DE CASH FLOW con: semáforo de caja (Verde/Amarillo/Rojo), po
 
   const { text: cfText, tokens: cfTokens } = await callLLM(config, CASHFLOW_SYSTEM, cfPrompt, { maxTokens: 4000, temperature: 0.3 });
   return { type: 'cashflow', content: cfText, timestamp: agentTimestamp(), tokens: cfTokens, data: { totalCuentasPorCobrar: totalCxC, totalCuentasPorPagar: totalCxP } };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  AGENT 17 — MONTHLY SUMMARY (Executive Monthly Report)
+// ═══════════════════════════════════════════════════════════════
+const MONTHLY_SYSTEM = `Sos un director de operaciones que prepara el RESUMEN EJECUTIVO MENSUAL para el dueño de una marca de ropa mayorista argentina.
+${ELI5_RULE}
+${BRAND_CONTEXT}
+Tu reporte debe ser claro, con datos concretos, comparaciones mes a mes, y recomendaciones accionables.
+Incluí tablas markdown y usá emojis para facilitar la lectura rápida.
+Español rioplatense, tono profesional pero directo. Formato: markdown con tablas.`;
+
+export async function runMonthlySummaryAgent(state, config, onProgress) {
+  const bd = state._businessData || {};
+  const pedidos = state.config?.pedidosOnline || [];
+  const clientes = state.config?.clientes || [];
+  const products = state.config?.posProductos || [];
+  const mesanVentas = state.config?.mesanVentasDiarias || [];
+  const mesanMov = state.config?.mesanMovimientos || [];
+  const bankPayments = state.config?.bankPayments || [];
+  const cortes = state.config?.cortes || [];
+
+  onProgress?.('Preparando datos del mes...');
+
+  // Calculate monthly stats
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const lastMonth = now.getMonth() === 0
+    ? `${now.getFullYear() - 1}-12`
+    : `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`;
+
+  const pedidosThisMonth = pedidos.filter(p => (p.date_created || p.fecha || '').substring(0, 7) === thisMonth);
+  const pedidosLastMonth = pedidos.filter(p => (p.date_created || p.fecha || '').substring(0, 7) === lastMonth);
+  const revenueThisMonth = pedidosThisMonth.reduce((s, p) => s + Number(p.total || 0), 0);
+  const revenueLastMonth = pedidosLastMonth.reduce((s, p) => s + Number(p.total || 0), 0);
+
+  // Province breakdown
+  const provinceOrders = {};
+  pedidosThisMonth.forEach(p => {
+    const prov = p.billing?.state || p.provincia || 'Desconocido';
+    provinceOrders[prov] = (provinceOrders[prov] || 0) + 1;
+  });
+  const topProvinces = Object.entries(provinceOrders).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+  // Clients with email for potential campaigns
+  const clientsWithEmail = clientes.filter(c => c.email).length;
+
+  // Source breakdown
+  const sourceOrders = {};
+  pedidosThisMonth.forEach(p => {
+    const src = (p.origen || 'Web').toLowerCase();
+    let cat = 'Otros';
+    if (src.includes('facebook') || src.includes('instagram') || src.includes('meta')) cat = 'Meta Ads';
+    else if (src.includes('google') || src === 'organic') cat = 'Orgánico';
+    else if (src.includes('web') || src.includes('celavie') || src === 'directo') cat = 'Directo';
+    sourceOrders[cat] = (sourceOrders[cat] || 0) + 1;
+  });
+
+  onProgress?.('Generando resumen mensual con IA...');
+
+  const prompt = `Fecha: ${todayLabel()} — RESUMEN DEL MES: ${thisMonth}
+
+📊 DATOS DEL MES ACTUAL (${thisMonth}):
+- Pedidos online: ${pedidosThisMonth.length} (mes anterior: ${pedidosLastMonth.length})
+- Revenue online: $${Math.round(revenueThisMonth).toLocaleString()} (mes anterior: $${Math.round(revenueLastMonth).toLocaleString()})
+- Variación: ${revenueLastMonth > 0 ? ((revenueThisMonth / revenueLastMonth - 1) * 100).toFixed(1) : 'N/A'}%
+
+📍 TOP PROVINCIAS POR PEDIDOS:
+${topProvinces.map(([p, n]) => `${p}: ${n} pedidos`).join('\n')}
+
+📬 FUENTE DE PEDIDOS:
+${Object.entries(sourceOrders).map(([s, n]) => `${s}: ${n}`).join('\n')}
+
+📦 PRODUCTOS: ${products.length} activos
+🧑 CLIENTES: ${clientes.length} total, ${clientsWithEmail} con email (potencial campañas)
+🏭 CORTES ACTIVOS: ${cortes.length}
+
+💰 MESAN (local/DOMO):
+- Ventas diarias registradas: ${mesanVentas.length}
+- Movimientos: ${mesanMov.length}
+
+🏦 BANCO/MP:
+- Movimientos bancarios: ${bankPayments.length}
+
+📢 META ADS (si hay datos):
+${safeTruncate(bd.meta, 800)}
+Campañas: ${safeTruncate(bd.campaigns?.map(c => c.name + ' (' + c.objective + ')'), 600)}
+
+───────────────────────
+Generá un **RESUMEN EJECUTIVO MENSUAL** con:
+
+## 📅 RESUMEN DEL MES ${thisMonth}
+Panorama general en 3-4 líneas.
+
+## 💰 VENTAS Y REVENUE
+| Canal | Pedidos | Revenue | vs Mes Anterior |
+Incluir: Web, Local/DOMO, Total. Comparar con mes anterior.
+
+## 📍 TOP PROVINCIAS
+| Provincia | Pedidos | % del Total |
+Top 10 provincias + recomendación de targeting.
+
+## 📢 RENDIMIENTO DE META ADS
+| Campaña | Objetivo | Spend | Resultado | Rating |
+Para CADA campaña activa. Rating: ⭐-⭐⭐⭐⭐⭐
+
+## 📦 STOCK Y PRODUCCIÓN
+Productos más vendidos, stock crítico, cortes en producción.
+
+## 🧑 CLIENTES
+- Nuevos vs recurrentes
+- ${clientsWithEmail} clientes con email = potencial para campañas de email marketing
+- Ticket promedio
+
+## 📊 KPIs DEL MES
+| KPI | Valor | Tendencia | Meta |
+Revenue, Pedidos, Ticket Promedio, ROAS, CAC, Clientes Nuevos
+
+## ⚡ TOP 5 ACCIONES PARA EL MES QUE VIENE
+| Acción | Responsable | Impacto Esperado |
+
+## 📈 FORECAST PRÓXIMO MES
+Proyección basada en tendencia actual.`;
+
+  const { text, tokens } = await callLLM(config, MONTHLY_SYSTEM, prompt, { maxTokens: 5000, temperature: 0.4 });
+  return { type: 'monthlySummary', content: text, timestamp: agentTimestamp(), tokens, data: { thisMonth, pedidosCount: pedidosThisMonth.length, revenue: revenueThisMonth, topProvinces, clientsWithEmail } };
 }
 
 
