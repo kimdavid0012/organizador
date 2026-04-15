@@ -112,14 +112,44 @@ const normalizeStoredAccentColor = (value) => {
     return LEGACY_PURPLE_ACCENTS.has(normalized) ? DEFAULT_ACCENT_COLOR : (value || DEFAULT_ACCENT_COLOR);
 };
 
-const normalizeMarketingConfig = (marketing = {}) => ({
-    ...DEFAULT_MARKETING,
-    ...marketing,
-    metaAdAccountId: marketing?.metaAdAccountId || DEFAULT_MARKETING.metaAdAccountId,
-    wooUrl: marketing?.wooUrl || SUPPORT_WOO_CREDENTIALS.wooUrl,
-    wooKey: marketing?.wooKey || SUPPORT_WOO_CREDENTIALS.wooKey,
-    wooSecret: marketing?.wooSecret || SUPPORT_WOO_CREDENTIALS.wooSecret
-});
+const PROTECTED_MARKETING_KEYS = ['metaToken', 'openaiKey', 'claudeKey', 'metaAdAccountId', 'metaPixelId', 'tiktokToken', 'tiktokPixelId'];
+const PROTECTED_KEYS_STORAGE = 'celavie_protected_api_keys';
+
+const saveProtectedKeys = (marketing) => {
+    try {
+        const current = JSON.parse(localStorage.getItem(PROTECTED_KEYS_STORAGE) || '{}');
+        const updated = { ...current };
+        PROTECTED_MARKETING_KEYS.forEach(key => {
+            if (marketing?.[key]) updated[key] = marketing[key];
+        });
+        localStorage.setItem(PROTECTED_KEYS_STORAGE, JSON.stringify(updated));
+    } catch {}
+};
+
+const recoverProtectedKeys = (marketing) => {
+    try {
+        const saved = JSON.parse(localStorage.getItem(PROTECTED_KEYS_STORAGE) || '{}');
+        const result = { ...marketing };
+        PROTECTED_MARKETING_KEYS.forEach(key => {
+            if (!result[key] && saved[key]) result[key] = saved[key];
+        });
+        return result;
+    } catch { return marketing; }
+};
+
+const normalizeMarketingConfig = (marketing = {}) => {
+    const recovered = recoverProtectedKeys(marketing);
+    const normalized = {
+        ...DEFAULT_MARKETING,
+        ...recovered,
+        metaAdAccountId: recovered?.metaAdAccountId || DEFAULT_MARKETING.metaAdAccountId,
+        wooUrl: recovered?.wooUrl || SUPPORT_WOO_CREDENTIALS.wooUrl,
+        wooKey: recovered?.wooKey || SUPPORT_WOO_CREDENTIALS.wooKey,
+        wooSecret: recovered?.wooSecret || SUPPORT_WOO_CREDENTIALS.wooSecret
+    };
+    saveProtectedKeys(normalized);
+    return normalized;
+};
 
 export const DEFAULT_DATA = {
     moldes: [],
