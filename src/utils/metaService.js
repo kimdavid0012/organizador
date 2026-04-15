@@ -113,5 +113,23 @@ export const metaService = {
         ]);
 
         return { today, last7d, last30d };
+    },
+
+    async fetchInsightsByRegion(config, dateRange) {
+        const adAccountId = this._getAdAccountId(config);
+        const token = this._getToken(config);
+        const dateParam = this._buildDateParam(dateRange);
+        const url = `https://graph.facebook.com/v19.0/${adAccountId}/insights?fields=spend,impressions,clicks,reach,actions&breakdowns=region&${dateParam}&limit=50&access_token=${token}`;
+        const result = await this._fetchJson(url, 'Error al traer insights por región');
+        return result.data || [];
+    },
+
+    async fetchInsightsByAge(config, dateRange) {
+        const adAccountId = this._getAdAccountId(config);
+        const token = this._getToken(config);
+        const dateParam = this._buildDateParam(dateRange);
+        const url = `https://graph.facebook.com/v19.0/${adAccountId}/insights?fields=spend,impressions,clicks,reach,actions&breakdowns=age,gender&${dateParam}&limit=50&access_token=${token}`;
+        const result = await this._fetchJson(url, 'Error al traer insights por edad');
+        return result.data || [];
     }
 };
