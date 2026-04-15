@@ -32,6 +32,11 @@ export default function InstagramPlannerPage() {
     const [igMetrics, setIgMetrics] = useState(null);
     const [igLoading, setIgLoading] = useState(false);
     const [igError, setIgError] = useState('');
+    const [showPlanner, setShowPlanner] = useState(false);
+    const [recentPosts, setRecentPosts] = useState([]);
+    const [postsLoading, setPostsLoading] = useState(false);
+    const [postSort, setPostSort] = useState('date');
+    const [postFilter, setPostFilter] = useState('all');
 
     const loadIgMetrics = useCallback(async () => {
         if (!state.config.marketing?.metaToken) { setIgError('Falta Meta Token en Configuración'); return; }
@@ -47,8 +52,18 @@ export default function InstagramPlannerPage() {
         }
     }, [state.config]);
 
+    const loadRecentPosts = useCallback(async () => {
+        if (!state.config.marketing?.metaToken) return;
+        setPostsLoading(true);
+        try {
+            const posts = await instagramService.fetchRecentMedia(state.config, 50);
+            setRecentPosts(posts);
+        } catch (err) { console.warn('Posts load error:', err.message); }
+        finally { setPostsLoading(false); }
+    }, [state.config]);
+
     useEffect(() => {
-        if (state.config.marketing?.metaToken) loadIgMetrics();
+        if (state.config.marketing?.metaToken) { loadIgMetrics(); loadRecentPosts(); }
     }, []);
 
     const plannerSlots = useMemo(() => {
@@ -344,17 +359,77 @@ export default function InstagramPlannerPage() {
                 </div>
             )}
 
-            {/* Section title for Grid Planner */}
-            <div className="glass-panel" style={{ padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* ═══ POSTS ACTUALES ═══ */}
+            {recentPosts.length > 0 && (
+                <div className="glass-panel" style={{ padding: 16, marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <h3 style={{ margin: 0, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            📸 Posts Actuales ({recentPosts.length})
+                        </h3>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            {['all', 'IMAGE', 'VIDEO', 'CAROUSEL_ALBUM'].map(f => (
+                                <button key={f} onClick={() => setPostFilter(f)} style={{ padding: '3px 10px', fontSize: 11, borderRadius: 6, border: postFilter === f ? '1px solid var(--accent)' : '1px solid var(--border-color)', background: postFilter === f ? 'rgba(99,102,241,0.15)' : 'transparent', color: postFilter === f ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer' }}>
+                                    {{ all: 'Todos', IMAGE: '📸 Fotos', VIDEO: '🎬 Reels', CAROUSEL_ALBUM: '🎠 Carruseles' }[f]}
+                                </button>
+                            ))}
+                            <select value={postSort} onChange={e => setPostSort(e.target.value)} style={{ padding: '3px 8px', fontSize: 11, borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}>
+                                <option value="date">Más recientes</option>
+                                <option value="engagement">Mayor engagement</option>
+                                <option value="likes">Más likes</option>
+                                <option value="comments">Más comentarios</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+                        {recentPosts
+                            .filter(p => postFilter === 'all' || p.media_type === postFilter)
+                            .sort((a, b) => {
+                                if (postSort === 'engagement') return b.engagement - a.engagement;
+                                if (postSort === 'likes') return (b.like_count || 0) - (a.like_count || 0);
+                                if (postSort === 'comments') return (b.comments_count || 0) - (a.comments_count || 0);
+                                return new Date(b.timestamp) - new Date(a.timestamp);
+                            })
+                            .map((post, i) => (
+                                <a key={post.id || i} href={post.permalink} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
+                                    <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-color)', background: 'var(--bg-input)', transition: 'transform 0.15s' }}
+                                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.03)'}
+                                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+                                        <div style={{ position: 'relative', paddingBottom: '100%', background: '#111' }}>
+                                            {(post.media_url || post.thumbnail_url) && (
+                                                <img src={post.thumbnail_url || post.media_url} alt="" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
+                                            )}
+                                            <div style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'rgba(0,0,0,0.6)', color: 'white' }}>
+                                                {post.media_type === 'VIDEO' ? '🎬' : post.media_type === 'CAROUSEL_ALBUM' ? '🎠' : '📸'}
+                                            </div>
+                                        </div>
+                                        <div style={{ padding: '8px 10px', fontSize: 11 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 4 }}>
+                                                <span>❤️ {(post.like_count || 0).toLocaleString()}</span>
+                                                <span>💬 {post.comments_count || 0}</span>
+                                            </div>
+                                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                                                {post.timestamp ? new Date(post.timestamp).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) : ''}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            ))}
+                    </div>
+                </div>
+            )}
+            {postsLoading && <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Cargando posts...</div>}
+
+            {/* Section title for Grid Planner - COLLAPSIBLE */}
+            <div className="glass-panel" style={{ padding: '12px 16px', marginBottom: showPlanner ? 12 : 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setShowPlanner(!showPlanner)}>
                 <h3 style={{ margin: 0, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Grid3X3 size={18} /> Grid Planner — Próximos 9 posts
+                    <Grid3X3 size={18} /> Grid Planner — Próximos 9 posts {showPlanner ? '▼' : '▶'}
                 </h3>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    Rocío puede cargar y ordenar las fotos para ver cómo queda el feed
+                    {filledCount}/9 cargados · Click para {showPlanner ? 'cerrar' : 'abrir'}
                 </span>
             </div>
 
-            <div className="instagram-planner-layout">
+            {showPlanner && <div className="instagram-planner-layout">
                 <div className="glass-panel instagram-planner-grid-wrap">
                     <div className="instagram-planner-grid">
                         {plannerSlots.map((slot) => {
@@ -435,7 +510,7 @@ export default function InstagramPlannerPage() {
                         <div>Podés reemplazar una casilla sin tocar las demás.</div>
                     </div>
                 </div>
-            </div>
+            </div>}
 
             {lightboxSrc && (
                 <div
