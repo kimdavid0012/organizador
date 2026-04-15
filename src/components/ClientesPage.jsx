@@ -651,6 +651,32 @@ export default function ClientesPage() {
                         <Mail size={16} /> Enviar Email
                     </button>
                     <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                            const selected = clientes.filter(c => selectedIds.has(c.id) && c.telefono);
+                            if (selected.length === 0) { alert('Ninguno de los seleccionados tiene teléfono'); return; }
+                            const msg = prompt('Mensaje para WhatsApp (usá {nombre} para personalizar):', 'Hola {nombre}! Te escribimos de CELAVIE. Tenemos nuevos ingresos que te van a encantar! 🛍️ Mirá todo en celavie.com.ar');
+                            if (!msg) return;
+                            const phones = selected.map(c => {
+                                const tel = String(c.telefono).replace(/\D/g, '').replace(/^0/, '').replace(/^54/, '');
+                                const nombre = (c.nombre || '').split(' ')[0] || 'Cliente';
+                                return { tel: '549' + tel, msg: msg.replace(/\{nombre\}/g, nombre), nombre: c.nombre };
+                            });
+                            // Open first WhatsApp, show the rest as copyable list
+                            if (phones.length === 1) {
+                                window.open('https://wa.me/' + phones[0].tel + '?text=' + encodeURIComponent(phones[0].msg), '_blank');
+                            } else {
+                                window.open('https://wa.me/' + phones[0].tel + '?text=' + encodeURIComponent(phones[0].msg), '_blank');
+                                const list = phones.map(p => p.nombre + ': wa.me/' + p.tel).join('\n');
+                                navigator.clipboard.writeText(list);
+                                alert('✅ Primer WhatsApp abierto!\n\n' + phones.length + ' contactos copiados al portapapeles.\nPegá la lista para enviar a los demás.\n\nPodés abrir cada link manualmente.');
+                            }
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}
+                    >
+                        💬 WhatsApp ({clientes.filter(c => selectedIds.has(c.id) && c.telefono).length})
+                    </button>
+                    <button
                         className="btn btn-ghost"
                         onClick={() => setSelectedIds(new Set())}
                         style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
