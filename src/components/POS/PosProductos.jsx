@@ -558,20 +558,63 @@ export default function PosProductos() {
                         const selected = productos.filter(p => selectedIds.has(p.id));
                         if (selected.length === 0) return;
                         // Generate catalog HTML
-                        const rows = selected.map(p => {
-                            const img = p.imagenBase64 || '';
-                            const price = p.precioVentaL1 ? '$' + Number(p.precioVentaL1).toLocaleString('es-AR') : '';
-                            return `<div style="display:flex;gap:12px;padding:12px;border-bottom:1px solid #eee;align-items:center">
-                                ${img ? `<img src="${img}" style="width:80px;height:80px;object-fit:cover;border-radius:8px" />` : '<div style="width:80px;height:80px;background:#f0f0f0;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#999">📷</div>'}
-                                <div style="flex:1"><div style="font-weight:bold;font-size:14px">${p.detalleCorto || 'Sin nombre'}</div><div style="font-size:12px;color:#666">Código: ${p.codigoInterno || '-'}</div></div>
-                                <div style="font-size:18px;font-weight:bold;color:#1a1a2e">${price}</div>
-                            </div>`;
-                        }).join('');
-                        const html = `<html><head><style>body{font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px}h1{color:#1a1a2e;text-align:center;border-bottom:2px solid #1a1a2e;padding-bottom:10px}</style></head><body><h1>CELAVIE — Catálogo Mayorista</h1><p style="text-align:center;color:#666;font-size:13px">${selected.length} artículos seleccionados · celavie.com.ar</p>${rows}<p style="text-align:center;margin-top:20px;font-size:12px;color:#999">CELAVIE Indumentaria Mayorista | Flores, Buenos Aires<br>📱 WhatsApp · 🌐 celavie.com.ar · 📸 @celavieindumentaria</p></body></html>`;
-                        const w = window.open('', '_blank');
-                        w.document.write(html);
-                        w.document.close();
-                        setTimeout(() => { w.print(); }, 500);
+                        // Generate professional catalog
+                        const fetchWooImages = async () => {
+                            const wooUrl = state.config?.marketing?.wooUrl || 'https://celavie.com.ar';
+                            const wooKey = state.config?.marketing?.wooKey;
+                            const wooSecret = state.config?.marketing?.wooSecret;
+                            if (!wooKey || !wooSecret) return {};
+                            const imageMap = {};
+                            try {
+                                for (const p of selected.slice(0, 30)) {
+                                    const code = (p.codigoInterno || '').replace(/^(ART|Art|art)\s*/i, '');
+                                    if (!code) continue;
+                                    try {
+                                        const res = await fetch(wooUrl + '/wp-json/wc/v3/products?sku=' + encodeURIComponent(code) + '&consumer_key=' + wooKey + '&consumer_secret=' + wooSecret);
+                                        const prods = await res.json();
+                                        if (prods?.[0]?.images?.[0]?.src) imageMap[p.id] = prods[0].images[0].src;
+                                    } catch {}
+                                }
+                            } catch {}
+                            return imageMap;
+                        };
+                        const buildCatalog = (wooImages) => {
+                            const cards = selected.map(p => {
+                                const img = wooImages[p.id] || p.imagenBase64 || '';
+                                const l1 = p.precioVentaL1 ? '$' + Number(p.precioVentaL1).toLocaleString('es-AR') : '-';
+                                const l2 = p.precioVentaL2 ? '$' + Number(p.precioVentaL2).toLocaleString('es-AR') : '';
+                                const l5 = p.precioVentaL5 ? '$' + Number(p.precioVentaL5).toLocaleString('es-AR') : '';
+                                const stockLabel = p.stock > 0 ? '✅ Stock: ' + p.stock : '⚠️ Sin stock';
+                                return '<div style="break-inside:avoid;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#fff">' +
+                                    (img ? '<img src="' + img + '" style="width:100%;height:200px;object-fit:cover" onerror="this.style.display=\'none\'" />' : '<div style="width:100%;height:200px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:40px">📷</div>') +
+                                    '<div style="padding:12px"><div style="font-weight:700;font-size:14px;margin-bottom:4px">' + (p.detalleCorto || 'Sin nombre') + '</div>' +
+                                    '<div style="font-size:11px;color:#6b7280;margin-bottom:8px">Cod: ' + (p.codigoInterno || '-') + '</div>' +
+                                    '<div style="font-size:20px;font-weight:800;color:#1a1a2e">' + l1 + '</div>' +
+                                    (l2 ? '<div style="font-size:12px;color:#6b7280">Minorista: ' + l2 + '</div>' : '') +
+                                    (l5 ? '<div style="font-size:12px;color:#6b7280">Lista 5: ' + l5 + '</div>' : '') +
+                                    '<div style="font-size:11px;margin-top:6px;color:' + (p.stock > 0 ? '#16a34a' : '#dc2626') + '">' + stockLabel + '</div>' +
+                                    '</div></div>';
+                            }).join('');
+                            return '<html><head><style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#1a1a2e}' +
+                                '.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0}@media print{.grid{grid-template-columns:repeat(3,1fr)}}</style></head>' +
+                                '<body><div style="text-align:center;margin-bottom:20px;border-bottom:3px solid #1a1a2e;padding-bottom:15px">' +
+                                '<h1 style="margin:0;font-size:28px">CELAVIE</h1><p style="margin:4px 0;color:#6b7280;font-size:13px">Indumentaria Mayorista · Catálogo ' + new Date().toLocaleDateString('es-AR') + '</p>' +
+                                '<p style="margin:2px 0;font-size:12px;color:#9ca3af">' + selected.length + ' artículos · celavie.com.ar · @celavieindumentaria</p></div>' +
+                                '<div class="grid">' + cards + '</div>' +
+                                '<div style="text-align:center;margin-top:30px;padding-top:15px;border-top:2px solid #e5e7eb;font-size:11px;color:#9ca3af">' +
+                                'CELAVIE Indumentaria Mayorista | Flores, Buenos Aires<br>📱 WhatsApp · 🌐 celavie.com.ar · 📸 @celavieindumentaria<br>Precios mayoristas sujetos a cambios sin previo aviso</div></body></html>';
+                        };
+                        // Try to fetch WooCommerce images first, fallback to local
+                        const loadBtn = event.target;
+                        loadBtn.textContent = '⏳ Cargando fotos...';
+                        loadBtn.disabled = true;
+                        fetchWooImages().then(wooImages => {
+                            const html = buildCatalog(wooImages);
+                            const w = window.open('', '_blank');
+                            w.document.write(html);
+                            w.document.close();
+                            setTimeout(() => { w.print(); }, 800);
+                        }).finally(() => { loadBtn.textContent = '📋 Catálogo (' + selectedIds.size + ')'; loadBtn.disabled = false; });
                     }}>
                         📋 Catálogo ({selectedIds.size})
                     </button>
