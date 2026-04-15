@@ -16,25 +16,25 @@ const KNOWN_USERS = {
 };
 
 const KNOWN_USER_SECTIONS = {
-    'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb', 'settings', 'agents', 'instagramplanner', 'articulos'],
-    'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'informes'],
-    'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia'],
-    'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia'],
-    'rocio@celavie.com': ['fotos', 'tiktok'],
-    'erica@celavie.com': ['instagramplanner', 'fotos', 'fotosprendas', 'library']
+    'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb', 'settings', 'agents', 'instagramplanner', 'articulos', 'fotoscompartidas'],
+    'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'informes', 'fotoscompartidas'],
+    'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia', 'fotoscompartidas'],
+    'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia', 'fotoscompartidas'],
+    'rocio@celavie.com': ['fotos', 'tiktok', 'fotoscompartidas'],
+    'erica@celavie.com': ['instagramplanner', 'fotos', 'fotosprendas', 'library', 'fotoscompartidas']
 };
 
 // All available sections in the app
-const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'agents', 'paginaweb', 'conteomercaderia', 'fotos', 'fotosprendas', 'instagramplanner', 'tiktok', 'mesan', 'banking', 'settings', 'informes', 'saldo', 'yuliya'];
+const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'agents', 'paginaweb', 'conteomercaderia', 'fotos', 'fotosprendas', 'fotoscompartidas', 'instagramplanner', 'tiktok', 'mesan', 'banking', 'settings', 'informes', 'saldo', 'yuliya'];
 
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
     admin: [...ALL_SECTIONS],
-    encargada: ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'informes'],
-    deposito: ['kanban', 'talleres', 'conteomercaderia'],
-    pedidos: ['kanban', 'pedidos', 'conteomercaderia'],
-    marketing: ['pedidos', 'marketing', 'paginaweb', 'settings', 'agents', 'instagramplanner', 'articulos'],
-    fotos: ['fotos', 'instagramplanner', 'tiktok'],
+    encargada: ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'informes', 'fotoscompartidas'],
+    deposito: ['kanban', 'talleres', 'conteomercaderia', 'fotoscompartidas'],
+    pedidos: ['kanban', 'pedidos', 'conteomercaderia', 'fotoscompartidas'],
+    marketing: ['pedidos', 'marketing', 'paginaweb', 'settings', 'agents', 'instagramplanner', 'articulos', 'fotoscompartidas'],
+    fotos: ['fotos', 'instagramplanner', 'tiktok', 'fotoscompartidas'],
     contenido_instagram: ['instagramplanner', 'fotos', 'fotosprendas', 'library'],
     pendiente: [] // New users get no access until admin assigns a role
 };
@@ -56,6 +56,8 @@ const SECTION_LABELS = {
     paginaweb: 'Pagina Web',
     conteomercaderia: 'Conteo Mercaderia',
     fotos: 'Fotos',
+    fotosprendas: 'Fotos Prendas',
+    fotoscompartidas: 'Fotos Compartidas',
     instagramplanner: 'Instagram Post',
     tiktok: 'TikTok',
     mesan: 'Mesan',
