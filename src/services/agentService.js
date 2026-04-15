@@ -471,7 +471,8 @@ export async function runAnalystAgent(config, state, onProgress) {
     'Sos un analista de Meta Ads. Analizá estos datos y dá un diagnóstico concreto con números. Español rioplatense, bullet points.',
     `DATOS META ADS (account-level 30d): ${safeTruncate(bd.meta)}
 CAMPAÑAS ACTIVAS: ${safeTruncate(bd.campaigns, 2500)}
-Respondé con: estado general, mejor campaña, peor campaña, alertas de budget, tendencia.`,
+REGLA IMPORTANTE: Solo evaluar peor/mejor campaña si lleva al menos 7 días corriendo. Mejor = mayor facturación. Peor = menor pedidos vs costo.
+Respondé con: estado general, mejor campaña (por facturación), peor campaña (por CPA, solo si >7 días), alertas de budget, tendencia.`,
     { maxTokens: 1500, temperature: 0.3 }
   );
 
@@ -521,6 +522,13 @@ ${safeTruncate(ai, 1000)}
 ${TEAM_CONTEXT}
 
 ───────────────────────
+REGLA DE CATEGORIZACIÓN DE FUENTES DE PEDIDOS:
+- DIRECTO = www.celavie.com.ar, celavie.com.ar, web (usuario entró directo)
+- ORGÁNICO = búsqueda orgánica Google (google / organic)
+- META ADS = facebook, instagram, facebook.com, instagram.com, fb, ig (paid)
+- OTROS = referido (bing, yahoo, otros sitios)
+Cuando analices pedidos, categorizá cada fuente según estas reglas SIN repeticiones.
+
 Generá un BRIEF EJECUTIVO DEL DÍA con:
 1. **SCORE DEL DÍA (0-100)** con justificación en 1 línea
 2. **RESUMEN EJECUTIVO** (3-4 líneas)
@@ -589,8 +597,7 @@ Basándote en tu conocimiento actualizado:
 2. 📌 **POR MARCA ANALIZADA** — Qué están lanzando en basics/essentials, qué puede adaptar ${BRAND.handle}
 3. 💡 **OPORTUNIDADES PARA ${BRAND.name}** — 3 productos a agregar/modificar, colores a incorporar, qué dejar de producir. Basate en nuestro catálogo actual.
 4. 📸 **IDEAS DE CONTENIDO PARA ${BRAND.handle}** — 3 conceptos de sesión de fotos/reels para IG y TikTok
-5. 🎯 **PREDICCIÓN** — Tendencias próximos 2-3 meses
-6. 🏷️ **HASHTAGS TENDENCIA** — 15 hashtags relevantes para ${BRAND.handle} ahora mismo`;
+5. 🎯 **PREDICCIÓN** — Tendencias próximos 2-3 meses`;
 
   const { text, tokens } = await callLLM(config, SCOUT_SYSTEM, prompt, { maxTokens: 3500, temperature: 0.7 });
   return { type: 'trendScout', content: text, timestamp: agentTimestamp(), tokens, brands: targetBrands };
@@ -654,7 +661,6 @@ PARA CADA DÍA (Lunes a Sábado):
 - **Hook**: primera línea/segundo del contenido
 - **Caption**: texto completo con emojis, mencionando ${BRAND.handle}
 - **CTA**: llamado a acción específico (link en bio, WhatsApp, etc)
-- **Hashtags**: 15-20 relevantes
 - **Horario**: hora sugerida por plataforma
 - **Cross-post**: cómo adaptar para las otras plataformas
 
@@ -912,9 +918,13 @@ Generá un **REPORTE DE PAID MEDIA** detallado:
 - Budget utilizado vs disponible
 
 ## 📊 ANÁLISIS POR CAMPAÑA
-Para cada campaña activa:
-| Campaña | Spend 7d | CTR | CPC | ROAS | Tendencia | Acción |
-- Identificar: mejores performers, peores performers, fatigadas
+Para cada campaña activa (INCLUIR TODAS, no omitir ninguna):
+| Campaña | Objetivo | Spend 7d | CTR | CPC | ROAS | Tendencia | Acción |
+- MEJOR CAMPAÑA: evaluar por **facturación total** generada (revenue), no por CTR ni clicks
+- PEOR CAMPAÑA: evaluar por **cantidad de pedidos generados vs costo invertido** (CPA real)
+- REGLA: Solo evaluar campañas con al menos 7 días corriendo. Campañas nuevas (<7 días) marcar como "En evaluación, necesita más datos"
+- CTR PROMEDIO: calcular ponderado por impresiones, no promedio simple
+- ROAS: calcular como Revenue Web Total / Inversión en Paid Media. NO usar solo revenue de una campaña
 
 ## 🎯 TARGETING ANALYSIS
 - Qué audiencias están funcionando (por ad set)
