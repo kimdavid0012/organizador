@@ -64,29 +64,70 @@ const DEFAULT_BRANDS = ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
 function MarkdownContent({ text }) {
   if (!text) return null;
   const lines = text.split('\n');
+  const elements = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+
+    // Detect markdown table (line starts with |)
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const tableLines = [];
+      while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+      if (tableLines.length >= 2) {
+        // Parse header
+        const headerCells = tableLines[0].split('|').filter(c => c.trim());
+        // Skip separator line (---|---|---)
+        const startRow = tableLines[1].replace(/[|\s-:]/g, '') === '' ? 2 : 1;
+        const bodyRows = tableLines.slice(startRow).map(row => row.split('|').filter(c => c.trim()));
+
+        elements.push(
+          <div key={`table-${i}`} style={{ overflowX: 'auto', margin: '10px 0' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border-color)' }}>
+                  {headerCells.map((cell, ci) => (
+                    <th key={ci} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{renderInline(cell.trim())}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {bodyRows.map((row, ri) => (
+                  <tr key={ri} style={{ borderBottom: '1px solid var(--border-color)', background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} style={{ padding: '6px 10px', color: 'var(--text-secondary)' }}>{renderInline(cell.trim())}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        continue;
+      }
+    }
+
+    if (!trimmed) { elements.push(<div key={i} style={{ height: 8 }} />); i++; continue; }
+    if (trimmed.startsWith('## ')) { elements.push(<h3 key={i} style={{ fontSize: 15, fontWeight: 700, margin: '16px 0 6px', color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: 4 }}>{renderInline(trimmed.slice(3))}</h3>); i++; continue; }
+    if (trimmed.startsWith('### ')) { elements.push(<h4 key={i} style={{ fontSize: 14, fontWeight: 600, margin: '12px 0 4px', color: 'var(--text-primary)' }}>{renderInline(trimmed.slice(4))}</h4>); i++; continue; }
+    if (trimmed.startsWith('# ')) { elements.push(<h2 key={i} style={{ fontSize: 17, fontWeight: 700, margin: '18px 0 8px', color: 'var(--text-primary)' }}>{renderInline(trimmed.slice(2))}</h2>); i++; continue; }
+    if (/^[-*•] /.test(trimmed)) { elements.push(<div key={i} style={{ paddingLeft: 16, position: 'relative' }}><span style={{ position: 'absolute', left: 4, color: 'var(--text-muted)' }}>•</span>{renderInline(trimmed.replace(/^[-*•] /, ''))}</div>); i++; continue; }
+    if (/^\d+[.)]\s/.test(trimmed)) {
+      const match = trimmed.match(/^(\d+[.)]\s)(.*)/);
+      elements.push(<div key={i} style={{ paddingLeft: 20, position: 'relative' }}><span style={{ position: 'absolute', left: 0, fontWeight: 600, color: 'var(--accent)' }}>{match[1]}</span>{renderInline(match[2])}</div>);
+      i++; continue;
+    }
+    if (/^[-─═]{3,}/.test(trimmed)) { elements.push(<hr key={i} style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '12px 0' }} />); i++; continue; }
+    elements.push(<div key={i}>{renderInline(trimmed)}</div>);
+    i++;
+  }
+
   return (
     <div style={{ fontSize: 13, lineHeight: 1.8, color: 'var(--text-primary)' }}>
-      {lines.map((line, i) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <div key={i} style={{ height: 8 }} />;
-        // H2
-        if (trimmed.startsWith('## ')) return <h3 key={i} style={{ fontSize: 15, fontWeight: 700, margin: '16px 0 6px', color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: 4 }}>{renderInline(trimmed.slice(3))}</h3>;
-        // H3
-        if (trimmed.startsWith('### ')) return <h4 key={i} style={{ fontSize: 14, fontWeight: 600, margin: '12px 0 4px', color: 'var(--text-primary)' }}>{renderInline(trimmed.slice(4))}</h4>;
-        // H1
-        if (trimmed.startsWith('# ')) return <h2 key={i} style={{ fontSize: 17, fontWeight: 700, margin: '18px 0 8px', color: 'var(--text-primary)' }}>{renderInline(trimmed.slice(2))}</h2>;
-        // Bullet
-        if (/^[-*•] /.test(trimmed)) return <div key={i} style={{ paddingLeft: 16, position: 'relative' }}><span style={{ position: 'absolute', left: 4, color: 'var(--text-muted)' }}>•</span>{renderInline(trimmed.replace(/^[-*•] /, ''))}</div>;
-        // Numbered
-        if (/^\d+[.)]\s/.test(trimmed)) {
-          const match = trimmed.match(/^(\d+[.)]\s)(.*)/);
-          return <div key={i} style={{ paddingLeft: 20, position: 'relative' }}><span style={{ position: 'absolute', left: 0, fontWeight: 600, color: 'var(--accent)' }}>{match[1]}</span>{renderInline(match[2])}</div>;
-        }
-        // Separator
-        if (/^[-─═]{3,}/.test(trimmed)) return <hr key={i} style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '12px 0' }} />;
-        // Normal paragraph
-        return <div key={i}>{renderInline(trimmed)}</div>;
-      })}
+      {elements}
     </div>
   );
 }

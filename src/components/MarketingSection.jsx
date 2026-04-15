@@ -164,13 +164,15 @@ export default function MarketingSection() {
     const [showPausedCampaigns, setShowPausedCampaigns] = useState(false);
     const canvasRef = useRef(null);
     const prevDatePresetRef = useRef(datePreset);
+    const [regionInsights, setRegionInsights] = useState(marketingCache.regionInsights || []);
 
     useEffect(() => {
         setAccountInsights(marketingCache.accountInsights || null);
         setCampaigns(marketingCache.campaigns?.length ? marketingCache.campaigns : null);
         setAdSets(marketingCache.adSets || {});
         setAiReport(marketingCache.aiReport || '');
-    }, [marketingCache.accountInsights, marketingCache.campaigns, marketingCache.adSets, marketingCache.aiReport]);
+        setRegionInsights(marketingCache.regionInsights || []);
+    }, [marketingCache.accountInsights, marketingCache.campaigns, marketingCache.adSets, marketingCache.aiReport, marketingCache.regionInsights]);
 
     // Auto re-fetch when period changes (only if we already have data)
     useEffect(() => {
@@ -270,15 +272,18 @@ export default function MarketingSection() {
     const handleSync = async () => {
         setLoading(true);
         try {
-            const [insights, camps] = await Promise.all([
+            const [insights, camps, regions] = await Promise.all([
                 metaService.fetchAdInsights(config, getDateRange()),
                 metaService.fetchCampaigns(config, getDateRange()),
+                metaService.fetchInsightsByRegion(config, getDateRange()).catch(() => []),
             ]);
             setAccountInsights(insights);
             setCampaigns(camps);
+            setRegionInsights(regions);
             persistMarketingCache({
                 accountInsights: insights,
                 campaigns: camps,
+                regionInsights: regions,
                 adSets,
                 aiReport,
                 lastSyncedAt: new Date().toISOString()
@@ -1089,6 +1094,21 @@ export default function MarketingSection() {
                 });
                 const maxCount = Math.max(...Object.values(origenCount), 1);
 
+                // Process region insights from Meta
+                const regionData = {};
+                (regionInsights || []).forEach(r => {
+                    const region = r.region || 'Desconocido';
+                    regionData[region] = {
+                        spend: parseFloat(r.spend || 0),
+                        impressions: parseInt(r.impressions || 0),
+                        clicks: parseInt(r.clicks || 0),
+                        reach: parseInt(r.reach || 0),
+                    };
+                });
+                const regionsSorted = Object.entries(regionData).sort((a, b) => b[1].spend - a[1].spend);
+                const targetedRegions = regionsSorted.map(([r]) => r);
+                const untargetedProvinces = PROVINCIAS.filter(p => !targetedRegions.some(r => r.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(r.toLowerCase())));
+
                 return (
                     <div style={{ display: 'grid', gap: 16, marginTop: 16 }}>
                         <div style={{ padding: 'var(--sp-4)', borderRadius: 18, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
@@ -1096,7 +1116,37 @@ export default function MarketingSection() {
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                                 <div>
-                                    <h4 style={{ margin: '0 0 10px', fontSize: 14 }}>Provincias con publicidad activa</h4>
+                                    <h4 style={{ margin: '0 0 10px', fontSize: 14 }}>📍 Rendimiento por Región (Meta Ads)</h4>
+                                    {regionsSorted.length > 0 ? (
+                                        <div style={{ display: 'grid', gap: 4 }}>
+                                            {regionsSorted.slice(0, 12).map(([region, data]) => {
+                                                const maxSpend = regionsSorted[0]?.[1]?.spend || 1;
+                                                const ctr = data.impressions > 0 ? ((data.clicks / data.impressions) * 100).toFixed(2) : '0';
+                                                return (
+                                                    <div key={region} style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+                                                            <span style={{ fontWeight: 600 }}>{region}</span>
+                                                            <span style={{ color: 'var(--text-muted)' }}>${Math.round(data.spend)} · {data.clicks} clicks · CTR {ctr}%</span>
+                                                        </div>
+                                                        <div style={{ height: 4, borderRadius: 999, background: 'rgba(255,255,255,0.05)' }}>
+                                                            <div style={{ height: '100%', borderRadius: 999, width: `${(data.spend / maxSpend) * 100}%`, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', transition: 'width 0.3s' }} />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {untargetedProvinces.length > 0 && (
+                                                <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', fontSize: 12, color: '#f59e0b' }}>
+                                                    ⚠️ <strong>Sin publicidad:</strong> {untargetedProvinces.join(', ')}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '16px', textAlign: 'center' }}>
+                                            Sincronizá Meta Ads para ver rendimiento por región
+                                        </div>
+                                    )}
+
+                                    <h4 style={{ margin: '16px 0 10px', fontSize: 14 }}>Provincias con publicidad activa (manual)</h4>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 6 }}>
                                         {PROVINCIAS.map(prov => {
                                             const active = selectedProvinces.includes(prov);

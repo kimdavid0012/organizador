@@ -1786,7 +1786,6 @@ Incluí tablas markdown y usá emojis para facilitar la lectura rápida.
 Español rioplatense, tono profesional pero directo. Formato: markdown con tablas.`;
 
 export async function runMonthlySummaryAgent(state, config, onProgress) {
-  const bd = state._businessData || {};
   const pedidos = state.config?.pedidosOnline || [];
   const clientes = state.config?.clientes || [];
   const products = state.config?.posProductos || [];
@@ -1796,6 +1795,31 @@ export async function runMonthlySummaryAgent(state, config, onProgress) {
   const cortes = state.config?.cortes || [];
 
   onProgress?.('Preparando datos del mes...');
+
+  // Fetch live Meta Ads data directly instead of relying on _businessData
+  let metaSummary = 'Sin datos de Meta Ads configurados';
+  let campaignsSummary = '';
+  try {
+    const [insights, campaigns] = await Promise.all([
+      metaService.fetchAdInsights(config),
+      metaService.fetchCampaigns(config),
+    ]);
+    const activeCamps = (campaigns || []).filter(c => c.status === 'ACTIVE');
+    if (insights?.length) {
+      const ins = insights[0];
+      metaSummary = `Spend: $${parseFloat(ins.spend || 0).toLocaleString()}, Impresiones: ${parseInt(ins.impressions || 0).toLocaleString()}, Clicks: ${parseInt(ins.clicks || 0).toLocaleString()}, CTR: ${parseFloat(ins.ctr || 0).toFixed(2)}%, CPC: $${parseFloat(ins.cpc || 0).toFixed(2)}, Alcance: ${parseInt(ins.reach || 0).toLocaleString()}`;
+    }
+    if (activeCamps.length) {
+      campaignsSummary = activeCamps.map(c => {
+        const ci = c.insights?.data?.[0] || {};
+        return `${c.name} (${c.objective}) — Spend: $${parseFloat(ci.spend || 0).toFixed(0)}, Clicks: ${ci.clicks || 0}, CTR: ${parseFloat(ci.ctr || 0).toFixed(2)}%`;
+      }).join('\n');
+    } else {
+      campaignsSummary = 'No hay campañas activas actualmente';
+    }
+  } catch (e) {
+    console.warn('[MonthlySummary] Meta Ads no disponible:', e.message);
+  }
 
   // Calculate monthly stats
   const now = new Date();
@@ -1857,9 +1881,9 @@ ${Object.entries(sourceOrders).map(([s, n]) => `${s}: ${n}`).join('\n')}
 🏦 BANCO/MP:
 - Movimientos bancarios: ${bankPayments.length}
 
-📢 META ADS (si hay datos):
-${safeTruncate(bd.meta, 800)}
-Campañas: ${safeTruncate(bd.campaigns?.map(c => c.name + ' (' + c.objective + ')'), 600)}
+📢 META ADS:
+${metaSummary}
+Campañas: ${campaignsSummary || 'Sin campañas activas'}
 
 ───────────────────────
 Generá un **RESUMEN EJECUTIVO MENSUAL** con:
