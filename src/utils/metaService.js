@@ -24,6 +24,13 @@ export const metaService = {
         return await response.json();
     },
 
+    _buildDateParam(dateRange) {
+        if (dateRange?.since && dateRange?.until) {
+            return `time_range=${encodeURIComponent(JSON.stringify({ since: dateRange.since, until: dateRange.until }))}`;
+        }
+        return `date_preset=${dateRange?.preset || 'last_30d'}`;
+    },
+
     async _fetchCampaignInsightsByPreset(config, campaignId, datePreset) {
         const token = this._getToken(config);
         const fields = [
@@ -48,11 +55,12 @@ export const metaService = {
     /**
      * Fetch account-level insights for the last 30 days
      */
-    async fetchAdInsights(config) {
+    async fetchAdInsights(config, dateRange) {
         const adAccountId = this._getAdAccountId(config);
         const token = this._getToken(config);
+        const dateParam = this._buildDateParam(dateRange);
 
-        const url = `https://graph.facebook.com/v19.0/${adAccountId}/insights?fields=spend,impressions,clicks,reach,cpc,ctr,cpp,frequency,actions&date_preset=last_30d&access_token=${token}`;
+        const url = `https://graph.facebook.com/v19.0/${adAccountId}/insights?fields=spend,impressions,clicks,reach,cpc,ctr,cpp,frequency,actions&${dateParam}&access_token=${token}`;
 
         const result = await this._fetchJson(url, 'Error al traer datos de Meta Ads');
         return result.data || [];
@@ -61,11 +69,12 @@ export const metaService = {
     /**
      * Fetch all campaigns with their insights
      */
-    async fetchCampaigns(config) {
+    async fetchCampaigns(config, dateRange) {
         const adAccountId = this._getAdAccountId(config);
         const token = this._getToken(config);
+        const preset = dateRange?.since ? 'last_30d' : (dateRange?.preset || 'last_30d');
 
-        const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,insights.date_preset(last_30d){spend,impressions,clicks,reach,cpc,ctr,actions}&limit=50&access_token=${token}`;
+        const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?fields=name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,insights.date_preset(${preset}){spend,impressions,clicks,reach,cpc,ctr,actions}&limit=50&access_token=${token}`;
 
         const result = await this._fetchJson(url, 'Error al traer campañas de Meta');
         return result.data || [];
@@ -86,10 +95,11 @@ export const metaService = {
     /**
      * Fetch daily insights breakdown for a campaign (for chart)
      */
-    async fetchCampaignDailyInsights(config, campaignId) {
+    async fetchCampaignDailyInsights(config, campaignId, dateRange) {
         const token = this._getToken(config);
+        const dateParam = this._buildDateParam(dateRange);
 
-        const url = `https://graph.facebook.com/v19.0/${campaignId}/insights?fields=spend,impressions,clicks,reach,cpc,ctr&date_preset=last_30d&time_increment=1&access_token=${token}`;
+        const url = `https://graph.facebook.com/v19.0/${campaignId}/insights?fields=spend,impressions,clicks,reach,cpc,ctr&${dateParam}&time_increment=1&access_token=${token}`;
 
         const result = await this._fetchJson(url, 'Error al traer insights diarios');
         return result.data || [];
