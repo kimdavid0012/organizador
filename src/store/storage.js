@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
 
 const STORAGE_KEY = 'organizador_moldes_data';
@@ -539,33 +539,34 @@ export const saveDataToFirestore = async (data) => {
     try {
         // Strip base64 images from moldes if document is too large
         const moldesClean = (data.moldes || []).map(m => {
-            // If a molde has huge base64 images, truncate them to save space
             if (m.imagenes && m.imagenes.length > 0) {
                 const totalSize = JSON.stringify(m.imagenes).length;
-                if (totalSize > 500000) { // 500KB per molde is too much
+                if (totalSize > 500000) {
                     console.warn(`⚠️ Molde "${m.nombre}" tiene imágenes muy grandes (${(totalSize/1024).toFixed(0)}KB). Limitando...`);
-                    return { ...m, imagenes: m.imagenes.slice(0, 2) }; // keep max 2 images
+                    return { ...m, imagenes: m.imagenes.slice(0, 2) };
                 }
             }
             return m;
         });
 
         const configWithoutSplitDocs = buildConfigWithoutSplitDocs(data.config || {});
-        const splitDocWrites = Object.entries(CONFIG_SPLIT_DOCS).map(([key, docId]) => (
-            setDoc(
+
+        // Use writeBatch for atomic single-round-trip write (much faster than parallel setDoc)
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'app-data', 'config'), { config: configWithoutSplitDocs });
+        batch.set(doc(db, 'app-data', 'moldes'), { moldes: moldesClean });
+        batch.set(doc(db, 'app-data', 'telas'), { telas: data.telas || [] });
+        batch.set(doc(db, 'app-data', 'tareas'), { tareas: data.tareas || [] });
+
+        Object.entries(CONFIG_SPLIT_DOCS).forEach(([key, docId]) => {
+            batch.set(
                 doc(db, 'app-data', docId),
                 getFirestoreSplitDocPayload(key, data.config?.[key] || [])
-            )
-        ));
+            );
+        });
 
-        await Promise.all([
-            setDoc(doc(db, 'app-data', 'config'), { config: configWithoutSplitDocs }),
-            setDoc(doc(db, 'app-data', 'moldes'), { moldes: moldesClean }),
-            setDoc(doc(db, 'app-data', 'telas'), { telas: data.telas || [] }),
-            setDoc(doc(db, 'app-data', 'tareas'), { tareas: data.tareas || [] }),
-            ...splitDocWrites
-        ]);
-        console.log('✅ Datos guardados en Firestore (5 documentos)');
+        await batch.commit();
+        console.log('✅ Datos guardados en Firestore (batch atómico)');
     } catch (err) {
         console.error('Error guardando datos en Firestore:', err);
         throw err;

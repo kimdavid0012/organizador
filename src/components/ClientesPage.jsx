@@ -138,12 +138,12 @@ export default function ClientesPage() {
     }, [clientes, posVentas, pedidosOnline, rankMonth]);
 
     const filteredClientes = useMemo(() => {
-        let list = clientesConTotal;
+        // Always sort by total spend descending (ranking by accumulated amount)
+        let list = [...clientesConTotal].sort((a, b) => b._totalSpend - a._totalSpend);
 
         // Apply top N filter
         if (topFilter) {
-            const sorted = [...list].sort((a, b) => b._totalSpend - a._totalSpend);
-            list = sorted.slice(0, topFilter);
+            list = list.slice(0, topFilter);
         }
 
         const query = normalizeSearchValue(searchTerm);
@@ -662,14 +662,19 @@ export default function ClientesPage() {
                                 const nombre = (c.nombre || '').split(' ')[0] || 'Cliente';
                                 return { tel: '549' + tel, msg: msg.replace(/\{nombre\}/g, nombre), nombre: c.nombre };
                             });
-                            // Open first WhatsApp, show the rest as copyable list
+                            // Open first WhatsApp, then open the rest with 1-second delays
                             if (phones.length === 1) {
                                 window.open('https://wa.me/' + phones[0].tel + '?text=' + encodeURIComponent(phones[0].msg), '_blank');
                             } else {
                                 window.open('https://wa.me/' + phones[0].tel + '?text=' + encodeURIComponent(phones[0].msg), '_blank');
+                                phones.slice(1).forEach((p, idx) => {
+                                    setTimeout(() => {
+                                        window.open('https://wa.me/' + p.tel + '?text=' + encodeURIComponent(p.msg), '_blank');
+                                    }, (idx + 1) * 1200);
+                                });
                                 const list = phones.map(p => p.nombre + ': wa.me/' + p.tel).join('\n');
                                 navigator.clipboard.writeText(list);
-                                alert('✅ Primer WhatsApp abierto!\n\n' + phones.length + ' contactos copiados al portapapeles.\nPegá la lista para enviar a los demás.\n\nPodés abrir cada link manualmente.');
+                                alert('✅ Abriendo ' + phones.length + ' WhatsApps (1 por segundo).\n\nTambién se copiaron los links al portapapeles.');
                             }
                         }}
                         style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}

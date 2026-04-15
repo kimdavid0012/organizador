@@ -163,6 +163,7 @@ export default function MarketingSection() {
     const [loadingDaily, setLoadingDaily] = useState(false);
     const [showPausedCampaigns, setShowPausedCampaigns] = useState(false);
     const canvasRef = useRef(null);
+    const prevDatePresetRef = useRef(datePreset);
 
     useEffect(() => {
         setAccountInsights(marketingCache.accountInsights || null);
@@ -170,6 +171,16 @@ export default function MarketingSection() {
         setAdSets(marketingCache.adSets || {});
         setAiReport(marketingCache.aiReport || '');
     }, [marketingCache.accountInsights, marketingCache.campaigns, marketingCache.adSets, marketingCache.aiReport]);
+
+    // Auto re-fetch when period changes (only if we already have data)
+    useEffect(() => {
+        if (prevDatePresetRef.current !== datePreset && (campaigns || accountInsights)) {
+            prevDatePresetRef.current = datePreset;
+            if (datePreset !== 'custom') {
+                handleSync();
+            }
+        }
+    }, [datePreset]);
 
     const persistMarketingCache = (overrides = {}) => {
         setMarketingCache({
@@ -1072,7 +1083,8 @@ export default function MarketingSection() {
                 const origenCount = {};
                 SOURCES.forEach(s => { origenCount[s] = 0; });
                 pedidosOnline.forEach(p => {
-                    const src = p.origen || 'Otro';
+                    // If no origin set but has wooId, it's a web order
+                    const src = p.origen || (p.wooId ? 'Web' : 'Otro');
                     origenCount[src] = (origenCount[src] || 0) + 1;
                 });
                 const maxCount = Math.max(...Object.values(origenCount), 1);
