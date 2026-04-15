@@ -554,6 +554,27 @@ export default function PosProductos() {
                     <button className="btn btn-danger btn-sm" onClick={() => setShowBulkConfirm(true)}>
                         <Trash2 size={15} /> Eliminar seleccionados
                     </button>
+                    <button className="btn btn-primary btn-sm" onClick={() => {
+                        const selected = productos.filter(p => selectedIds.has(p.id));
+                        if (selected.length === 0) return;
+                        // Generate catalog HTML
+                        const rows = selected.map(p => {
+                            const img = p.imagenBase64 || '';
+                            const price = p.precioVentaL1 ? '$' + Number(p.precioVentaL1).toLocaleString('es-AR') : '';
+                            return `<div style="display:flex;gap:12px;padding:12px;border-bottom:1px solid #eee;align-items:center">
+                                ${img ? `<img src="${img}" style="width:80px;height:80px;object-fit:cover;border-radius:8px" />` : '<div style="width:80px;height:80px;background:#f0f0f0;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#999">📷</div>'}
+                                <div style="flex:1"><div style="font-weight:bold;font-size:14px">${p.detalleCorto || 'Sin nombre'}</div><div style="font-size:12px;color:#666">Código: ${p.codigoInterno || '-'}</div></div>
+                                <div style="font-size:18px;font-weight:bold;color:#1a1a2e">${price}</div>
+                            </div>`;
+                        }).join('');
+                        const html = `<html><head><style>body{font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px}h1{color:#1a1a2e;text-align:center;border-bottom:2px solid #1a1a2e;padding-bottom:10px}</style></head><body><h1>CELAVIE — Catálogo Mayorista</h1><p style="text-align:center;color:#666;font-size:13px">${selected.length} artículos seleccionados · celavie.com.ar</p>${rows}<p style="text-align:center;margin-top:20px;font-size:12px;color:#999">CELAVIE Indumentaria Mayorista | Flores, Buenos Aires<br>📱 WhatsApp · 🌐 celavie.com.ar · 📸 @celavieindumentaria</p></body></html>`;
+                        const w = window.open('', '_blank');
+                        w.document.write(html);
+                        w.document.close();
+                        setTimeout(() => { w.print(); }, 500);
+                    }}>
+                        📋 Catálogo ({selectedIds.size})
+                    </button>
                 </div>
             )}
 
