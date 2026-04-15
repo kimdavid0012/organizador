@@ -70,17 +70,26 @@ export default function ClientesPage() {
     const [emailSubject, setEmailSubject] = useState('');
     const [emailBody, setEmailBody] = useState('');
     const [topFilter, setTopFilter] = useState(null);
+    const [rankMonth, setRankMonth] = useState('');  // YYYY-MM format or '' for all time
 
     const normalizeSearchValue = (value) => (value || '').toString().toLowerCase().trim();
 
     // Calculate total spend per client for Top N filtering
     const clientesConTotal = useMemo(() => {
+        const matchDate = (dateStr) => {
+            if (!rankMonth) return true;
+            return (dateStr || '').substring(0, 7) === rankMonth;
+        };
+
         return clientes.map(cliente => {
             const nombre = normalizeClientMatch(cliente.nombre);
             const telefono = normalizeWooPhone(cliente.telefono);
             const wooId = String(cliente.wooId || '').trim();
 
-            let total = Number(cliente.totalCompras || 0);
+            let total = rankMonth ? 0 : Number(cliente.totalCompras || 0);
+            let orderCount = 0;
+            let sources = new Set();
+            let products = [];
 
             // Sum from POS ventas
             (posVentas || []).forEach(venta => {
@@ -92,7 +101,12 @@ export default function ClientesPage() {
                     (nombre && vNombre && nombre === vNombre) ||
                     (telefono && vTel && telefono === vTel)
                 ) {
-                    total += Number(venta.total || venta.totalFinal || 0);
+                    if (matchDate(venta.fecha)) {
+                        total += Number(venta.total || venta.totalFinal || 0);
+                        orderCount++;
+                        sources.add('Local');
+                        (venta.items || []).forEach(it => { if (it.nombre) products.push(it.nombre); });
+                    }
                 }
             });
 
@@ -106,13 +120,22 @@ export default function ClientesPage() {
                     (wooId && pWooId && wooId === pWooId) ||
                     (nombre && pNombre && nombre === pNombre)
                 ) {
-                    total += Number(pedido.total || pedido.totalAmount || 0);
+                    if (matchDate(pedido.date_created || pedido.fecha)) {
+                        total += Number(pedido.total || pedido.totalAmount || 0);
+                        orderCount++;
+                        const src = (pedido.origen || '').toLowerCase();
+                        if (src.includes('facebook') || src.includes('instagram') || src.includes('meta')) sources.add('Meta Ads');
+                        else if (src.includes('google') || src === 'organic') sources.add('Orgánico');
+                        else if (src.includes('web') || src.includes('celavie') || src === 'directo') sources.add('Directo');
+                        else if (src) sources.add(src);
+                        else sources.add('Web');
+                    }
                 }
             });
 
-            return { ...cliente, _totalSpend: total };
+            return { ...cliente, _totalSpend: total, _orderCount: orderCount, _sources: [...sources].join(', ') || cliente.origen || '-', _topProducts: [...new Set(products)].slice(0, 3).join(', ') };
         });
-    }, [clientes, posVentas, pedidosOnline]);
+    }, [clientes, posVentas, pedidosOnline, rankMonth]);
 
     const filteredClientes = useMemo(() => {
         let list = clientesConTotal;
@@ -426,6 +449,10 @@ export default function ClientesPage() {
                             >
                                 Todos ({clientes.length})
                             </button>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8, marginRight: 2 }}>Mes:</span>
+                            <input type="month" value={rankMonth} onChange={e => setRankMonth(e.target.value)}
+                                style={{ padding: '3px 8px', fontSize: 11, borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }} />
+                            {rankMonth && <button onClick={() => setRankMonth('')} style={{ padding: '3px 8px', fontSize: 11, borderRadius: 8, border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>✕</button>}
                         </div>
                     </div>
                     {clientes.length === 0 ? (
@@ -454,6 +481,9 @@ export default function ClientesPage() {
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Email</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Teléfono</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Provincia</th>
+                                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>Total $</th>
+                                    <th style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold' }}>Pedidos</th>
+                                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Fuente</th>
                                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: 'bold' }}>Descuento</th>
                                     <th style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>Total Compras</th>
                                 </tr>
@@ -486,6 +516,9 @@ export default function ClientesPage() {
                                         <td style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '12px' }}>{cliente.email || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{normalizeWooPhone(cliente.telefono) || '-'}</td>
                                         <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{cliente.provincia || '-'}</td>
+                                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: 600, color: cliente._totalSpend > 0 ? 'var(--success)' : 'var(--text-muted)' }}>{cliente._totalSpend > 0 ? '$' + Math.round(cliente._totalSpend).toLocaleString('es-AR') : '-'}</td>
+                                        <td style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)' }}>{cliente._orderCount || (cliente.cantidadPedidos > 0 ? cliente.cantidadPedidos : '-')}</td>
+                                        <td style={{ padding: '12px', fontSize: 11, color: 'var(--text-muted)' }}>{cliente._sources}</td>
                                         <td style={{ padding: '12px', color: 'var(--accent)' }}>{cliente.descuento ? `${cliente.descuento}%` : '-'}</td>
                                         <td style={{ padding: '12px', textAlign: 'right', fontWeight: 600, color: cliente._totalSpend > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
                                             {cliente._totalSpend > 0 ? `$${Math.round(cliente._totalSpend).toLocaleString('es-AR')}` : '-'}
