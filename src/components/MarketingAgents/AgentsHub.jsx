@@ -24,6 +24,7 @@ import {
   runSupplyChainAgent,
   runCustomerSuccessAgent,
   runCashFlowAgent,
+  runMonthlySummaryAgent,
   runCEOAutoDaily,
   shouldAutoRun,
   runBugFinderAgent,
@@ -49,6 +50,7 @@ const TABS = [
   { id: 'supplyChain', label: 'Proveedores', icon: Truck, color: '#7c3aed', desc: 'Cadena de suministro y telas' },
   { id: 'customerSuccess', label: 'Clientes', icon: Heart, color: '#f43f5e', desc: 'Retención y satisfacción' },
   { id: 'cashflow', label: 'Cash Flow', icon: Banknote, color: '#059669', desc: 'Flujo de caja diario' },
+  { id: 'monthlySummary', label: 'Resumen Mensual', icon: BarChart3, color: '#8b5cf6', desc: 'Reporte ejecutivo mensual con KPIs y forecast' },
   { id: 'master', label: '👑 CEO', icon: Crown, color: '#fbbf24', desc: 'Director General AI — decide y delega' },
   { id: 'bugFinder', label: 'Bug Finder', icon: AlertCircle, color: '#ef4444', desc: 'Monitorea errores en el dashboard', alwaysOn: true },
   { id: 'bugFixer', label: 'Bug Fixer', icon: Wrench, color: '#f97316', desc: 'Intenta corregir bugs automáticamente', alwaysOn: true },
@@ -194,6 +196,7 @@ export default function AgentsHub() {
         case 'supplyChain': result = await runSupplyChainAgent(config, state, results.analyst, onProgress); break;
         case 'customerSuccess': result = await runCustomerSuccessAgent(config, results.analyst, onProgress); break;
         case 'cashflow': result = await runCashFlowAgent(config, state, results.analyst, onProgress); break;
+        case 'monthlySummary': result = await runMonthlySummaryAgent(state, config, onProgress); break;
         case 'master': result = await runMasterAgent(config, results, onProgress); break;
         case 'bugFinder': result = await runBugFinderAgent(state); break;
         case 'bugFixer': result = await runBugFixerAgent(state); break;
