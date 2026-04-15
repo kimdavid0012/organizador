@@ -1624,7 +1624,6 @@ export function DataProvider({ children }) {
         const startupLocalData = mergeBestLocalState();
         if (startupLocalData) {
             currentRevisionRef.current = getSyncRevision(startupLocalData);
-            localChangeTimestamp.current = Date.now();
             dispatch({ type: ACTION_TYPES.SET_DATA, payload: startupLocalData });
             initialized.current = true;
             updateSyncStatus({
@@ -1635,6 +1634,8 @@ export function DataProvider({ children }) {
 
         // We listen to the config doc as the "trigger" — when it changes, we reload all docs
         const configRef = doc(db, 'app-data', 'config');
+        const ECHO_WINDOW_MS = 2000; // Only ignore echoes within 2s of our save
+
         const unsubscribe = onSnapshot(configRef, { includeMetadataChanges: true }, async (snap) => {
             updateSyncStatus({
                 hasPendingWrites: snap.metadata.hasPendingWrites,
@@ -1643,65 +1644,73 @@ export function DataProvider({ children }) {
                 lastError: null
             });
 
-            // Si nosotros acabamos de guardar, ignorar el echo
-            if (justSaved.current && !snap.metadata.hasPendingWrites) {
-                justSaved.current = false;
-                pendingCloudSave.current = false;
-                pendingChangesCount.current = 0;
-                updateSyncStatus({
-                    hasPendingWrites: false,
-                    pendingChanges: 0,
-                    lastCloudSaveAt: new Date().toISOString(),
-                    lastError: null
-                });
-                setPendingLocalChangesFlag(false);
-            }
-
+            // If this snapshot is our own pending write still being confirmed, skip
             if (snap.metadata.hasPendingWrites) {
                 return;
             }
 
-            if (pendingCloudSave.current) {
-                console.log('Snapshot ignorado: guardado local pendiente.');
-                return;
-            }
-
-            // Bloquear snapshots por 3 segundos después de cualquier cambio local
-            const timeSinceLocalChange = Date.now() - localChangeTimestamp.current;
-            if (initialized.current && timeSinceLocalChange < 15000 && (snap.exists() ? Number(snap.data()?.config?.syncMeta?.revision || 0) : 0) <= currentRevisionRef.current) {
-                console.log(`🛡️ Snapshot ignorado (cambio local hace ${timeSinceLocalChange}ms)`);
-                return;
+            // Detect echo of our own save: if we just saved and the revision matches
+            // what we wrote, this is our echo — acknowledge it and move on
+            if (justSaved.current) {
+                const timeSinceLocalChange = Date.now() - (localChangeTimestamp.current || 0);
+                const remoteRev = snap.exists() ? Number(snap.data()?.config?.syncMeta?.revision || 0) : 0;
+                if (timeSinceLocalChange < ECHO_WINDOW_MS && remoteRev <= currentRevisionRef.current) {
+                    // This is the echo of our own save
+                    justSaved.current = false;
+                    pendingCloudSave.current = false;
+                    pendingChangesCount.current = 0;
+                    updateSyncStatus({
+                        hasPendingWrites: false,
+                        pendingChanges: 0,
+                        lastCloudSaveAt: new Date().toISOString(),
+                        lastError: null
+                    });
+                    setPendingLocalChangesFlag(false);
+                    console.log(`[Sync] Echo de nuestro guardado (rev ${remoteRev}) — ignorado`);
+                    return;
+                }
+                // If revision is higher, it's a REAL remote change that arrived — don't skip!
+                justSaved.current = false;
             }
 
             if (snap.exists()) {
                 try {
-                    // Load all 4 docs
+                    // Load all split docs from Firebase
                     const { loadDataFromFirestore } = await import('./storage');
                     const fullData = await loadDataFromFirestore();
-                    lastKnownCloudState.current = fullData;
-                    const localRecoveryData = mergeBestLocalState(stateRef.current);
                     const remoteRevision = getSyncRevision(fullData);
 
-                    // FIREBASE ES SIEMPRE LA FUENTE DE VERDAD
-                    // Solo mergeamos datos locales que NO existan en Firebase (para no perder trabajo offline)
-                    // Pero Firebase SIEMPRE gana cuando tiene datos
-                    if (initialized.current && localRecoveryData) {
-                        const timeSinceLastLocalChange = Date.now() - (localChangeTimestamp.current || 0);
-                        // Si el usuario hizo un cambio local hace menos de 5 segundos, no sobreescribir
-                        // (es el eco de su propio guardado volviendo de Firestore)
-                        if (timeSinceLastLocalChange < 5000 && justSaved.current) {
-                            justSaved.current = false;
-                            return;
-                        }
+                    // ALWAYS accept remote data — Firebase is the source of truth
+                    // If we have pending local changes, merge them ON TOP of remote
+                    // Remote wins for existing data; local only adds what remote doesn't have
+                    lastKnownCloudState.current = fullData;
+
+                    if (pendingCloudSave.current && stateRef.current) {
+                        // We have unsaved local changes — merge: remote base + local additions
+                        console.log(`[Sync] Cambio remoto (rev ${remoteRevision}) + cambios locales pendientes — merging`);
+                        isFromFirestore.current = true;
+                        const merged = mergeProtectedState(fullData, stateRef.current);
+                        dispatch({ type: ACTION_TYPES.SET_DATA, payload: merged });
+                        saveAppDataLocally(merged).catch(() => {});
+                        // Keep pendingCloudSave true — the debounced save will push our local additions
+                        currentRevisionRef.current = Math.max(currentRevisionRef.current, remoteRevision);
+                    } else {
+                        // No pending local changes — accept remote data directly
+                        console.log(`[Sync] Cambio remoto aceptado (rev ${remoteRevision})`);
+                        isFromFirestore.current = true;
+                        dispatch({ type: ACTION_TYPES.SET_DATA, payload: fullData });
+                        saveAppDataLocally(fullData).catch(() => {});
+                        currentRevisionRef.current = remoteRevision;
+                        pendingChangesCount.current = 0;
+                        updateSyncStatus({
+                            pendingChanges: 0,
+                            hasPendingWrites: false,
+                            lastCloudSaveAt: new Date().toISOString(),
+                            lastError: null
+                        });
+                        setPendingLocalChangesFlag(false);
                     }
 
-                    isFromFirestore.current = true;
-                    // Firebase es la base, local solo enriquece con datos que Firebase no tiene
-                    const merged = mergeProtectedState(fullData, localRecoveryData);
-                    dispatch({ type: ACTION_TYPES.SET_DATA, payload: merged });
-                    // Also back up Firebase data to organizador-local IndexedDB
-                    saveAppDataLocally(merged).catch(() => {});
-                    currentRevisionRef.current = remoteRevision;
                     initialized.current = true;
                 } catch (err) {
                     console.error('Error loading split docs:', err);
