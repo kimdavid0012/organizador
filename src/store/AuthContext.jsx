@@ -16,7 +16,7 @@ const KNOWN_USERS = {
 };
 
 const KNOWN_USER_SECTIONS = {
-    'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb'],
+    'giselakim.wk@gmail.com': ['pedidos', 'marketing', 'paginaweb', 'settings', 'agents', 'instagramplanner', 'articulos'],
     'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'informes'],
     'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia'],
     'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia'],
@@ -33,7 +33,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
     encargada: ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'informes'],
     deposito: ['kanban', 'talleres', 'conteomercaderia'],
     pedidos: ['kanban', 'pedidos', 'conteomercaderia'],
-    marketing: ['pedidos', 'marketing', 'paginaweb'],
+    marketing: ['pedidos', 'marketing', 'paginaweb', 'settings', 'agents', 'instagramplanner', 'articulos'],
     fotos: ['fotos', 'instagramplanner', 'tiktok'],
     contenido_instagram: ['instagramplanner', 'fotos', 'fotosprendas', 'library'],
     pendiente: [] // New users get no access until admin assigns a role
