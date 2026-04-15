@@ -22,6 +22,7 @@ import PaginaWebSection from './components/PaginaWebSection.jsx';
 import ConteoMercaderiaPage from './components/ConteoMercaderiaPage.jsx';
 import FotosPage from './components/FotosPage.jsx';
 import FotosPrendasPage from './components/FotosPrendasPage.jsx';
+import FotosCompartidasPage from './components/FotosCompartidasPage.jsx';
 import InstagramPlannerPage from './components/InstagramPlannerPage.jsx';
 import MesanPage from './components/MesanPage.jsx';
 import BankPaymentsPage from './components/BankPaymentsPage.jsx';
@@ -447,6 +448,7 @@ function AppContent() {
         { id: 'conteomercaderia', icon: Boxes, label: 'Conteo Mercadería' },
         { id: 'fotos', icon: Camera, label: 'Fotos' },
         { id: 'fotosprendas', icon: Camera, label: 'Fotos Prendas' },
+        { id: 'fotoscompartidas', icon: HardDrive, label: 'Fotos Compartidas' },
         { id: 'instagramplanner', icon: Instagram, label: t('navInstagramPlanner') },
         { id: 'tiktok', icon: Video, label: 'TikTok' },
         { id: 'mesan', icon: BarChart3, label: 'Mesan' },
@@ -669,6 +671,7 @@ function AppContent() {
                     {view === 'conteomercaderia' && <ConteoMercaderiaPage />}
                     {view === 'fotos' && <FotosPage />}
                     {view === 'fotosprendas' && <FotosPrendasPage />}
+                    {view === 'fotoscompartidas' && <FotosCompartidasPage />}
                     {view === 'instagramplanner' && <InstagramPlannerPage />}
                     {view === 'tiktok' && <TikTokContentPage />}
                     {view === 'mesan' && <MesanPage />}
