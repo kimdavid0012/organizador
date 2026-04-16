@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Upload, Search, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import { useAuth } from '../../store/AuthContext';
@@ -47,6 +47,13 @@ export default function PosProductos() {
     const [importingWoo, setImportingWoo] = useState(false);
     const [editingStockId, setEditingStockId] = useState(null);
     const [editingStockValue, setEditingStockValue] = useState('');
+    const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const formatCurrency = (value) => {
         const amount = Number(value || 0);
@@ -321,6 +328,7 @@ export default function PosProductos() {
                 </div>
             </div>
 
+            {!isMobile && (
             <div className="pos-table-container">
                 <table className="pos-table">
                     <thead>
@@ -353,12 +361,12 @@ export default function PosProductos() {
                         {filteredProducts.map(p => (
                             <tr key={p.id} className={`pos-table-row${selectedIds.has(p.id) ? ' row-selected' : ''}`}>
                                 {canEdit && (
-                                    <td style={{ paddingRight: 0 }}>
+                                    <td style={{ paddingRight: 0 }} onClick={(e) => e.stopPropagation()}>
                                         <input
                                             type="checkbox"
                                             className="bulk-checkbox"
                                             checked={selectedIds.has(p.id)}
-                                            onChange={() => toggleSelect(p.id)}
+                                            onChange={(e) => { e.stopPropagation(); toggleSelect(p.id); }}
                                         />
                                     </td>
                                 )}
@@ -436,7 +444,9 @@ export default function PosProductos() {
                     </tbody>
                 </table>
             </div>
+            )}
 
+            {isMobile && (
             <div className="pos-product-cards">
                 {filteredProducts.map(p => (
                     <article key={`card-${p.id}`} className={`pos-product-card${selectedIds.has(p.id) ? ' card-selected' : ''}`}>
@@ -543,6 +553,7 @@ export default function PosProductos() {
                     </div>
                 )}
             </div>
+            )}
 
             {/* Floating bulk action bar */}
             {canEdit && selectedIds.size > 0 && (
