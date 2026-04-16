@@ -1569,7 +1569,7 @@ export function DataProvider({ children }) {
         const persistRecoverySnapshot = () => {
             if (!stateRef.current) return;
             const stampedState = stampStateForPersistence(
-                mergeProtectedState(stateRef.current, lastKnownCloudState.current),
+                stateRef.current,
                 Math.max(currentRevisionRef.current, getSyncRevision(stateRef.current)),
                 pendingCloudSave.current ? 'local-pending' : 'local'
             );
@@ -1634,7 +1634,7 @@ export function DataProvider({ children }) {
 
         // We listen to the config doc as the "trigger" — when it changes, we reload all docs
         const configRef = doc(db, 'app-data', 'config');
-        const ECHO_WINDOW_MS = 2000; // Only ignore echoes within 2s of our save
+        const ECHO_WINDOW_MS = 5000; // Ignore echoes within 5s of our save
 
         const unsubscribe = onSnapshot(configRef, { includeMetadataChanges: true }, async (snap) => {
             updateSyncStatus({
@@ -1686,14 +1686,11 @@ export function DataProvider({ children }) {
                     lastKnownCloudState.current = fullData;
 
                     if (pendingCloudSave.current && stateRef.current) {
-                        // We have unsaved local changes — merge: remote base + local additions
-                        console.log(`[Sync] Cambio remoto (rev ${remoteRevision}) + cambios locales pendientes — merging`);
-                        isFromFirestore.current = true;
-                        const merged = mergeProtectedState(fullData, stateRef.current);
-                        dispatch({ type: ACTION_TYPES.SET_DATA, payload: merged });
-                        saveAppDataLocally(merged).catch(() => {});
-                        // Keep pendingCloudSave true — the debounced save will push our local additions
+                        // We have unsaved local changes — LOCAL state wins (user just made changes)
+                        // Accept remote revision number but keep local data
+                        console.log(`[Sync] Cambio remoto (rev ${remoteRevision}) — pero hay cambios locales pendientes, local gana`);
                         currentRevisionRef.current = Math.max(currentRevisionRef.current, remoteRevision);
+                        // Don't dispatch — keep local state, the pending save will push it to Firestore
                     } else {
                         // No pending local changes — accept remote data directly
                         console.log(`[Sync] Cambio remoto aceptado (rev ${remoteRevision})`);
@@ -1754,14 +1751,10 @@ export function DataProvider({ children }) {
         // SIEMPRE guardar a localStorage inmediatamente como backup
         const nextRevision = currentRevisionRef.current + 1;
         currentRevisionRef.current = nextRevision;
-        const persistableState = stampStateForPersistence(
-            mergeProtectedState(state, lastKnownCloudState.current),
-            nextRevision,
-            'local'
-        );
+        // DO NOT merge with lastKnownCloudState — local state IS the source of truth after a local change
+        const persistableState = stampStateForPersistence(state, nextRevision, 'local');
         try { saveDataToLocal(persistableState); } catch (localErr) { console.warn('localStorage backup failed (non-critical):', localErr.message); }
         try { saveProtectedSessionSnapshot(persistableState); } catch (snapErr) { console.warn('Session snapshot failed (non-critical):', snapErr.message); }
-        // Also persist to organizador-local IndexedDB (additive offline layer)
         saveAppDataLocally(persistableState).catch(() => {});
         localChangeTimestamp.current = Date.now();
         pendingCloudSave.current = true;
@@ -1777,8 +1770,9 @@ export function DataProvider({ children }) {
         if (saveTimeout.current) clearTimeout(saveTimeout.current);
         saveTimeout.current = setTimeout(async () => {
             try {
+                // Save current state AS-IS to Firestore — no merging with cloud
                 const currentState = stampStateForPersistence(
-                    mergeProtectedState(stateRef.current, lastKnownCloudState.current),
+                    stateRef.current,
                     currentRevisionRef.current,
                     'cloud'
                 );
@@ -1827,7 +1821,7 @@ export function DataProvider({ children }) {
             try {
                 const { saveDataToFirestore } = await import('./storage');
                 const retryState = stampStateForPersistence(
-                    mergeProtectedState(stateRef.current, lastKnownCloudState.current),
+                    stateRef.current,
                     currentRevisionRef.current,
                     'cloud'
                 );
@@ -2372,7 +2366,7 @@ export function DataProvider({ children }) {
             try {
                 const { saveDataToFirestore } = await import('./storage');
                 const currentState = stampStateForPersistence(
-                    mergeProtectedState(stateRef.current, lastKnownCloudState.current),
+                    stateRef.current,
                     currentRevisionRef.current,
                     'cloud'
                 );
