@@ -1426,13 +1426,11 @@ export function DataProvider({ children }) {
     const [syncStatus, setSyncStatus] = useState({
         online: typeof navigator !== 'undefined' ? navigator.onLine : true,
         hasPendingWrites: false,
-        pendingChanges: loadPendingLocalChangesFlag() ? 1 : 0,
+        pendingChanges: 0,
         lastLocalSaveAt: null,
         lastCloudSaveAt: null,
         lastError: null,
-        status: loadPendingLocalChangesFlag()
-            ? 'Pendiente de sincronizar'
-            : (firestoreOfflineReady ? 'Sincronizado' : 'Modo local'),
+        status: firestoreOfflineReady ? 'Sincronizado' : 'Modo local',
         firestoreOfflineReady
     });
     const isFromFirestore = useRef(false);
@@ -1443,8 +1441,8 @@ export function DataProvider({ children }) {
     const justSaved = useRef(false);
     const lastKnownCloudState = useRef(null);
     const localChangeTimestamp = useRef(0); // timestamp of last local change
-    const pendingCloudSave = useRef(loadPendingLocalChangesFlag());
-    const pendingChangesCount = useRef(loadPendingLocalChangesFlag() ? 1 : 0);
+    const pendingCloudSave = useRef(false);
+    const pendingChangesCount = useRef(0);
 
     useEffect(() => {
         stateRef.current = state;
