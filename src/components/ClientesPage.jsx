@@ -85,57 +85,45 @@ export default function ClientesPage() {
             const nombre = normalizeClientMatch(cliente.nombre);
             const telefono = normalizeWooPhone(cliente.telefono);
             const wooId = String(cliente.wooId || '').trim();
+            const cEmail = (cliente.email || '').toLowerCase().trim();
 
-            // For all-time ranking: start with WooCommerce's total_spent (most accurate for online)
-            // For monthly filter: recalculate from actual orders in that month
             let total = 0;
             let orderCount = 0;
             let sources = new Set();
             let products = [];
-            let countedOnlineOrderIds = new Set();
 
-            if (!rankMonth) {
-                // All-time: trust WooCommerce data for online
-                total = Number(cliente.totalCompras || 0);
-                orderCount = Number(cliente.cantidadPedidos || 0);
-                if (total > 0 || orderCount > 0) sources.add('WooCommerce');
-            }
-
-            // Sum from online orders (month filter OR to catch orders not in total_spent yet)
+            // Sum from online orders (pedidosOnline) — REAL source of truth for online sales
             (pedidosOnline || []).forEach(pedido => {
                 const pNombre = normalizeClientMatch(
-                    pedido.clienteNombre || ((pedido.billing?.first_name || pedido.billing?.last_name) ? `${pedido.billing?.first_name || ''} ${pedido.billing?.last_name || ''}` : pedido.billing?.first_name || pedido.email || '')
+                    pedido.clienteNombre || pedido.cliente ||
+                    ((pedido.billing?.first_name || pedido.billing?.last_name) ? `${pedido.billing?.first_name || ''} ${pedido.billing?.last_name || ''}`.trim() : '') ||
+                    pedido.email || ''
                 );
                 const pWooId = String(pedido.customer_id || pedido.wooCustomerId || '').trim();
                 const pEmail = (pedido.billing?.email || pedido.email || '').toLowerCase().trim();
-                const cEmail = (cliente.email || '').toLowerCase().trim();
+                const pPhone = normalizeWooPhone(pedido.billing?.phone || pedido.telefono || '');
+
                 const matches = (
-                    (wooId && pWooId && wooId === pWooId) ||
+                    (wooId && pWooId && pWooId !== '0' && wooId === pWooId) ||
                     (cEmail && pEmail && cEmail === pEmail) ||
-                    (nombre && pNombre && nombre === pNombre)
+                    (nombre && pNombre && nombre === pNombre) ||
+                    (telefono && pPhone && telefono === pPhone)
                 );
                 if (!matches) return;
 
-                if (rankMonth) {
-                    // Monthly filter: only count orders in that month
-                    if (matchDate(pedido.date_created || pedido.fecha)) {
-                        total += Number(pedido.total || pedido.totalAmount || 0);
-                        orderCount++;
-                        countedOnlineOrderIds.add(pedido.id || pedido.wooId);
-                        sources.add('Web');
-                    }
-                } else {
-                    // All-time: track for source tags and products
-                    countedOnlineOrderIds.add(pedido.id || pedido.wooId);
-                    sources.add('Web');
+                if (matchDate(pedido.date_created || pedido.fecha)) {
+                    total += Number(pedido.total || pedido.monto || pedido.totalAmount || 0);
+                    orderCount++;
+                    const src = (pedido.origen || (pedido.wooId ? 'Web' : '')).toLowerCase();
+                    if (src.includes('instagram')) sources.add('Instagram');
+                    else if (src.includes('facebook') || src.includes('meta')) sources.add('Meta Ads');
+                    else if (src.includes('google') || src === 'organic') sources.add('Organico');
+                    else if (src.includes('whatsapp')) sources.add('WhatsApp');
+                    else sources.add('Web');
                 }
-
-                const src = (pedido.origen || '').toLowerCase();
-                if (src.includes('facebook') || src.includes('instagram') || src.includes('meta')) sources.add('Meta Ads');
-                else if (src.includes('google') || src === 'organic') sources.add('Orgánico');
             });
 
-            // Sum from POS ventas (local sales - always add these, not in WooCommerce total_spent)
+            // Sum from POS ventas (local sales)
             (posVentas || []).forEach(venta => {
                 const vNombre = normalizeClientMatch(venta.clienteNombre || venta.nombreCliente || venta.cliente?.nombre || venta.cliente || '');
                 const vTel = normalizeWooPhone(venta.clienteTelefono || venta.telefonoCliente || venta.cliente?.telefono || '');
@@ -153,6 +141,13 @@ export default function ClientesPage() {
                     }
                 }
             });
+
+            // Fallback: if no orders matched but client has WooCommerce total_spent, use that
+            if (total === 0 && !rankMonth && Number(cliente.totalCompras || 0) > 0) {
+                total = Number(cliente.totalCompras);
+                orderCount = Number(cliente.cantidadPedidos || 0) || 1;
+                sources.add('WooCommerce');
+            }
 
             return { ...cliente, _totalSpend: total, _orderCount: orderCount, _sources: [...sources].join(', ') || cliente.origen || '-', _topProducts: [...new Set(products)].slice(0, 3).join(', ') };
         });
