@@ -551,22 +551,29 @@ export const saveDataToFirestore = async (data) => {
 
         const configWithoutSplitDocs = buildConfigWithoutSplitDocs(data.config || {});
 
-        // Use writeBatch for atomic single-round-trip write (much faster than parallel setDoc)
-        const batch = writeBatch(db);
-        batch.set(doc(db, 'app-data', 'config'), { config: configWithoutSplitDocs });
-        batch.set(doc(db, 'app-data', 'moldes'), { moldes: moldesClean });
-        batch.set(doc(db, 'app-data', 'telas'), { telas: data.telas || [] });
-        batch.set(doc(db, 'app-data', 'tareas'), { tareas: data.tareas || [] });
+        // Prepare all doc writes
+        const writes = [
+            { ref: doc(db, 'app-data', 'config'), data: { config: configWithoutSplitDocs } },
+            { ref: doc(db, 'app-data', 'moldes'), data: { moldes: moldesClean } },
+            { ref: doc(db, 'app-data', 'telas'), data: { telas: data.telas || [] } },
+            { ref: doc(db, 'app-data', 'tareas'), data: { tareas: data.tareas || [] } },
+            ...Object.entries(CONFIG_SPLIT_DOCS).map(([key, docId]) => ({
+                ref: doc(db, 'app-data', docId),
+                data: getFirestoreSplitDocPayload(key, data.config?.[key] || [])
+            }))
+        ];
 
-        Object.entries(CONFIG_SPLIT_DOCS).forEach(([key, docId]) => {
-            batch.set(
-                doc(db, 'app-data', docId),
-                getFirestoreSplitDocPayload(key, data.config?.[key] || [])
-            );
-        });
-
-        await batch.commit();
-        console.log('✅ Datos guardados en Firestore (batch atómico)');
+        // Try writeBatch first (faster), fallback to parallel setDoc if batch fails
+        try {
+            const batch = writeBatch(db);
+            writes.forEach(w => batch.set(w.ref, w.data));
+            await batch.commit();
+            console.log('✅ Firestore save OK (batch)');
+        } catch (batchErr) {
+            console.warn('⚠️ Batch write failed, falling back to parallel setDoc:', batchErr.message);
+            await Promise.all(writes.map(w => setDoc(w.ref, w.data)));
+            console.log('✅ Firestore save OK (parallel fallback)');
+        }
     } catch (err) {
         console.error('Error guardando datos en Firestore:', err);
         throw err;

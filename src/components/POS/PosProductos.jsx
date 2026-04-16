@@ -591,7 +591,8 @@ export default function PosProductos() {
                         };
                         const buildCatalog = (wooImages) => {
                             const cards = selected.map(p => {
-                                const img = wooImages[p.id] || p.imagenBase64 || '';
+                                const existingWooImg = Array.isArray(p.imagenes) && p.imagenes.length > 0 ? (p.imagenes[0].url || p.imagenes[0].src || '') : '';
+                                const img = existingWooImg || wooImages[p.id] || p.imagenBibliotecaThumb || p.storageUrl || p.imagenBase64 || '';
                                 const l1 = p.precioVentaL1 ? '$' + Number(p.precioVentaL1).toLocaleString('es-AR') : '-';
                                 const l2 = p.precioVentaL2 ? '$' + Number(p.precioVentaL2).toLocaleString('es-AR') : '';
                                 const l5 = p.precioVentaL5 ? '$' + Number(p.precioVentaL5).toLocaleString('es-AR') : '';

@@ -1202,37 +1202,37 @@ function dataReducer(state, action) {
         case ACTION_TYPES.ADD_POS_PRODUCT:
             return {
                 ...state,
-                config: withReconciledPosProducts({
+                config: {
                     ...state.config,
                     posProductos: upsertPosProducts(state.config.posProductos || [], [action.payload], { forceOverwrite: true })
-                }, state.moldes)
+                }
             };
         case ACTION_TYPES.UPDATE_POS_PRODUCT:
             return {
                 ...state,
-                config: withReconciledPosProducts({
+                config: {
                     ...state.config,
                     posProductos: (state.config.posProductos || []).map(p =>
                         p.id === action.payload.id ? { ...p, ...action.payload.changes } : p
                     )
-                }, state.moldes)
+                }
             };
         case ACTION_TYPES.DELETE_POS_PRODUCT:
             return {
                 ...state,
-                config: withReconciledPosProducts({
+                config: {
                     ...state.config,
                     posProductos: (state.config.posProductos || []).filter((product) => product.id !== action.payload)
-                }, state.moldes)
+                }
             };
         case ACTION_TYPES.BULK_DELETE_POS_PRODUCTS: {
             const idsToDelete = new Set(action.payload);
             return {
                 ...state,
-                config: withReconciledPosProducts({
+                config: {
                     ...state.config,
                     posProductos: (state.config.posProductos || []).filter((product) => !idsToDelete.has(product.id))
-                }, state.moldes)
+                }
             };
         }
         case ACTION_TYPES.IMPORT_POS_PRODUCTS:
