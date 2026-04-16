@@ -1106,8 +1106,55 @@ export default function MarketingSection() {
                     };
                 });
                 const regionsSorted = Object.entries(regionData).sort((a, b) => b[1].spend - a[1].spend);
-                const targetedRegions = regionsSorted.map(([r]) => r);
-                const untargetedProvinces = PROVINCIAS.filter(p => !targetedRegions.some(r => r.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(r.toLowerCase())));
+
+                // Normalize strings for matching (remove accents, lowercase)
+                const normalizeRegion = (s) => (s || '')
+                    .toString()
+                    .toLowerCase()
+                    .trim()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^a-z0-9 ]/g, ' ')
+                    .replace(/\s+/g, ' ');
+
+                // Province aliases: canonical name -> list of variations Meta might return
+                const PROVINCE_ALIASES = {
+                    'CABA': ['caba', 'ciudad autonoma de buenos aires', 'capital federal', 'ciudad de buenos aires', 'autonomous city of buenos aires'],
+                    'Buenos Aires': ['buenos aires', 'provincia de buenos aires', 'bs as', 'buenos aires province'],
+                    'Córdoba': ['cordoba'],
+                    'Santa Fe': ['santa fe'],
+                    'Mendoza': ['mendoza'],
+                    'Tucumán': ['tucuman'],
+                    'Entre Ríos': ['entre rios'],
+                    'Salta': ['salta'],
+                    'Misiones': ['misiones'],
+                    'Chaco': ['chaco'],
+                    'Corrientes': ['corrientes'],
+                    'Santiago del Estero': ['santiago del estero'],
+                    'San Juan': ['san juan'],
+                    'Jujuy': ['jujuy'],
+                    'Río Negro': ['rio negro'],
+                    'Neuquén': ['neuquen'],
+                    'Formosa': ['formosa'],
+                    'Chubut': ['chubut'],
+                    'San Luis': ['san luis'],
+                    'Catamarca': ['catamarca'],
+                    'La Pampa': ['la pampa'],
+                    'La Rioja': ['la rioja'],
+                    'Santa Cruz': ['santa cruz'],
+                    'Tierra del Fuego': ['tierra del fuego', 'tierra del fuego antartida e islas del atlantico sur']
+                };
+
+                // Check which provinces have any Meta spend (normalized matching)
+                const metaRegionsNormalized = regionsSorted.map(([r]) => normalizeRegion(r));
+                const targetedProvinces = new Set();
+                Object.entries(PROVINCE_ALIASES).forEach(([canonical, aliases]) => {
+                    const matches = metaRegionsNormalized.some(metaReg =>
+                        aliases.some(alias => metaReg === alias || metaReg.includes(alias) || alias.includes(metaReg))
+                    );
+                    if (matches) targetedProvinces.add(canonical);
+                });
+                const untargetedProvinces = PROVINCIAS.filter(p => !targetedProvinces.has(p));
 
                 return (
                     <div style={{ display: 'grid', gap: 16, marginTop: 16 }}>
