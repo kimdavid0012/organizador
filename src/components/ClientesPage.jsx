@@ -94,14 +94,15 @@ export default function ClientesPage() {
 
             // Sum from online orders (pedidosOnline) — REAL source of truth for online sales
             (pedidosOnline || []).forEach(pedido => {
+                // Build all possible name/email/phone from the pedido (handles both old and new import formats)
                 const pNombre = normalizeClientMatch(
                     pedido.clienteNombre || pedido.cliente ||
                     ((pedido.billing?.first_name || pedido.billing?.last_name) ? `${pedido.billing?.first_name || ''} ${pedido.billing?.last_name || ''}`.trim() : '') ||
                     pedido.email || ''
                 );
                 const pWooId = String(pedido.customer_id || pedido.wooCustomerId || '').trim();
-                const pEmail = (pedido.billing?.email || pedido.email || '').toLowerCase().trim();
-                const pPhone = normalizeWooPhone(pedido.billing?.phone || pedido.telefono || '');
+                const pEmail = (pedido.email || pedido.billing?.email || '').toLowerCase().trim();
+                const pPhone = normalizeWooPhone(pedido.telefono || pedido.billing?.phone || '');
 
                 const matches = (
                     (wooId && pWooId && pWooId !== '0' && wooId === pWooId) ||
