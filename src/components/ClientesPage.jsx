@@ -86,12 +86,56 @@ export default function ClientesPage() {
             const telefono = normalizeWooPhone(cliente.telefono);
             const wooId = String(cliente.wooId || '').trim();
 
-            let total = rankMonth ? 0 : Number(cliente.totalCompras || 0);
+            // For all-time ranking: start with WooCommerce's total_spent (most accurate for online)
+            // For monthly filter: recalculate from actual orders in that month
+            let total = 0;
             let orderCount = 0;
             let sources = new Set();
             let products = [];
+            let countedOnlineOrderIds = new Set();
 
-            // Sum from POS ventas
+            if (!rankMonth) {
+                // All-time: trust WooCommerce data for online
+                total = Number(cliente.totalCompras || 0);
+                orderCount = Number(cliente.cantidadPedidos || 0);
+                if (total > 0 || orderCount > 0) sources.add('WooCommerce');
+            }
+
+            // Sum from online orders (month filter OR to catch orders not in total_spent yet)
+            (pedidosOnline || []).forEach(pedido => {
+                const pNombre = normalizeClientMatch(
+                    pedido.clienteNombre || ((pedido.billing?.first_name || pedido.billing?.last_name) ? `${pedido.billing?.first_name || ''} ${pedido.billing?.last_name || ''}` : pedido.billing?.first_name || pedido.email || '')
+                );
+                const pWooId = String(pedido.customer_id || pedido.wooCustomerId || '').trim();
+                const pEmail = (pedido.billing?.email || pedido.email || '').toLowerCase().trim();
+                const cEmail = (cliente.email || '').toLowerCase().trim();
+                const matches = (
+                    (wooId && pWooId && wooId === pWooId) ||
+                    (cEmail && pEmail && cEmail === pEmail) ||
+                    (nombre && pNombre && nombre === pNombre)
+                );
+                if (!matches) return;
+
+                if (rankMonth) {
+                    // Monthly filter: only count orders in that month
+                    if (matchDate(pedido.date_created || pedido.fecha)) {
+                        total += Number(pedido.total || pedido.totalAmount || 0);
+                        orderCount++;
+                        countedOnlineOrderIds.add(pedido.id || pedido.wooId);
+                        sources.add('Web');
+                    }
+                } else {
+                    // All-time: track for source tags and products
+                    countedOnlineOrderIds.add(pedido.id || pedido.wooId);
+                    sources.add('Web');
+                }
+
+                const src = (pedido.origen || '').toLowerCase();
+                if (src.includes('facebook') || src.includes('instagram') || src.includes('meta')) sources.add('Meta Ads');
+                else if (src.includes('google') || src === 'organic') sources.add('Orgánico');
+            });
+
+            // Sum from POS ventas (local sales - always add these, not in WooCommerce total_spent)
             (posVentas || []).forEach(venta => {
                 const vNombre = normalizeClientMatch(venta.clienteNombre || venta.nombreCliente || venta.cliente?.nombre || venta.cliente || '');
                 const vTel = normalizeWooPhone(venta.clienteTelefono || venta.telefonoCliente || venta.cliente?.telefono || '');
@@ -106,29 +150,6 @@ export default function ClientesPage() {
                         orderCount++;
                         sources.add('Local');
                         (venta.items || []).forEach(it => { if (it.nombre) products.push(it.nombre); });
-                    }
-                }
-            });
-
-            // Sum from online orders
-            (pedidosOnline || []).forEach(pedido => {
-                const pNombre = normalizeClientMatch(
-                    pedido.clienteNombre || ((pedido.billing?.first_name || pedido.billing?.last_name) ? `${pedido.billing?.first_name || ''} ${pedido.billing?.last_name || ''}` : pedido.billing?.first_name || pedido.email || '')
-                );
-                const pWooId = String(pedido.customer_id || pedido.wooCustomerId || '').trim();
-                if (
-                    (wooId && pWooId && wooId === pWooId) ||
-                    (nombre && pNombre && nombre === pNombre)
-                ) {
-                    if (matchDate(pedido.date_created || pedido.fecha)) {
-                        total += Number(pedido.total || pedido.totalAmount || 0);
-                        orderCount++;
-                        const src = (pedido.origen || '').toLowerCase();
-                        if (src.includes('facebook') || src.includes('instagram') || src.includes('meta')) sources.add('Meta Ads');
-                        else if (src.includes('google') || src === 'organic') sources.add('Orgánico');
-                        else if (src.includes('web') || src.includes('celavie') || src === 'directo') sources.add('Directo');
-                        else if (src) sources.add(src);
-                        else sources.add('Web');
                     }
                 }
             });
@@ -287,11 +308,14 @@ export default function ClientesPage() {
                     if (!exists.provincia && provincia) changes.provincia = provincia;
                     if (!exists.direccion && direccion) changes.direccion = direccion;
                     if (!exists.wooId) changes.wooId = wc.id;
-                    if (wc.total_spent && Number(exists.totalCompras || 0) !== Number(wc.total_spent || 0)) {
-                        changes.totalCompras = parseFloat(wc.total_spent || 0);
+                    // Always refresh totalCompras and cantidadPedidos from WooCommerce (they are the source of truth)
+                    const newTotal = parseFloat(wc.total_spent || 0);
+                    const newOrders = parseInt(wc.orders_count || 0, 10);
+                    if (newTotal !== Number(exists.totalCompras || 0)) {
+                        changes.totalCompras = newTotal;
                     }
-                    if (wc.orders_count && Number(exists.cantidadPedidos || 0) !== Number(wc.orders_count || 0)) {
-                        changes.cantidadPedidos = parseInt(wc.orders_count || 0, 10);
+                    if (newOrders !== Number(exists.cantidadPedidos || 0)) {
+                        changes.cantidadPedidos = newOrders;
                     }
                     if (Object.keys(changes).length > 0) {
                         updateCliente(exists.id, changes);
