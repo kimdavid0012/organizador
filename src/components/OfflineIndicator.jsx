@@ -1,14 +1,25 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../store/DataContext';
 
 export default function OfflineIndicator() {
     const { syncStatus } = useData();
-    const { online, pendingChanges, hasPendingWrites } = syncStatus || {};
+    const { online, pendingChanges, hasPendingWrites, lastCloudSaveAt } = syncStatus || {};
+    const [showSyncing, setShowSyncing] = useState(false);
 
     const isSyncing = online && (hasPendingWrites || pendingChanges > 0);
     const isOffline = !online;
 
-    if (!isOffline && !isSyncing) return null;
+    // Show syncing banner but auto-hide after 8 seconds to prevent permanent "Sincronizando..."
+    useEffect(() => {
+        if (isSyncing) {
+            setShowSyncing(true);
+            const timeout = setTimeout(() => setShowSyncing(false), 8000);
+            return () => clearTimeout(timeout);
+        }
+        setShowSyncing(false);
+    }, [isSyncing, lastCloudSaveAt]);
+
+    if (!isOffline && !showSyncing) return null;
 
     const bannerStyle = {
         position: 'fixed',
@@ -37,7 +48,7 @@ export default function OfflineIndicator() {
         borderRadius: '50%',
         background: '#fff',
         opacity: 0.85,
-        animation: isSyncing ? 'pulse 1.2s infinite' : 'none',
+        animation: showSyncing ? 'pulse 1.2s infinite' : 'none',
         flexShrink: 0
     };
 
