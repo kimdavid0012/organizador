@@ -87,7 +87,9 @@ const fmt = (n, isPercent = false) => {
 };
 
 function CellEditor({ value, type, onSave, onCancel }) {
-    const [val, setVal] = useState(value ?? '');
+    // For 'decimal' type (percentages), show as whole number (50 instead of 0.5)
+    const initialVal = type === 'decimal' ? ((Number(value) || 0) * 100).toFixed(0) : (value ?? '');
+    const [val, setVal] = useState(initialVal);
     const inputRef = useRef(null);
 
     useEffect(() => { inputRef.current?.focus(); inputRef.current?.select(); }, []);
@@ -95,7 +97,7 @@ function CellEditor({ value, type, onSave, onCancel }) {
     const commit = () => {
         let parsed = val;
         if (type === 'number') parsed = Number(val) || 0;
-        if (type === 'decimal') parsed = parseFloat(val) || 0;
+        if (type === 'decimal') parsed = (parseFloat(val) || 0) / 100; // Convert 50 → 0.5
         onSave(parsed);
     };
 
@@ -109,7 +111,8 @@ function CellEditor({ value, type, onSave, onCancel }) {
             ref={inputRef}
             className="yuliya-cell-input"
             type={type === 'date' ? 'date' : (type === 'number' || type === 'decimal') ? 'number' : 'text'}
-            step={type === 'decimal' ? '0.01' : undefined}
+            step={type === 'decimal' ? '1' : undefined}
+            placeholder={type === 'decimal' ? 'Ej: 50' : undefined}
             value={val}
             onChange={(e) => setVal(e.target.value)}
             onBlur={commit}
