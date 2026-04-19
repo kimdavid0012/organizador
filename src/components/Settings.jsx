@@ -430,8 +430,8 @@ export default function Settings() {
                 </div>
             )}
 
-            {/* Marketing Integrations (Admin Only) */}
-            {currentUser?.role === 'admin' && (
+            {/* Marketing Integrations (Admin + Marketing) */}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'marketing') && (
                 <div className="settings-section">
                     <h3><Megaphone /> Integraciones de Marketing</h3>
                     <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)', marginBottom: 12 }}>
@@ -543,8 +543,8 @@ export default function Settings() {
                 </div>
             )}
 
-            {/* OpenAI / AI Assistant (Admin Only) */}
-            {currentUser?.role === 'admin' && (
+            {/* OpenAI / AI Assistant (Admin + Marketing) */}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'marketing') && (
                 <div className="settings-section">
                     <h3>🤖 Asistente IA (CELA IA)</h3>
                     <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)', marginBottom: 12 }}>
@@ -598,7 +598,25 @@ export default function Settings() {
                 </div>
             )}
 
-            {/* Google Drive Integration (Admin Only) */}
+            {/* Google Drive Integration (Admin + Marketing) */}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'marketing') && (
+                <div className="settings-section">
+                    <h3><Cloud /> Google Drive</h3>
+                    <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-secondary)', marginBottom: 12 }}>
+                        Link a la carpeta compartida de Google Drive para el equipo.
+                    </p>
+                    <div className="settings-field">
+                        <label>URL de carpeta Google Drive</label>
+                        <input
+                            className="form-input"
+                            placeholder="https://drive.google.com/drive/folders/..."
+                            value={config.marketing?.googleDriveUrl || ''}
+                            onChange={(e) => updateConfig({ marketing: { ...(config.marketing || {}), googleDriveUrl: e.target.value } })}
+                        />
+                    </div>
+                </div>
+            )}
+
             {currentUser?.role === 'admin' && (
                 <div className="settings-section">
                     <h3><Cloud /> Respaldo en Google Drive</h3>

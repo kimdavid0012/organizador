@@ -448,7 +448,7 @@ function AppContent() {
         { id: 'conteomercaderia', icon: Boxes, label: 'Conteo Mercadería' },
         { id: 'fotos', icon: Camera, label: 'Fotos' },
         { id: 'fotosprendas', icon: Camera, label: 'Fotos Prendas' },
-        { id: 'fotoscompartidas', icon: HardDrive, label: 'Fotos Compartidas' },
+        { id: 'fotoscompartidas', icon: HardDrive, label: 'Google Drive' },
         { id: 'instagramplanner', icon: Instagram, label: t('navInstagramPlanner') },
         { id: 'tiktok', icon: Video, label: 'TikTok' },
         { id: 'mesan', icon: BarChart3, label: 'Mesan' },
