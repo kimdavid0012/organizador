@@ -253,7 +253,17 @@ export default function PedidosOnlinePage() {
         setLoadingWoo(true);
         try {
             const count = await fetchWooOrders();
-            alert(`✅ Se importaron ${count} pedidos nuevos de la web.`);
+            // Also backfill email/phone/billing for existing orders that are missing them
+            try {
+                const resyncCount = await resyncOrderSources();
+                if (resyncCount > 0) {
+                    alert(`✅ ${count} pedidos nuevos importados + ${resyncCount} pedidos existentes actualizados con email/teléfono.`);
+                } else {
+                    alert(`✅ Se importaron ${count} pedidos nuevos de la web.`);
+                }
+            } catch {
+                alert(`✅ Se importaron ${count} pedidos nuevos de la web.`);
+            }
         } catch (err) {
             alert(`❌ Error al conectar con WooCommerce: ${err.message}`);
         } finally {
