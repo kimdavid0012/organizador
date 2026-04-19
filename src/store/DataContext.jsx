@@ -2366,6 +2366,8 @@ export function DataProvider({ children }) {
 
         forceSaveNow: async () => {
             if (!stateRef.current) return false;
+            // Cancel any pending debounced save
+            if (saveTimeout.current) { clearTimeout(saveTimeout.current); saveTimeout.current = null; }
             try {
                 const { saveDataToFirestore } = await import('./storage');
                 const currentState = stampStateForPersistence(
@@ -2374,6 +2376,7 @@ export function DataProvider({ children }) {
                     'cloud'
                 );
                 console.log('[forceSaveNow] Saving to Firestore immediately...');
+                justSaved.current = true;
                 await saveDataToFirestore(currentState);
                 lastKnownCloudState.current = currentState;
                 pendingCloudSave.current = false;
