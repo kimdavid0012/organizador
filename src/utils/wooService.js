@@ -8,14 +8,21 @@ export const wooService = {
         if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
 
         const baseUrl = wooUrl.endsWith('/') ? wooUrl : `${wooUrl}/`;
-        const url = `${baseUrl}wp-json/wc/v3/orders?consumer_key=${wooKey}&consumer_secret=${wooSecret}&per_page=20`;
+        let allOrders = [];
+        let page = 1;
+        let hasMore = true;
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Error al traer pedidos de WooCommerce');
+        while (hasMore) {
+            const url = `${baseUrl}wp-json/wc/v3/orders?consumer_key=${wooKey}&consumer_secret=${wooSecret}&per_page=100&page=${page}&orderby=date&order=desc`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Error al traer pedidos de WooCommerce');
+            const orders = await response.json();
+            allOrders = [...allOrders, ...orders];
+            hasMore = orders.length === 100;
+            page++;
+            if (page > 5) break; // max 500 orders
         }
-        return await response.json();
+        return allOrders;
     },
 
     /**

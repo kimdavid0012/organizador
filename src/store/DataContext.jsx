@@ -1983,10 +1983,24 @@ export function DataProvider({ children }) {
                     if (!p.wooId) return p;
                     const wooData = byWooId.get(p.wooId);
                     if (!wooData) return p;
+                    const changes = {};
                     const newOrigen = inferWooOrderSource(wooData);
-                    if (newOrigen !== p.origen) {
+                    if (newOrigen !== p.origen) changes.origen = newOrigen;
+                    // Backfill missing billing data from WooCommerce
+                    if (!p.email && wooData.billing?.email) changes.email = wooData.billing.email;
+                    if (!p.telefono && wooData.billing?.phone) changes.telefono = wooData.billing.phone;
+                    if (!p.billing && wooData.billing) changes.billing = {
+                        first_name: wooData.billing.first_name, last_name: wooData.billing.last_name,
+                        email: wooData.billing.email || '', phone: wooData.billing.phone || '',
+                        state: wooData.billing.state || '', city: wooData.billing.city || ''
+                    };
+                    if (!p.clienteNombre && wooData.billing) {
+                        changes.clienteNombre = `${wooData.billing.first_name || ''} ${wooData.billing.last_name || ''}`.trim();
+                    }
+                    if (!p.total && wooData.total) changes.total = parseFloat(wooData.total);
+                    if (Object.keys(changes).length > 0) {
                         updatedCount++;
-                        return { ...p, origen: newOrigen };
+                        return { ...p, ...changes };
                     }
                     return p;
                 });
