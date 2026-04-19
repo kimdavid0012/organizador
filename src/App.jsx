@@ -16,6 +16,7 @@ import TalleresPage from './components/TalleresPage';
 import CortesPage from './components/CortesPage';
 import EmpleadosPage from './components/EmpleadosPage';
 import PedidosOnlinePage from './components/PedidosOnlinePage';
+import GoogleAnalyticsPage from './components/GoogleAnalyticsPage';
 import PosPage from './components/POS/PosPage';
 import MarketingSection from './components/MarketingSection.jsx';
 import PaginaWebSection from './components/PaginaWebSection.jsx';
@@ -444,6 +445,7 @@ function AppContent() {
         { id: 'empleados', icon: Users, label: 'Empleados' },
         { id: 'marketing', icon: Megaphone, label: 'Marketing' },
         { id: 'agents', icon: Zap, label: 'Agentes AI' },
+        { id: 'googleanalytics', icon: BarChart3, label: 'Google Analytics' },
         { id: 'paginaweb', icon: Globe, label: 'Página Web' },
         { id: 'conteomercaderia', icon: Boxes, label: 'Conteo Mercadería' },
         { id: 'fotos', icon: Camera, label: 'Fotos' },
@@ -672,6 +674,7 @@ function AppContent() {
                     {view === 'fotos' && <FotosPage />}
                     {view === 'fotosprendas' && <FotosPrendasPage />}
                     {view === 'fotoscompartidas' && <FotosCompartidasPage />}
+                    {view === 'googleanalytics' && <GoogleAnalyticsPage />}
                     {view === 'instagramplanner' && <InstagramPlannerPage />}
                     {view === 'tiktok' && <TikTokContentPage />}
                     {view === 'mesan' && <MesanPage />}

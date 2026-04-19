@@ -614,6 +614,16 @@ export default function Settings() {
                             onChange={(e) => updateConfig({ marketing: { ...(config.marketing || {}), googleDriveUrl: e.target.value } })}
                         />
                     </div>
+                    <div className="settings-field" style={{ marginTop: 12 }}>
+                        <label>Google Analytics Measurement ID</label>
+                        <input
+                            className="form-input"
+                            placeholder="G-XXXXXXXXXX"
+                            value={config.marketing?.googleAnalyticsId || ''}
+                            onChange={(e) => updateConfig({ marketing: { ...(config.marketing || {}), googleAnalyticsId: e.target.value } })}
+                        />
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>Encontralo en GA4 → Admin → Data Streams → Measurement ID</span>
+                    </div>
                 </div>
             )}
 

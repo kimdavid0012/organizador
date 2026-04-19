@@ -25,7 +25,7 @@ const KNOWN_USER_SECTIONS = {
 };
 
 // All available sections in the app
-const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'agents', 'paginaweb', 'conteomercaderia', 'fotos', 'fotosprendas', 'fotoscompartidas', 'instagramplanner', 'tiktok', 'mesan', 'banking', 'settings', 'informes', 'saldo', 'yuliya'];
+const ALL_SECTIONS = ['kanban', 'pos', 'articulos', 'library', 'pedidos', 'clientes', 'fabrics', 'cortes', 'cortadores', 'talleres', 'empleados', 'marketing', 'agents', 'paginaweb', 'conteomercaderia', 'fotos', 'fotosprendas', 'fotoscompartidas', 'instagramplanner', 'tiktok', 'mesan', 'banking', 'settings', 'informes', 'saldo', 'yuliya', 'googleanalytics'];
 
 // Default permissions per role (admin always gets everything)
 const DEFAULT_ROLE_PERMISSIONS = {
@@ -33,7 +33,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
     encargada: ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'informes', 'fotoscompartidas'],
     deposito: ['kanban', 'talleres', 'conteomercaderia', 'fotoscompartidas'],
     pedidos: ['kanban', 'pedidos', 'conteomercaderia', 'fotoscompartidas'],
-    marketing: ['pedidos', 'marketing', 'paginaweb', 'settings', 'agents', 'instagramplanner', 'articulos', 'fotoscompartidas'],
+    marketing: ['pedidos', 'marketing', 'paginaweb', 'settings', 'agents', 'instagramplanner', 'articulos', 'fotoscompartidas', 'googleanalytics'],
     fotos: ['fotos', 'instagramplanner', 'tiktok', 'fotoscompartidas'],
     contenido_instagram: ['instagramplanner', 'fotos', 'fotosprendas', 'library'],
     pendiente: [] // New users get no access until admin assigns a role
@@ -65,7 +65,8 @@ const SECTION_LABELS = {
     settings: 'Configuración',
     informes: 'Informes',
     saldo: 'Saldo',
-    fotosprendas: 'Fotos Prendas'
+    fotosprendas: 'Fotos Prendas',
+    googleanalytics: 'Google Analytics'
 };
 
 export { ALL_SECTIONS, SECTION_LABELS };
