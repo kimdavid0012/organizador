@@ -15,7 +15,8 @@ import {
     setPendingLocalChangesFlag,
     normalizeData,
     downloadBackupJSON,
-    mergeDataPreservingRicherSections
+    mergeDataPreservingRicherSections,
+    cleanupLocalStorageOnStartup
 } from './storage';
 import { generateId } from '../utils/helpers';
 import { wooService } from '../utils/wooService';
@@ -1479,6 +1480,10 @@ export function DataProvider({ children }) {
     const mergeProtectedState = useCallback((...sources) => (
         mergeDataPreservingRicherSections(...sources.filter(Boolean)) || DEFAULT_DATA
     ), []);
+
+    useEffect(() => {
+        cleanupLocalStorageOnStartup();
+    }, []);
 
     useEffect(() => {
         let cancelled = false;

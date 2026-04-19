@@ -70,7 +70,7 @@ export default function FotosPage() {
     }, []);
 
     useEffect(() => {
-        window.localStorage.setItem('fotos-page-search', search);
+        try { window.localStorage.setItem('fotos-page-search', search); } catch { /* ignore quota */ }
     }, [search]);
 
     useEffect(() => {

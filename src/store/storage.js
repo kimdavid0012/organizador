@@ -624,7 +624,12 @@ const saveBackupSnapshotToLocal = (data) => {
         const parsedIndex = JSON.parse(rawIndex || '[]');
         const backupKeys = Array.isArray(parsedIndex) ? parsedIndex : [];
 
-        localStorage.setItem(backupKey, JSON.stringify(buildLocalStorageSafeData(data, { keepBackupMeta: true })));
+        try {
+            localStorage.setItem(backupKey, JSON.stringify(buildLocalStorageSafeData(data, { keepBackupMeta: true })));
+        } catch {
+            // localStorage full — skip backup silently; Firestore + IndexedDB are the primary stores
+            return;
+        }
         const nextKeys = [...backupKeys, backupKey].slice(-MAX_LOCAL_BACKUPS);
 
         while (backupKeys.length >= MAX_LOCAL_BACKUPS) {
@@ -634,7 +639,9 @@ const saveBackupSnapshotToLocal = (data) => {
             }
         }
 
-        localStorage.setItem(BACKUP_INDEX_KEY, JSON.stringify(nextKeys));
+        try {
+            localStorage.setItem(BACKUP_INDEX_KEY, JSON.stringify(nextKeys));
+        } catch { /* ignore */ }
     } catch (err) {
         console.error('Error guardando snapshot local:', err);
     }
@@ -715,11 +722,14 @@ export const clearData = () => {
 };
 
 export const saveProtectedSessionSnapshot = (data) => {
+    // IndexedDB is primary — always write there first, localStorage is best-effort
+    void writeAppSnapshotToIndexedDb(APP_RECOVERY_SNAPSHOT_KEY, data);
     try {
         localStorage.setItem(RECOVERY_SESSION_KEY, JSON.stringify(buildLocalStorageSafeData(data)));
-        void writeAppSnapshotToIndexedDb(APP_RECOVERY_SNAPSHOT_KEY, data);
     } catch (err) {
-        console.error('Error guardando snapshot de recuperacion:', err);
+        if (err.name !== 'QuotaExceededError' && err.code !== 22) {
+            console.error('Error guardando snapshot de recuperacion:', err);
+        }
     }
 };
 
@@ -762,4 +772,19 @@ export const getStorageUsage = () => {
         used: bytes,
         usedMB: (bytes / (1024 * 1024)).toFixed(2)
     };
+};
+
+// Call once on app startup to free localStorage space.
+// Backups and recovery snapshots live in Firestore + IndexedDB, so localStorage copies are redundant.
+export const cleanupLocalStorageOnStartup = () => {
+    try {
+        const rawIndex = localStorage.getItem(BACKUP_INDEX_KEY);
+        const backupKeys = JSON.parse(rawIndex || '[]');
+        if (Array.isArray(backupKeys) && backupKeys.length > 0) {
+            backupKeys.forEach((key) => { try { localStorage.removeItem(key); } catch {} });
+            localStorage.removeItem(BACKUP_INDEX_KEY);
+        }
+        // Recovery snapshot is preserved in IndexedDB — remove the localStorage copy
+        localStorage.removeItem(RECOVERY_SESSION_KEY);
+    } catch {}
 };

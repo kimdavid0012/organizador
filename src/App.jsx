@@ -149,7 +149,7 @@ const getDailyQuoteForUser = (user) => {
         quoteId: next.id,
         usedIds: [...usedIds, next.id]
     };
-    localStorage.setItem(DAILY_QUOTE_STORAGE_KEY, JSON.stringify(stored));
+    try { localStorage.setItem(DAILY_QUOTE_STORAGE_KEY, JSON.stringify(stored)); } catch { /* quota — quote preference not critical */ }
 
     return {
         shouldShow: true,
