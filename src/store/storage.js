@@ -616,61 +616,29 @@ export const loadProtectedSessionSnapshotFromIndexedDb = async () => readAppSnap
 
 export const loadDataFromIndexedDb = async () => readAppSnapshotFromIndexedDb(APP_MAIN_SNAPSHOT_KEY);
 
-const saveBackupSnapshotToLocal = (data) => {
+// Removes large data blobs from localStorage that were written by older versions.
+// Big data now lives in IndexedDB only; localStorage holds only small flags.
+const removeBigLocalStorageKeys = () => {
     try {
-        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const backupKey = `${STORAGE_KEY}_backup_${stamp}`;
         const rawIndex = localStorage.getItem(BACKUP_INDEX_KEY);
-        const parsedIndex = JSON.parse(rawIndex || '[]');
-        const backupKeys = Array.isArray(parsedIndex) ? parsedIndex : [];
-
-        try {
-            localStorage.setItem(backupKey, JSON.stringify(buildLocalStorageSafeData(data, { keepBackupMeta: true })));
-        } catch {
-            // localStorage full — skip backup silently; Firestore + IndexedDB are the primary stores
-            return;
+        const backupKeys = JSON.parse(rawIndex || '[]');
+        if (Array.isArray(backupKeys)) {
+            backupKeys.forEach((key) => { try { localStorage.removeItem(key); } catch {} });
         }
-        const nextKeys = [...backupKeys, backupKey].slice(-MAX_LOCAL_BACKUPS);
-
-        while (backupKeys.length >= MAX_LOCAL_BACKUPS) {
-            const oldKey = backupKeys.shift();
-            if (oldKey && !nextKeys.includes(oldKey)) {
-                localStorage.removeItem(oldKey);
-            }
-        }
-
-        try {
-            localStorage.setItem(BACKUP_INDEX_KEY, JSON.stringify(nextKeys));
-        } catch { /* ignore */ }
-    } catch (err) {
-        console.error('Error guardando snapshot local:', err);
-    }
+        localStorage.removeItem(BACKUP_INDEX_KEY);
+    } catch {}
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    try { localStorage.removeItem(RECOVERY_SESSION_KEY); } catch {}
 };
 
+export const cleanupLargeLocalStorageKeys = removeBigLocalStorageKeys;
+
 export const saveDataToLocal = (data) => {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(buildLocalStorageSafeData(data)));
-        void writeAppSnapshotToIndexedDb(APP_MAIN_SNAPSHOT_KEY, data);
-        saveBackupSnapshotToLocal(data);
-    } catch (err) {
-        console.error('Error guardando datos locales:', err);
-        if (err.name === 'QuotaExceededError') {
-            try {
-                const rawIndex = localStorage.getItem(BACKUP_INDEX_KEY);
-                const backupKeys = JSON.parse(rawIndex || '[]');
-                if (Array.isArray(backupKeys)) {
-                    backupKeys.forEach((key) => localStorage.removeItem(key));
-                }
-                localStorage.removeItem(BACKUP_INDEX_KEY);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(buildLocalStorageSafeData(data)));
-                void writeAppSnapshotToIndexedDb(APP_MAIN_SNAPSHOT_KEY, data);
-                return;
-            } catch (retryErr) {
-                console.error('Error reintentando guardado local compacto:', retryErr);
-            }
-            alert('⚠️ Se alcanzó el límite de almacenamiento local.');
-        }
-    }
+    // Big data goes to IndexedDB only — localStorage has a 5-10 MB limit that
+    // overflows with 143+ products. Keep localStorage for small flags only.
+    void writeAppSnapshotToIndexedDb(APP_MAIN_SNAPSHOT_KEY, data);
+    // Remove any large blobs left by older app versions so localStorage stays free.
+    removeBigLocalStorageKeys();
 };
 
 // ============ DOWNLOAD / IMPORT JSON ============
@@ -722,15 +690,8 @@ export const clearData = () => {
 };
 
 export const saveProtectedSessionSnapshot = (data) => {
-    // IndexedDB is primary — always write there first, localStorage is best-effort
+    // Recovery snapshot lives in IndexedDB only (no localStorage for big data).
     void writeAppSnapshotToIndexedDb(APP_RECOVERY_SNAPSHOT_KEY, data);
-    try {
-        localStorage.setItem(RECOVERY_SESSION_KEY, JSON.stringify(buildLocalStorageSafeData(data)));
-    } catch (err) {
-        if (err.name !== 'QuotaExceededError' && err.code !== 22) {
-            console.error('Error guardando snapshot de recuperacion:', err);
-        }
-    }
 };
 
 export const loadProtectedSessionSnapshot = () => {
@@ -745,7 +706,7 @@ export const loadProtectedSessionSnapshot = () => {
 };
 
 export const clearProtectedSessionSnapshot = () => {
-    localStorage.removeItem(RECOVERY_SESSION_KEY);
+    try { localStorage.removeItem(RECOVERY_SESSION_KEY); } catch {}
 };
 
 export const setPendingLocalChangesFlag = (value) => {
@@ -765,13 +726,9 @@ export const loadPendingLocalChangesFlag = () => {
 };
 
 export const getStorageUsage = () => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { used: 0, usedMB: '0' };
-    const bytes = new Blob([raw]).size;
-    return {
-        used: bytes,
-        usedMB: (bytes / (1024 * 1024)).toFixed(2)
-    };
+    // Big data is now in IndexedDB; localStorage only holds small flags.
+    // Return 0 to avoid misleading callers who expect app-data size here.
+    return { used: 0, usedMB: '0' };
 };
 
 // Call once on app startup to free localStorage space.
