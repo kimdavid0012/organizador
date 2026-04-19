@@ -52,10 +52,10 @@ const TABS = [
   { id: 'cashflow', label: 'Cash Flow', icon: Banknote, color: '#059669', desc: 'Flujo de caja diario' },
   { id: 'monthlySummary', label: 'Resumen Mensual', icon: BarChart3, color: '#8b5cf6', desc: 'Reporte ejecutivo mensual con KPIs y forecast' },
   { id: 'master', label: '👑 CEO', icon: Crown, color: '#fbbf24', desc: 'Director General AI — decide y delega' },
-  { id: 'bugFinder', label: 'Bug Finder', icon: AlertCircle, color: '#ef4444', desc: 'Monitorea errores en el dashboard', alwaysOn: true },
-  { id: 'bugFixer', label: 'Bug Fixer', icon: Wrench, color: '#f97316', desc: 'Intenta corregir bugs automáticamente', alwaysOn: true },
-  { id: 'adQualifier', label: 'Ad Qualifier', icon: Target, color: '#8b5cf6', desc: 'Califica la calidad de campañas activas', alwaysOn: true },
-  { id: 'siteTracker', label: 'Site Tracker', icon: Globe, color: '#06b6d4', desc: 'Monitorea celavie.com.ar: SEO, velocidad, keywords', alwaysOn: true },
+  { id: 'bugFinder', label: 'Bug Finder', icon: AlertCircle, color: '#ef4444', desc: 'Busca errores en el dashboard (ejecutar manualmente)', alwaysOn: true },
+  { id: 'bugFixer', label: 'Bug Fixer', icon: Wrench, color: '#f97316', desc: 'Sugiere correcciones de bugs (ejecutar manualmente)', alwaysOn: true },
+  { id: 'adQualifier', label: 'Ad Qualifier', icon: Target, color: '#8b5cf6', desc: 'Califica campañas activas (ejecutar manualmente)', alwaysOn: true },
+  { id: 'siteTracker', label: 'Site Tracker', icon: Globe, color: '#06b6d4', desc: 'Analiza celavie.com.ar: SEO y velocidad (ejecutar manualmente)', alwaysOn: true },
 ];
 
 const DEFAULT_BRANDS = ['Zara', 'Skims', 'COS', 'Uniqlo', 'Aritzia'];
@@ -471,7 +471,7 @@ export default function AgentsHub() {
       {/* Always-On Agents Banner */}
       <div className="agents-24-7-bar" style={{ marginBottom: 16, padding: 16, borderRadius: 14, background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
-          Sub-Agentes 24/7 — Siempre Activos
+          Sub-Agentes — Ejecutar bajo demanda
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'nowrap' }}>
           {TABS.filter(t => t.alwaysOn).map(tab => {
@@ -493,7 +493,7 @@ export default function AgentsHub() {
               >
                 <tab.icon size={16} />
                 {tab.label}
-                <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 8, background: 'rgba(34,197,94,0.2)', color: '#22c55e', fontWeight: 600 }}>24/7</span>
+                <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 8, background: 'rgba(59,130,246,0.2)', color: '#60a5fa', fontWeight: 600 }}>Manual</span>
                 {hasData && <span style={{ fontSize: 10, opacity: 0.7 }}>{timeAgo(results[tab.id]?.timestamp)}</span>}
                 {!hasData && (
                   <button
@@ -532,7 +532,7 @@ export default function AgentsHub() {
             >
               <tab.icon size={16} />
               {tab.label}
-              {tab.alwaysOn && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 8, background: 'rgba(34,197,94,0.2)', color: '#22c55e', fontWeight: 600 }}>24/7</span>}
+              {tab.alwaysOn && <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 8, background: 'rgba(59,130,246,0.2)', color: '#60a5fa', fontWeight: 600 }}>Manual</span>}
               {hasData && <span style={{ fontSize: 10, opacity: 0.7 }}>{age}</span>}
             </button>
           );
