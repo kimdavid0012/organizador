@@ -378,6 +378,39 @@ export default function ConteoMercaderiaPage() {
         setFormData(EMPTY_FORM);
     };
 
+    // Add and keep article data — only clear color + quantities for fast multi-color entry
+    const handleAddAndContinue = () => {
+        const articuloVenta = normalizeCode(formData.articuloVenta);
+        const articuloFabrica = normalizeCode(formData.articuloFabrica);
+        if (!articuloVenta && !articuloFabrica) {
+            alert('Tenes que cargar el art de local o el art de fabrica.');
+            return;
+        }
+        if (!normalizeText(formData.color)) {
+            alert('Poné el color para agregar.');
+            return;
+        }
+
+        const newItem = buildConteoItem({
+            id: generateId(),
+            ...formData,
+            responsable: formData.responsable || (normalizedEmail === 'juan@celavie.com' ? 'Juan' : normalizedEmail === 'naara@celavie.com' ? 'Naara' : ''),
+            createdAt: new Date().toISOString()
+        });
+
+        saveConteos([newItem, ...conteos]);
+        // Keep article fields, clear only color + quantities
+        setFormData(prev => ({
+            ...prev,
+            color: '',
+            cantidadOriginal: '',
+            cantidadContada: '',
+            cantidadEllos: '',
+            fallado: '',
+            trajoMuestra: false
+        }));
+    };
+
     const handleDelete = (id) => {
         if (!window.confirm('Eliminar este conteo?')) return;
         saveConteos(conteos.filter((item) => item.id !== id));
@@ -581,6 +614,9 @@ export default function ConteoMercaderiaPage() {
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
                     <button className="btn btn-primary" onClick={handleAdd} disabled={!canEditInventoryRows}><Plus size={16} /> Agregar conteo</button>
+                    <button className="btn btn-secondary" onClick={handleAddAndContinue} disabled={!canEditInventoryRows} style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>
+                        <Plus size={16} /> Agregar + otro color
+                    </button>
                 </div>
                 {!canEditInventoryRows && <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)' }}>Nadia solo controla: puede marcar chequeado y comentar, sin editar cantidades ni articulos.</div>}
             </div>

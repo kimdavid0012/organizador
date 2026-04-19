@@ -12,7 +12,9 @@ export default function PedidosOnlinePage() {
 
     // CHANGE 14 — Order Source Filter
     const [filtroOrigen, setFiltroOrigen] = useState('Todos');
+    const [filtroEstado, setFiltroEstado] = useState('Todos');
     const origenOptions = ['Todos', 'Instagram', 'WhatsApp', 'Directo', 'Modatex', 'Web', 'Otro'];
+    const estadoOptions = ['Todos', 'pendiente', 'listo', 'cancelado', 'abandonado'];
 
     const origenColors = {
         Instagram: { bg: '#fce4ec', color: '#c2185b' },

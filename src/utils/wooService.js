@@ -18,6 +18,20 @@ export const wooService = {
         return await response.json();
     },
 
+    /**
+     * Fetch cancelled/failed/on-hold orders (abandoned carts & cancelled orders)
+     */
+    async fetchAbandonedOrders(config, limit = 50) {
+        const { wooUrl, wooKey, wooSecret } = config.marketing || {};
+        if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
+        const baseUrl = wooUrl.endsWith('/') ? wooUrl : `${wooUrl}/`;
+        const statuses = ['cancelled', 'failed', 'on-hold', 'pending'].join(',');
+        const url = `${baseUrl}wp-json/wc/v3/orders?consumer_key=${wooKey}&consumer_secret=${wooSecret}&per_page=${limit}&status=${statuses}&orderby=date&order=desc`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Error al traer pedidos abandonados/cancelados');
+        return await response.json();
+    },
+
     async fetchTopProducts(config) {
         const { wooUrl, wooKey, wooSecret } = config.marketing || {};
         if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
