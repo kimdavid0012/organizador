@@ -93,6 +93,29 @@ export const metaService = {
     },
 
     /**
+     * Fetch targeting geo regions from all active ad sets
+     */
+    async fetchActiveTargetingRegions(config) {
+        const adAccountId = this._getAdAccountId(config);
+        const token = this._getToken(config);
+        const url = `https://graph.facebook.com/v19.0/${adAccountId}/adsets?fields=name,status,targeting&filtering=[{"field":"effective_status","operator":"IN","value":["ACTIVE"]}]&limit=100&access_token=${token}`;
+        const result = await this._fetchJson(url, 'Error al traer targeting de ad sets');
+        const adSets = result.data || [];
+        const regions = new Set();
+        adSets.forEach(as => {
+            const geoRegions = as.targeting?.geo_locations?.regions || [];
+            geoRegions.forEach(r => regions.add(r.name || r.key));
+            const geoCities = as.targeting?.geo_locations?.cities || [];
+            geoCities.forEach(c => regions.add(c.region || c.name));
+            const geoCountries = as.targeting?.geo_locations?.countries || [];
+            if (geoCountries.includes('AR') && geoRegions.length === 0 && geoCities.length === 0) {
+                regions.add('Argentina (todo el pais)');
+            }
+        });
+        return { regions: [...regions], adSetCount: adSets.length };
+    },
+
+    /**
      * Fetch daily insights breakdown for a campaign (for chart)
      */
     async fetchCampaignDailyInsights(config, campaignId, dateRange) {

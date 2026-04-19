@@ -165,6 +165,7 @@ export default function MarketingSection() {
     const canvasRef = useRef(null);
     const prevDatePresetRef = useRef(datePreset);
     const [regionInsights, setRegionInsights] = useState(marketingCache.regionInsights || []);
+    const [targetingRegions, setTargetingRegions] = useState(marketingCache.targetingRegions || { regions: [], adSetCount: 0 });
 
     useEffect(() => {
         setAccountInsights(marketingCache.accountInsights || null);
@@ -172,6 +173,7 @@ export default function MarketingSection() {
         setAdSets(marketingCache.adSets || {});
         setAiReport(marketingCache.aiReport || '');
         setRegionInsights(marketingCache.regionInsights || []);
+        setTargetingRegions(marketingCache.targetingRegions || { regions: [], adSetCount: 0 });
     }, [marketingCache.accountInsights, marketingCache.campaigns, marketingCache.adSets, marketingCache.aiReport, marketingCache.regionInsights]);
 
     // Auto re-fetch when period changes (only if we already have data)
@@ -272,18 +274,21 @@ export default function MarketingSection() {
     const handleSync = async () => {
         setLoading(true);
         try {
-            const [insights, camps, regions] = await Promise.all([
+            const [insights, camps, regions, targeting] = await Promise.all([
                 metaService.fetchAdInsights(config, getDateRange()),
                 metaService.fetchCampaigns(config, getDateRange()),
                 metaService.fetchInsightsByRegion(config, getDateRange()).catch(() => []),
+                metaService.fetchActiveTargetingRegions(config).catch(() => ({ regions: [], adSetCount: 0 })),
             ]);
             setAccountInsights(insights);
             setCampaigns(camps);
             setRegionInsights(regions);
+            setTargetingRegions(targeting);
             persistMarketingCache({
                 accountInsights: insights,
                 campaigns: camps,
                 regionInsights: regions,
+                targetingRegions: targeting,
                 adSets,
                 aiReport,
                 lastSyncedAt: new Date().toISOString()
@@ -1173,6 +1178,21 @@ export default function MarketingSection() {
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                                 <div>
+                                    {/* Active targeting regions from ad sets */}
+                                    {targetingRegions.adSetCount > 0 && (
+                                        <div style={{ marginBottom: 16, padding: 12, borderRadius: 10, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                            <h4 style={{ margin: '0 0 8px', fontSize: 13, color: '#3b82f6' }}>🎯 Regiones Targeteadas ({targetingRegions.adSetCount} ad sets activos)</h4>
+                                            {targetingRegions.regions.length > 0 ? (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                                    {targetingRegions.regions.map(r => (
+                                                        <span key={r} style={{ padding: '3px 10px', borderRadius: 12, background: 'rgba(59,130,246,0.15)', color: '#60a5fa', fontSize: 11, fontWeight: 600 }}>{r}</span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Targeting: Todo Argentina (sin regiones específicas)</span>
+                                            )}
+                                        </div>
+                                    )}
                                     <h4 style={{ margin: '0 0 10px', fontSize: 14 }}>📍 Rendimiento por Región (Meta Ads)</h4>
                                     {regionsSorted.length > 0 ? (
                                         <div style={{ display: 'grid', gap: 4 }}>
