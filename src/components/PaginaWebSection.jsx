@@ -16,6 +16,31 @@ export default function PaginaWebSection() {
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState('itemsSold'); // itemsSold, netRevenue, productName, ordersCount
     const [sortDir, setSortDir] = useState('desc');
+    const [datePreset, setDatePreset] = useState('last_30d');
+    const [customAfter, setCustomAfter] = useState('');
+    const [customBefore, setCustomBefore] = useState('');
+
+    const getDateRange = () => {
+        if (datePreset === 'custom' && customAfter) return { after: customAfter, before: customBefore || new Date().toISOString().slice(0, 10) };
+        const now = new Date();
+        const daysMap = { today: 0, last_7d: 7, last_14d: 14, last_30d: 30, last_90d: 90 };
+        const days = daysMap[datePreset] ?? 30;
+        if (datePreset === 'today') {
+            return { after: now.toISOString().slice(0, 10), before: now.toISOString().slice(0, 10) };
+        }
+        if (datePreset === 'this_month') {
+            return { after: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01` };
+        }
+        if (datePreset === 'last_month') {
+            const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lmEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+            return { after: lm.toISOString().slice(0, 10), before: lmEnd.toISOString().slice(0, 10) };
+        }
+        const after = new Date(now);
+        after.setDate(after.getDate() - days);
+        return { after: after.toISOString().slice(0, 10) };
+    };
+    const dateLabel = { today: 'Hoy', last_7d: '7 días', last_14d: '14 días', last_30d: '30 días', last_90d: '90 días', this_month: 'Este mes', last_month: 'Mes pasado', custom: 'Personalizado' }[datePreset] || '30 días';
 
     // Detail view state
     const [selectedProduct, setSelectedProduct] = useState(null);
@@ -40,7 +65,7 @@ export default function PaginaWebSection() {
     const handleLoadAll = async () => {
         setLoading(true);
         try {
-            const raw = await wooService.fetchAllProductsAnalytics(config);
+            const raw = await wooService.fetchAllProductsAnalytics(config, getDateRange());
             const mapped = raw.map(tp => ({
                 productId: tp.product_id,
                 productName: tp.extended_info?.name || 'Sin Nombre',
@@ -339,18 +364,35 @@ export default function PaginaWebSection() {
                         <Globe className="text-accent" /> Página Web
                     </h2>
                     <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
-                        Analíticas completas de ventas de tu tienda WooCommerce.
+                        Analíticas de ventas de tu tienda WooCommerce — Período: <strong>{dateLabel}</strong>
+                        {paginaWebCache.lastLoadedAt && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>· Última carga: {new Date(paginaWebCache.lastLoadedAt).toLocaleString('es-AR')}</span>}
                     </p>
                 </div>
                 {marketing.wooUrl && (
-                    <button
-                        className="btn btn-primary"
-                        onClick={handleLoadAll}
-                        disabled={loading}
-                    >
-                        <RefreshCw size={16} className={loading ? 'spin' : ''} />
-                        {loading ? 'Cargando...' : allProducts ? '🔄 Actualizar' : '📊 Cargar Analíticas'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>📅 Período:</span>
+                        {['today', 'last_7d', 'last_14d', 'last_30d', 'last_90d', 'this_month', 'last_month', 'custom'].map(p => (
+                            <button key={p} onClick={() => { setDatePreset(p); }}
+                                style={{ padding: '4px 10px', fontSize: 11, borderRadius: 6, border: datePreset === p ? '1px solid var(--accent)' : '1px solid var(--border-color)', background: datePreset === p ? 'rgba(99,102,241,0.15)' : 'transparent', color: datePreset === p ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: datePreset === p ? 600 : 400 }}>
+                                {{ today: 'Hoy', last_7d: '7d', last_14d: '14d', last_30d: '30d', last_90d: '90d', this_month: 'Este mes', last_month: 'Mes pasado', custom: 'Custom' }[p]}
+                            </button>
+                        ))}
+                        {datePreset === 'custom' && (
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                <input type="date" value={customAfter} onChange={e => setCustomAfter(e.target.value)} style={{ padding: '3px 6px', fontSize: 11, borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }} />
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>→</span>
+                                <input type="date" value={customBefore} onChange={e => setCustomBefore(e.target.value)} style={{ padding: '3px 6px', fontSize: 11, borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }} />
+                            </div>
+                        )}
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleLoadAll}
+                            disabled={loading}
+                        >
+                            <RefreshCw size={16} className={loading ? 'spin' : ''} />
+                            {loading ? 'Cargando...' : allProducts ? '🔄 Actualizar' : '📊 Cargar Analíticas'}
+                        </button>
+                    </div>
                 )}
             </div>
 

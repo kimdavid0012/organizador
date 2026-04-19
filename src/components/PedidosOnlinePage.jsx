@@ -37,9 +37,11 @@ export default function PedidosOnlinePage() {
     }, [pedidos]);
 
     const pedidosFiltrados = useMemo(() => {
-        if (filtroOrigen === 'Todos') return pedidosConOrigen;
-        return pedidosConOrigen.filter(p => p.origen === filtroOrigen);
-    }, [pedidosConOrigen, filtroOrigen]);
+        let list = pedidosConOrigen;
+        if (filtroOrigen !== 'Todos') list = list.filter(p => p.origen === filtroOrigen);
+        if (filtroEstado !== 'Todos') list = list.filter(p => p.estado === filtroEstado);
+        return list;
+    }, [pedidosConOrigen, filtroOrigen, filtroEstado]);
 
     // CHANGE 15 — Payment Verification
     const [comprobanteModalImg, setComprobanteModalImg] = useState(null);
@@ -315,6 +317,50 @@ export default function PedidosOnlinePage() {
                         <RefreshCw size={16} className={loadingWoo ? 'spin' : ''} />
                         {loadingWoo ? 'Sincronizando...' : '🔄 Traer de la Web'}
                     </button>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={async () => {
+                            try {
+                                setLoadingWoo(true);
+                                const abandoned = await wooService.fetchAbandonedOrders(state.config);
+                                const mapped = abandoned.map(o => ({
+                                    id: 'aband-' + o.id,
+                                    wooId: o.id,
+                                    customer_id: o.customer_id || '',
+                                    cliente: `${o.billing?.first_name || ''} ${o.billing?.last_name || ''}`.trim() || 'Guest',
+                                    clienteNombre: `${o.billing?.first_name || ''} ${o.billing?.last_name || ''}`.trim(),
+                                    email: o.billing?.email || '',
+                                    telefono: o.billing?.phone || '',
+                                    billing: o.billing || {},
+                                    total: parseFloat(o.total || 0),
+                                    monto: parseFloat(o.total || 0),
+                                    metodoPago: o.payment_method_title || 'N/A',
+                                    estado: o.status === 'cancelled' ? 'cancelado' : (o.status === 'failed' ? 'cancelado' : 'abandonado'),
+                                    fecha: o.date_created,
+                                    origen: 'Web',
+                                    items: (o.line_items || []).map(li => ({
+                                        detalle: li.name, cantidad: li.quantity, precio: parseFloat(li.price || 0),
+                                    }))
+                                }));
+                                const existing = state.config?.pedidosOnline || [];
+                                const newOnes = mapped.filter(m => !existing.some(e => e.wooId === m.wooId));
+                                if (newOnes.length > 0) {
+                                    updateConfig({ pedidosOnline: [...newOnes, ...existing] });
+                                    alert(`✅ ${newOnes.length} pedidos cancelados/abandonados importados.`);
+                                } else {
+                                    alert('No hay pedidos abandonados nuevos.');
+                                }
+                            } catch (err) {
+                                alert(`❌ Error: ${err.message}`);
+                            } finally {
+                                setLoadingWoo(false);
+                            }
+                        }}
+                        disabled={loadingWoo}
+                        style={{ gap: 8, background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}
+                    >
+                        🛒 Carritos Abandonados
+                    </button>
                     {user.role === 'admin' && (
                         <button
                             className="btn btn-secondary"
@@ -348,6 +394,27 @@ export default function PedidosOnlinePage() {
                         {opt !== 'Todos' && (
                             <span className="origen-filter-count">
                                 {pedidosConOrigen.filter(p => p.origen === opt).length}
+                            </span>
+                        )}
+                    </button>
+                ))}
+            </div>
+
+            {/* Filtro por Estado */}
+            <div className="origen-filter-bar" style={{ marginTop: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginRight: 4 }}>Estado:</span>
+                {estadoOptions.map(opt => (
+                    <button
+                        key={opt}
+                        type="button"
+                        className={`origen-filter-btn ${filtroEstado === opt ? 'active' : ''}`}
+                        onClick={() => setFiltroEstado(opt)}
+                        style={opt === 'cancelado' || opt === 'abandonado' ? { borderColor: 'rgba(239,68,68,0.3)', color: filtroEstado === opt ? '#fff' : '#ef4444', background: filtroEstado === opt ? '#ef4444' : 'transparent' } : {}}
+                    >
+                        {opt === 'pendiente' ? '⏳ Pendiente' : opt === 'listo' ? '✅ Listo' : opt === 'cancelado' ? '❌ Cancelado' : opt === 'abandonado' ? '🛒 Abandonado' : opt}
+                        {opt !== 'Todos' && (
+                            <span className="origen-filter-count">
+                                {pedidosConOrigen.filter(p => p.estado === opt).length}
                             </span>
                         )}
                     </button>

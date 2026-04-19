@@ -50,12 +50,15 @@ export const wooService = {
     /**
      * Fetch ALL products analytics (for Página Web section)
      */
-    async fetchAllProductsAnalytics(config) {
+    async fetchAllProductsAnalytics(config, dateRange) {
         const { wooUrl, wooKey, wooSecret } = config.marketing || {};
         if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
 
         const baseUrl = wooUrl.endsWith('/') ? wooUrl : `${wooUrl}/`;
-        const url = `${baseUrl}wp-json/wc-analytics/reports/products?orderby=items_sold&order=desc&per_page=100&extended_info=true&consumer_key=${wooKey}&consumer_secret=${wooSecret}`;
+        let dateParams = '';
+        if (dateRange?.after) dateParams += `&after=${dateRange.after}T00:00:00`;
+        if (dateRange?.before) dateParams += `&before=${dateRange.before}T23:59:59`;
+        const url = `${baseUrl}wp-json/wc-analytics/reports/products?orderby=items_sold&order=desc&per_page=100&extended_info=true&consumer_key=${wooKey}&consumer_secret=${wooSecret}${dateParams}`;
 
         const response = await fetch(url);
         if (!response.ok) {

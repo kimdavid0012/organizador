@@ -1088,8 +1088,18 @@ export default function MarketingSection() {
                 const origenCount = {};
                 SOURCES.forEach(s => { origenCount[s] = 0; });
                 pedidosOnline.forEach(p => {
-                    // If no origin set but has wooId, it's a web order
-                    const src = p.origen || (p.wooId ? 'Web' : 'Otro');
+                    // Infer origin from available data — same logic as PedidosOnlinePage
+                    let src = p.origen || '';
+                    if (!src || src === 'Otro') {
+                        if (p.wooId) src = 'Web';
+                        else if (p.metodoPago && !p.canal) src = 'Web';
+                        else src = 'Otro';
+                    }
+                    // Normalize variations
+                    if (src === 'Directo' || src === 'directo' || src === 'Web' || src === 'web') src = 'Web';
+                    if (src === 'instagram' || src === 'Instagram' || src === 'ig') src = 'Instagram';
+                    if (src === 'whatsapp' || src === 'WhatsApp' || src === 'wa') src = 'WhatsApp';
+                    if (!SOURCES.includes(src)) src = 'Otro';
                     origenCount[src] = (origenCount[src] || 0) + 1;
                 });
                 const maxCount = Math.max(...Object.values(origenCount), 1);
