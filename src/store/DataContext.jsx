@@ -2284,6 +2284,59 @@ export function DataProvider({ children }) {
             }
         },
 
+        // Merge duplicate client "Antonela yanina Pineiro" → "Antonela Yanina Pineiro"
+        runClientMerge_AntoielaYanina: () => {
+            const currentConfig = stateRef.current.config;
+            if (currentConfig._clientMerge_AntoielaYanina_2026April) return;
+
+            const normalize = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+            const canonical = 'antonela yanina pineiro';
+            const clientes = currentConfig.clientes || [];
+            const matching = clientes.filter(c => normalize(c.nombre) === canonical);
+
+            if (matching.length <= 1) {
+                dispatch({ type: 'UPDATE_CONFIG', payload: { _clientMerge_AntoielaYanina_2026April: true } });
+                console.log('Client merge: no duplicate found');
+                return;
+            }
+
+            // Keep the best-capitalized entry (prefer title-case), remove others
+            const keep = matching.find(c => c.nombre === 'Antonela Yanina Pineiro') || matching[0];
+            const removeIds = matching.filter(c => c.id !== keep.id).map(c => c.id);
+            const merged = clientes.filter(c => !removeIds.includes(c.id));
+
+            dispatch({ type: 'UPDATE_CONFIG', payload: { clientes: merged, _clientMerge_AntoielaYanina_2026April: true } });
+            console.log(`✅ Client merge: removed ${removeIds.length} duplicate(s) of Antonela Yanina Pineiro`);
+        },
+
+        // Rename taller "Jose Luuis" → "Jose Luis" everywhere
+        runTallerRename_JoseLuis: () => {
+            const currentConfig = stateRef.current.config;
+            if (currentConfig._tallerRename_JoseLuis_2026April) return;
+
+            const BAD = 'Jose Luuis';
+            const GOOD = 'Jose Luis';
+            const fix = (s) => (s === BAD ? GOOD : s);
+
+            const talleres = (currentConfig.talleres || []).map(t => fix(t));
+
+            const cortes = (currentConfig.cortes || []).map(c => ({
+                ...c,
+                moldesData: (c.moldesData || []).map(m => ({ ...m, taller: fix(m.taller) }))
+            }));
+
+            const planillasCortes = (currentConfig.planillasCortes || []).map(p => ({
+                ...p,
+                rows: (p.rows || []).map(r => ({ ...r, taller: fix(r.taller) }))
+            }));
+
+            dispatch({
+                type: 'UPDATE_CONFIG',
+                payload: { talleres, cortes, planillasCortes, _tallerRename_JoseLuis_2026April: true }
+            });
+            console.log('✅ Taller rename: "Jose Luuis" → "Jose Luis"');
+        },
+
         fetchWooProducts: async () => {
             const currentConfig = stateRef.current.config;
             try {

@@ -275,7 +275,7 @@ class ErrorBoundary extends React.Component {
 }
 
 function AppContent() {
-    const { state, addMolde, addTarea, syncStatus, updateConfig, runPriceMigration2026April, runPriceMigrationL2Fix, runPriceMigrationL2Force, runPriceMigrationL2Uniform, runPriceMigrationL2Fix2, forceSaveNow } = useData();
+    const { state, addMolde, addTarea, syncStatus, updateConfig, runPriceMigration2026April, runPriceMigrationL2Fix, runPriceMigrationL2Force, runPriceMigrationL2Uniform, runPriceMigrationL2Fix2, runClientMerge_AntoielaYanina, runTallerRename_JoseLuis, forceSaveNow } = useData();
     const [saveStatus, setSaveStatus] = React.useState('idle'); // idle | saving | saved | error
     const { moldes, telas, config } = state;
     const { t, lang, changeLang, LANGUAGE_LABELS } = useI18n();
@@ -345,6 +345,20 @@ function AppContent() {
             runPriceMigrationL2Fix2();
         }
     }, [state?.config?.posProductos?.length]);
+
+    // Merge duplicate client "Antonela yanina Pineiro"
+    useEffect(() => {
+        if (state?.config?.clientes && !state?.config?._clientMerge_AntoielaYanina_2026April) {
+            runClientMerge_AntoielaYanina();
+        }
+    }, [state?.config?.clientes?.length]);
+
+    // Rename taller "Jose Luuis" → "Jose Luis"
+    useEffect(() => {
+        if (state?.config && !state?.config?._tallerRename_JoseLuis_2026April) {
+            runTallerRename_JoseLuis();
+        }
+    }, [state?.config?.talleres?.length, state?.config?.cortes?.length]);
 
     useEffect(() => {
         if (state?.config?.idioma === lang) return;

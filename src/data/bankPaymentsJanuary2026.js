@@ -181,6 +181,7 @@ const mercadoPagoTotal = parsedEntries
 
 export const JANUARY_2026_BANK_PAYMENTS_IMPORT = {
     batchId: IMPORT_BATCH_ID,
+    monthLabel: 'Enero 2026',
     sourceName: 'Libro1.xlsx - Enero 2026',
     entries: parsedEntries,
     totals: {
