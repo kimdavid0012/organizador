@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, RefreshCw, Save } from 'lucide-react';
+import { Plus, Trash2, Save } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../store/firebase';
 import './YuliyaPage.css';
@@ -13,9 +13,11 @@ const DEFAULT_ROW = () => ({
     descripcion: '',
     tela: '',
     cotizacion: 1500,
+    costoReal: 0,
     tallerPrueba: 0,
     porcGanancia: 0.5,
     precioLuis: 0,
+    precioReal: 0,
     precioLocal: 0,
     precioChloe: 0,
     talleres: '',
@@ -25,6 +27,7 @@ const DEFAULT_ROW = () => ({
     fechaCorte: '',
     precioTelaXMetro: 0,
     kilajeMetroTotal: 0,
+    porcTela: 0,
     rollos: 0,
     accesorios: 0,
     accesorios2: 0,
@@ -38,32 +41,37 @@ const calcCostoReal = (row) => {
     return costoTela + Number(tallerPrueba) + (Number(accesorios) + Number(accesorios2)) / qty;
 };
 
+// If the user overrode costoReal, downstream formulas use that value.
+const getEffectiveCostoReal = (row) => Number(row.costoReal || 0) || calcCostoReal(row);
+
 const calcPrecioReal = (row) => {
-    const costo = calcCostoReal(row);
+    const costo = getEffectiveCostoReal(row);
     const ganancia = Number(row.porcGanancia);
     if (ganancia >= 1) return costo;
     return costo / (1 - ganancia);
 };
 
 const calcPorcTela = (row) => {
-    const costoReal = calcCostoReal(row);
+    const costoReal = getEffectiveCostoReal(row);
     if (!costoReal) return 0;
     const qty = Number(row.cantidadPrenda) || 1;
     const costoTela = (Number(row.precioTelaXMetro) * Number(row.kilajeMetroTotal) * Number(row.cotizacion || 1500)) / qty;
     return costoTela / costoReal;
 };
 
+// col.calc = auto-fill formula; when row[col.key] is 0/empty, the formula value is shown in blue.
+// User can click and type to override — the stored value then takes over.
 const COLUMNS = [
     { key: 'articuloFabrica', label: 'Art. Fábrica', type: 'text', sticky: true, width: 110 },
     { key: 'articuloLocal', label: 'Art. Local', type: 'text', sticky: true, width: 90 },
     { key: 'descripcion', label: 'Descripción', type: 'text', sticky: true, width: 160 },
     { key: 'tela', label: 'Tela', type: 'text', width: 120 },
     { key: 'cotizacion', label: 'Cotización', type: 'number', width: 90 },
-    { key: '_costoReal', label: 'Costo Real', type: 'formula', calc: calcCostoReal, width: 100 },
+    { key: 'costoReal', label: 'Costo Real', type: 'number', calc: calcCostoReal, width: 100 },
     { key: 'tallerPrueba', label: 'Taller Prueba', type: 'number', width: 105 },
     { key: 'porcGanancia', label: '% Ganancia', type: 'decimal', width: 90 },
     { key: 'precioLuis', label: 'Precio Luis', type: 'number', width: 95 },
-    { key: '_precioReal', label: 'Precio Real', type: 'formula', calc: calcPrecioReal, width: 100 },
+    { key: 'precioReal', label: 'Precio Real', type: 'number', calc: calcPrecioReal, width: 100 },
     { key: 'precioLocal', label: 'Precio Local', type: 'number', width: 100 },
     { key: 'precioChloe', label: 'Precio Chloe', type: 'number', width: 100 },
     { key: 'talleres', label: 'Talleres', type: 'text', width: 120 },
@@ -73,7 +81,7 @@ const COLUMNS = [
     { key: 'fechaCorte', label: 'Fecha Corte', type: 'date', width: 120 },
     { key: 'precioTelaXMetro', label: 'Tela $/m·kg', type: 'number', width: 100 },
     { key: 'kilajeMetroTotal', label: 'Kilaje/Metro', type: 'number', width: 100 },
-    { key: '_porcTela', label: '% Tela', type: 'formula', calc: calcPorcTela, width: 80 },
+    { key: 'porcTela', label: '% Tela', type: 'decimal', calc: calcPorcTela, width: 80 },
     { key: 'rollos', label: 'Rollos', type: 'number', width: 75 },
     { key: 'accesorios', label: 'Accesorios 1', type: 'number', width: 100 },
     { key: 'accesorios2', label: 'Accesorios 2', type: 'number', width: 100 },
@@ -86,8 +94,15 @@ const fmt = (n, isPercent = false) => {
     return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(num);
 };
 
+// Returns the value to display for a cell: stored value if the user overrode it, else formula.
+const getDisplayVal = (row, col) => {
+    const stored = Number(row[col.key] || 0);
+    return col.calc && stored === 0 ? col.calc(row) : (col.type === 'text' || col.type === 'date' ? row[col.key] : stored);
+};
+
+const isUsingFormula = (row, col) => Boolean(col.calc) && Number(row[col.key] || 0) === 0;
+
 function CellEditor({ value, type, onSave, onCancel }) {
-    // For 'decimal' type (percentages), show as whole number (50 instead of 0.5)
     const initialVal = type === 'decimal' ? ((Number(value) || 0) * 100).toFixed(0) : (value ?? '');
     const [val, setVal] = useState(initialVal);
     const inputRef = useRef(null);
@@ -97,7 +112,7 @@ function CellEditor({ value, type, onSave, onCancel }) {
     const commit = () => {
         let parsed = val;
         if (type === 'number') parsed = Number(val) || 0;
-        if (type === 'decimal') parsed = (parseFloat(val) || 0) / 100; // Convert 50 → 0.5
+        if (type === 'decimal') parsed = (parseFloat(val) || 0) / 100;
         onSave(parsed);
     };
 
@@ -135,8 +150,7 @@ export default function YuliyaPage() {
             try {
                 const snap = await getDoc(doc(db, FIRESTORE_DOC.col, FIRESTORE_DOC.id));
                 if (snap.exists()) {
-                    const data = snap.data();
-                    setRows(data.rows || []);
+                    setRows(snap.data().rows || []);
                 } else {
                     setRows([DEFAULT_ROW()]);
                 }
@@ -203,6 +217,8 @@ export default function YuliyaPage() {
     };
 
     const totalCantidad = rows.reduce((s, r) => s + (Number(r.cantidadPrenda) || 0), 0);
+    const avgCostoReal = rows.length ? rows.reduce((s, r) => s + getEffectiveCostoReal(r), 0) / rows.length : 0;
+    const avgPrecioReal = rows.length ? rows.reduce((s, r) => s + (Number(r.precioReal || 0) || calcPrecioReal(r)), 0) / rows.length : 0;
 
     if (loading) {
         return (
@@ -231,7 +247,7 @@ export default function YuliyaPage() {
                 </div>
                 <p className="yuliya-subtitle">
                     {rows.length} filas · Total prendas: <strong>{fmt(totalCantidad)}</strong> ·
-                    Columnas en azul son calculadas automáticamente.
+                    Celdas en azul se calculan automáticamente — hacé clic para editar y fijar el valor.
                 </p>
             </div>
 
@@ -243,7 +259,7 @@ export default function YuliyaPage() {
                             {COLUMNS.map((col, ci) => (
                                 <th
                                     key={col.key}
-                                    className={`yuliya-th${col.sticky ? ' sticky' : ''}${col.type === 'formula' ? ' formula-col' : ''}`}
+                                    className={`yuliya-th${col.sticky ? ' sticky' : ''}${col.calc ? ' formula-col' : ''}`}
                                     style={{ minWidth: col.width, left: col.sticky ? getStickyLeft(ci) : undefined }}
                                 >
                                     {col.label}
@@ -265,30 +281,24 @@ export default function YuliyaPage() {
                                 </td>
                                 {COLUMNS.map((col, ci) => {
                                     const isEditing = editingCell?.rowIdx === rowIdx && editingCell?.colKey === col.key;
-
-                                    if (col.type === 'formula') {
-                                        const val = col.calc(row);
-                                        return (
-                                            <td
-                                                key={col.key}
-                                                className="yuliya-td formula-cell"
-                                                style={{ minWidth: col.width }}
-                                            >
-                                                {col.key === '_porcTela' ? fmt(val, true) : fmt(val)}
-                                            </td>
-                                        );
-                                    }
+                                    const formulaFallback = isUsingFormula(row, col);
+                                    const displayVal = getDisplayVal(row, col);
+                                    // When opening the editor, pre-populate with the effective value
+                                    // so the user sees the calculated number and can adjust it.
+                                    const editInitVal = col.calc
+                                        ? (Number(row[col.key] || 0) || col.calc(row))
+                                        : row[col.key];
 
                                     return (
                                         <td
                                             key={col.key}
-                                            className={`yuliya-td editable-cell${col.sticky ? ' sticky' : ''}`}
+                                            className={`yuliya-td editable-cell${col.sticky ? ' sticky' : ''}${formulaFallback ? ' formula-cell' : ''}`}
                                             style={{ minWidth: col.width, left: col.sticky ? getStickyLeft(ci) : undefined }}
                                             onClick={() => setEditingCell({ rowIdx, colKey: col.key })}
                                         >
                                             {isEditing ? (
                                                 <CellEditor
-                                                    value={row[col.key]}
+                                                    value={editInitVal}
                                                     type={col.type}
                                                     onSave={(v) => {
                                                         updateRow(rowIdx, col.key, v);
@@ -299,10 +309,10 @@ export default function YuliyaPage() {
                                             ) : (
                                                 <span className="yuliya-cell-display">
                                                     {col.type === 'decimal'
-                                                        ? ((Number(row[col.key]) || 0) * 100).toFixed(0) + '%'
+                                                        ? ((Number(displayVal) || 0) * 100).toFixed(1) + '%'
                                                         : col.type === 'number'
-                                                            ? fmt(row[col.key])
-                                                            : (row[col.key] || <span className="yuliya-empty">—</span>)}
+                                                            ? fmt(displayVal)
+                                                            : (displayVal || <span className="yuliya-empty">—</span>)}
                                                 </span>
                                             )}
                                         </td>
@@ -317,8 +327,8 @@ export default function YuliyaPage() {
                             {COLUMNS.map((col) => (
                                 <td key={col.key} className="yuliya-td yuliya-total-cell">
                                     {col.key === 'cantidadPrenda' ? <strong>{fmt(totalCantidad)}</strong> :
-                                     col.key === '_costoReal' ? <strong>{fmt(rows.reduce((s, r) => s + calcCostoReal(r), 0) / (rows.length || 1))}</strong> :
-                                     col.key === '_precioReal' ? <strong>{fmt(rows.reduce((s, r) => s + calcPrecioReal(r), 0) / (rows.length || 1))}</strong> :
+                                     col.key === 'costoReal' ? <strong>{fmt(avgCostoReal)}</strong> :
+                                     col.key === 'precioReal' ? <strong>{fmt(avgPrecioReal)}</strong> :
                                      null}
                                 </td>
                             ))}
@@ -338,8 +348,7 @@ export default function YuliyaPage() {
 
 // Sticky left offsets for first 3 columns (action col = 36px, then col widths)
 function getStickyLeft(columnIndex) {
-    // columnIndex is the index within COLUMNS (0-based, not counting action col)
     const ACTION_W = 36;
-    const offsets = [0, 110, 200]; // cumulative left for sticky cols 0,1,2
+    const offsets = [0, 110, 200];
     return ACTION_W + (offsets[columnIndex] ?? 0) + 'px';
 }
