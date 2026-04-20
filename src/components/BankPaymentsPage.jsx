@@ -262,7 +262,8 @@ export default function BankPaymentsPage() {
                 byMonth.set(monthKey, {
                     ...batch,
                     _batchIds: [batch.batchId],
-                    monthLabel: batch.monthLabel || monthKey,
+                    _monthKey: monthKey,
+                    monthLabel: batch.monthLabel || getMonthLabel(monthKey),
                     importedCount: batch.importedCount || batch.totals.count,
                     totals: { ...batch.totals }
                 });
@@ -282,11 +283,10 @@ export default function BankPaymentsPage() {
             const monthKey = getMonthKey(normDate);
             if (!monthKey || monthKey.length < 7) return;
 
-            // De-duplicate entries by id when present
-            if (entry.id) {
-                if (seen.has(entry.id)) return;
-                seen.add(entry.id);
-            }
+            // De-duplicate by id, then by content fingerprint as fallback
+            const fingerprint = entry.id || `${normDate}|${entry.metodo}|${normalizeComparable(entry.cliente || '')}|${Number(entry.monto || 0)}`;
+            if (seen.has(fingerprint)) return;
+            seen.add(fingerprint);
 
             if (!grouped.has(monthKey)) grouped.set(monthKey, { monthKey, entries: [], byDay: new Map() });
             const monthGroup = grouped.get(monthKey);
@@ -408,10 +408,12 @@ export default function BankPaymentsPage() {
         });
     };
 
+    const makeEntryKey = (entry) => `${entry.fecha}|${entry.metodo}|${normalizeComparable(entry.cliente || '')}|${Number(entry.monto || 0)}`;
+
     const importBatch = (batch) => {
         if (!batch || entries.some((entry) => entry.batchId === batch.batchId)) return;
-        const existingKeys = new Set(entries.map((entry) => `${entry.fecha}|${entry.metodo}|${entry.cliente || ''}|${Number(entry.monto || 0)}`));
-        const fresh = batch.entries.filter((entry) => !existingKeys.has(`${entry.fecha}|${entry.metodo}|${entry.cliente || ''}|${Number(entry.monto || 0)}`));
+        const existingKeys = new Set(entries.map(makeEntryKey));
+        const fresh = batch.entries.filter((entry) => !existingKeys.has(makeEntryKey(entry)));
         if (!fresh.length) return;
         syncBankEntries([...fresh, ...entries]);
     };
@@ -422,8 +424,8 @@ export default function BankPaymentsPage() {
         setXlsxStatus({ loading: true, message: 'Procesando archivo...' });
         try {
             const batch = await parseExcelFile(file);
-            const existingKeys = new Set(entries.map((entry) => `${entry.fecha}|${entry.metodo}|${entry.cliente || ''}|${Number(entry.monto || 0)}`));
-            const fresh = batch.entries.filter((entry) => !existingKeys.has(`${entry.fecha}|${entry.metodo}|${entry.cliente || ''}|${Number(entry.monto || 0)}`));
+            const existingKeys = new Set(entries.map(makeEntryKey));
+            const fresh = batch.entries.filter((entry) => !existingKeys.has(makeEntryKey(entry)));
             if (!fresh.length) {
                 setXlsxStatus({ error: true, message: 'Todos los movimientos ya estaban cargados.' });
                 return;
@@ -474,18 +476,31 @@ export default function BankPaymentsPage() {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
                         {allBatchStatuses.map((batch) => (
-                            <div key={batch.batchId} style={{ padding: 14, borderRadius: 16, background: 'rgba(255,255,255,0.03)', display: 'grid', gap: 10 }}>
+                            <div key={batch._monthKey || batch.batchId} style={{ padding: 14, borderRadius: 16, background: 'rgba(255,255,255,0.03)', display: 'grid', gap: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}>
                                     <div>
                                         <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 18 }}>{batch.monthLabel || batch.sourceName?.replace(/^.*? - /, '')}</div>
                                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{batch.totals.count} movimientos</div>
                                     </div>
                                     <button className="btn btn-secondary" onClick={() => {
-                                        if (batch._batchIds) batch._batchIds.forEach(bid => {
-                                            const b = [...IMPORT_BATCHES, ...xlsxBatchStatuses].find(x => x.batchId === bid);
-                                            if (b) importBatch(b);
-                                        });
-                                        else importBatch(batch);
+                                        if (batch._batchIds) {
+                                            const allBatches = [...IMPORT_BATCHES, ...xlsxBatchStatuses];
+                                            const existingKeys = new Set(entries.map(makeEntryKey));
+                                            let fresh = [];
+                                            batch._batchIds.forEach(bid => {
+                                                const b = allBatches.find(x => x.batchId === bid);
+                                                if (!b || entries.some(e => e.batchId === bid)) return;
+                                                (b.entries || []).forEach(e => {
+                                                    if (!existingKeys.has(makeEntryKey(e))) {
+                                                        existingKeys.add(makeEntryKey(e));
+                                                        fresh.push(e);
+                                                    }
+                                                });
+                                            });
+                                            if (fresh.length) syncBankEntries([...fresh, ...entries]);
+                                        } else {
+                                            importBatch(batch);
+                                        }
                                     }} disabled={batch.alreadyLoaded}>
                                         <Download size={16} /> {batch.alreadyLoaded ? 'Cargado' : 'Importar'}
                                     </button>
