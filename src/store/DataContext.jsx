@@ -1568,6 +1568,65 @@ export function DataProvider({ children }) {
         void seedYuliya();
     }, []);
 
+    // One-time migration: deduplicate bankPayments in Firestore and remove hardcoded-batch
+    // entries when an xlsx batch for the same month is already present.
+    useEffect(() => {
+        const FLAG = '_bankPaymentsDeduped_v2';
+        if (localStorage.getItem(FLAG)) return;
+
+        const HARDCODED_BATCH_IDS = new Set(['enero-2026-libro1', 'febrero-2026-libro1', 'marzo-2026-libro1']);
+        const nc = (v) => (v || '').toString().toUpperCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '');
+        const fingerprint = (e) => `${(e.fecha || '').slice(0, 10)}|${e.metodo}|${nc(e.cliente)}|${Number(e.monto || 0)}`;
+
+        const runCleanup = async () => {
+            try {
+                const ref = doc(db, 'app-data', 'main');
+                const snap = await getDoc(ref);
+                if (!snap.exists()) { localStorage.setItem(FLAG, '1'); return; }
+
+                const raw = snap.data()?.config?.bankPayments;
+                if (!Array.isArray(raw) || raw.length === 0) { localStorage.setItem(FLAG, '1'); return; }
+
+                // Detect months that have xlsx batch entries
+                const xlsxMonths = new Set(
+                    raw
+                        .filter((e) => e.batchId?.startsWith('xlsx-'))
+                        .map((e) => (e.fecha || '').slice(0, 7))
+                        .filter(Boolean)
+                );
+
+                // Deduplicate: skip hardcoded-batch entries whose month already has xlsx data,
+                // then deduplicate remaining entries by content fingerprint.
+                const seen = new Set();
+                const cleaned = raw.filter((e) => {
+                    const month = (e.fecha || '').slice(0, 7);
+                    if (HARDCODED_BATCH_IDS.has(e.batchId) && xlsxMonths.has(month)) return false;
+                    const fp = fingerprint(e);
+                    if (seen.has(fp)) return false;
+                    seen.add(fp);
+                    return true;
+                });
+
+                const removed = raw.length - cleaned.length;
+                if (removed === 0) {
+                    console.log('[bankPayments migration] No duplicates found');
+                    localStorage.setItem(FLAG, '1');
+                    return;
+                }
+
+                const updatedDoc = { ...snap.data(), config: { ...snap.data().config, bankPayments: cleaned } };
+                await setDoc(ref, updatedDoc);
+                console.log('[bankPayments migration] Removed', removed, 'duplicate/redundant entries, kept', cleaned.length);
+                localStorage.setItem(FLAG, '1');
+            } catch (err) {
+                console.warn('[bankPayments migration] Failed:', err.message);
+            }
+        };
+
+        void runCleanup();
+    }, []);
+
     useEffect(() => {
         const persistRecoverySnapshot = () => {
             if (!stateRef.current) return;
