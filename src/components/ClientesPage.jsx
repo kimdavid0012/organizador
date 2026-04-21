@@ -278,8 +278,10 @@ export default function ClientesPage() {
                 const direccion = wc.billing?.address_1 || wc.shipping?.address_1 || '';
                 // Check if already exists by email
                 const exists = clientes.find(c => 
-                    c.email === wc.email || 
-                    c.nombre?.toLowerCase() === nombre.toLowerCase()
+                    (wc.email && c.email && c.email.toLowerCase() === wc.email.toLowerCase()) || 
+                    (wc.id && c.wooId && String(c.wooId) === String(wc.id)) ||
+                    (telefono && c.telefono && normalizeWooPhone(c.telefono) === telefono) ||
+                    (nombre !== 'Sin nombre' && c.nombre?.toLowerCase() === nombre.toLowerCase())
                 );
                 if (!exists && nombre !== 'Sin nombre') {
                     addCliente({
@@ -301,10 +303,11 @@ export default function ClientesPage() {
                 } else if (exists) {
                     const changes = {};
                     if (!exists.telefono && telefono) changes.telefono = telefono;
+                    if (!exists.email && wc.email) changes.email = wc.email;
                     if (!exists.provincia && provincia) changes.provincia = provincia;
                     if (!exists.direccion && direccion) changes.direccion = direccion;
-                    if (!exists.wooId) changes.wooId = wc.id;
-                    // Always refresh totalCompras and cantidadPedidos from WooCommerce (they are the source of truth)
+                    if (!exists.wooId && wc.id) changes.wooId = wc.id;
+                    // Always update totalCompras and cantidadPedidos from WooCommerce
                     const newTotal = parseFloat(wc.total_spent || 0);
                     const newOrders = parseInt(wc.orders_count || 0, 10);
                     if (newTotal !== Number(exists.totalCompras || 0)) {
