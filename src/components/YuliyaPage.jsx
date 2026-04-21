@@ -31,14 +31,19 @@ const DEFAULT_ROW = () => ({
     rollos: 0,
     accesorios: 0,
     accesorios2: 0,
+    molde: 0,
+    fasonCosto: 0,
 });
 
 // ---- Formulas ----
 const calcCostoReal = (row) => {
     const { precioTelaXMetro, kilajeMetroTotal, cotizacion, cantidadPrenda, tallerPrueba, accesorios, accesorios2 } = row;
+    const porcTela = Number(row.porcTela) || 0;
+    const molde = Number(row.molde) || 0;
+    const fasonCosto = Number(row.fasonCosto) || 0;
     const qty = Number(cantidadPrenda) || 1;
-    const costoTela = (Number(precioTelaXMetro) * Number(kilajeMetroTotal) * Number(cotizacion || 1500)) / qty;
-    return costoTela + Number(tallerPrueba) + (Number(accesorios) + Number(accesorios2)) / qty;
+    const costoTela = (Number(precioTelaXMetro) * Number(cotizacion || 1500) * Number(kilajeMetroTotal) * (porcTela || 1)) / qty;
+    return costoTela + Number(tallerPrueba) + Number(accesorios) + molde + fasonCosto + Number(accesorios2);
 };
 
 // If the user overrode costoReal, downstream formulas use that value.
@@ -55,7 +60,8 @@ const calcPorcTela = (row) => {
     const costoReal = getEffectiveCostoReal(row);
     if (!costoReal) return 0;
     const qty = Number(row.cantidadPrenda) || 1;
-    const costoTela = (Number(row.precioTelaXMetro) * Number(row.kilajeMetroTotal) * Number(row.cotizacion || 1500)) / qty;
+    const porcTela = Number(row.porcTela) || 1;
+    const costoTela = (Number(row.precioTelaXMetro) * Number(row.kilajeMetroTotal) * Number(row.cotizacion || 1500) * porcTela) / qty;
     return costoTela / costoReal;
 };
 
@@ -85,6 +91,8 @@ const COLUMNS = [
     { key: 'rollos', label: 'Rollos', type: 'number', width: 75 },
     { key: 'accesorios', label: 'Accesorios 1', type: 'number', width: 100 },
     { key: 'accesorios2', label: 'Accesorios 2', type: 'number', width: 100 },
+    { key: 'molde', label: 'Molde', type: 'number', width: 80 },
+    { key: 'fasonCosto', label: 'Fasón Costo', type: 'number', width: 100 },
 ];
 
 const fmt = (n, isPercent = false) => {
