@@ -1212,8 +1212,13 @@ export default function MarketingSection() {
                                                 );
                                             })}
                                             {untargetedProvinces.length > 0 && (
-                                                <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', fontSize: 12, color: '#f59e0b' }}>
-                                                    ⚠️ <strong>Sin publicidad:</strong> {untargetedProvinces.join(', ')}
+                                                <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#f59e0b', marginBottom: 8 }}>⚠️ Provincias sin llegada de ads ({untargetedProvinces.length}):</div>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                                        {untargetedProvinces.map(p => (
+                                                            <span key={p} style={{ padding: '3px 10px', borderRadius: 12, background: 'rgba(245,158,11,0.15)', color: '#fbbf24', fontSize: 11, fontWeight: 600 }}>{p}</span>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
