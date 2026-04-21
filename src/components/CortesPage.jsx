@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, ChevronRight, Scissors, Save } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Plus, Trash2, ChevronRight, Scissors, Save, Upload } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { generateId } from '../utils/helpers';
+import * as XLSX from 'xlsx';
 
 export default function CortesPage() {
     const { state, updateConfig } = useData();
@@ -57,6 +58,53 @@ export default function CortesPage() {
         updateCorte(selected, { consumoTelas: (selectedCorte.consumoTelas || []).filter(r => r.id !== rowId) });
     };
 
+    const fileInputRef = useRef(null);
+
+    const handleImportExcel = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const data = await file.arrayBuffer();
+        const wb = XLSX.read(data);
+        const imported = [];
+        const TELA_KEYWORDS = ['MODAL', 'LANILLA', 'DARLON', 'KERRY', 'ALGOD', 'GAMUZ', 'FRIZADO', 'SWETER', 'BRUSH', 'MELLOW', 'SWEET', 'CORTE'];
+
+        wb.SheetNames.forEach(sheetName => {
+            const ws = wb.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+            const fason = sheetName.trim();
+            let currentCorte = null;
+
+            rows.forEach(row => {
+                const first = String(row[0] || '').trim();
+                if (!first) return;
+                const upper = first.toUpperCase();
+                if (upper === 'COLORES' || upper.startsWith('TOTAL')) return;
+
+                const isTitle = TELA_KEYWORDS.some(k => upper.includes(k));
+                if (isTitle) {
+                    if (currentCorte && currentCorte.consumoTelas.length > 0) imported.push(currentCorte);
+                    const tela = first.split(/\s+CORTE/i)[0].trim();
+                    currentCorte = { id: generateId(), nombre: first, fason, fecha: '', tela, consumoTelas: [] };
+                    return;
+                }
+                if (!currentCorte) return;
+                const kilo = Number(row[1]) || 0;
+                const cantidad = Math.round(Number(row[2]) || 0);
+                const rollo = Math.round(Number(row[3]) || 0);
+                if (!kilo && !cantidad && !rollo) return;
+                currentCorte.consumoTelas.push({ id: generateId(), color: first.toUpperCase(), kilo: Math.round(kilo * 100) / 100, cantidad, rollo });
+            });
+            if (currentCorte && currentCorte.consumoTelas.length > 0) imported.push(currentCorte);
+        });
+
+        if (imported.length === 0) { alert('No se encontraron cortes en el Excel.'); return; }
+        if (!window.confirm(`Se encontraron ${imported.length} cortes. ¿Reemplazar los cortes actuales con estos datos?`)) return;
+        updateConfig({ cortes: imported });
+        setSelected(imported[0]?.id || null);
+        alert(`✅ ${imported.length} cortes importados correctamente.`);
+        event.target.value = '';
+    };
+
     // Totals for selected corte
     const totals = useMemo(() => {
         if (!selectedCorte) return { cantidad: 0, kilo: 0, rollo: 0, colorCounts: {} };
@@ -91,6 +139,10 @@ export default function CortesPage() {
                             <input type="date" className="form-input" value={newCorteData.fecha} onChange={e => setNewCorteData(p => ({ ...p, fecha: e.target.value }))} style={{ flex: 1, fontSize: 12 }} />
                             <button className="btn btn-primary btn-sm" onClick={addCorte} style={{ whiteSpace: 'nowrap' }}><Plus size={14} /> Agregar</button>
                         </div>
+                        <button className="btn btn-secondary btn-sm" onClick={() => fileInputRef.current?.click()} style={{ width: '100%', marginTop: 4 }}>
+                            <Upload size={14} /> Importar desde Excel
+                        </button>
+                        <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
                     </div>
                 </div>
 
