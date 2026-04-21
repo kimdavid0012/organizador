@@ -1696,91 +1696,67 @@ export function DataProvider({ children }) {
 
         // We listen to the config doc as the "trigger" — when it changes, we reload all docs
         const configRef = doc(db, 'app-data', 'config');
-        const ECHO_WINDOW_MS = 5000; // Ignore echoes within 5s of our save
+        // Simple echo detection
+        const snapshotsToSkipRef = { current: 0 };
 
         const unsubscribe = onSnapshot(configRef, { includeMetadataChanges: true }, async (snap) => {
-            updateSyncStatus({
-                hasPendingWrites: snap.metadata.hasPendingWrites,
-                pendingChanges: snap.metadata.hasPendingWrites ? Math.max(pendingChangesCount.current, 1) : 0,
-                ...( !snap.metadata.hasPendingWrites && snap.exists() ? { lastCloudSaveAt: new Date().toISOString() } : {} ),
-                lastError: null
-            });
-
-            // If this snapshot is our own pending write still being confirmed, skip
+            // Skip our own pending writes
             if (snap.metadata.hasPendingWrites) {
+                updateSyncStatus({ hasPendingWrites: true });
                 return;
             }
 
-            // Detect echo of our own save: if we just saved and the revision matches
-            // what we wrote, this is our echo — acknowledge it and move on
+            // If we just saved, skip the echo snapshot
             if (justSaved.current) {
-                const timeSinceLocalChange = Date.now() - (localChangeTimestamp.current || 0);
-                const remoteRev = snap.exists() ? Number(snap.data()?.config?.syncMeta?.revision || 0) : 0;
-                if (timeSinceLocalChange < ECHO_WINDOW_MS && remoteRev <= currentRevisionRef.current) {
-                    // This is the echo of our own save
-                    justSaved.current = false;
-                    pendingCloudSave.current = false;
-                    pendingChangesCount.current = 0;
-                    updateSyncStatus({
-                        hasPendingWrites: false,
-                        pendingChanges: 0,
-                        lastCloudSaveAt: new Date().toISOString(),
-                        lastError: null
-                    });
-                    setPendingLocalChangesFlag(false);
-                    console.log(`[Sync] Echo de nuestro guardado (rev ${remoteRev}) — ignorado`);
-                    return;
-                }
-                // If revision is higher, it's a REAL remote change that arrived — don't skip!
                 justSaved.current = false;
+                console.log('[Sync] Echo de nuestro guardado — ignorado');
+                pendingCloudSave.current = false;
+                pendingChangesCount.current = 0;
+                updateSyncStatus({
+                    hasPendingWrites: false,
+                    pendingChanges: 0,
+                    lastCloudSaveAt: new Date().toISOString(),
+                    lastError: null
+                });
+                setPendingLocalChangesFlag(false);
+                return;
+            }
+
+            // Don't overwrite local changes that haven't been saved yet
+            if (pendingCloudSave.current) {
+                console.log('[Sync] Snapshot remoto ignorado — hay cambios locales sin guardar');
+                return;
             }
 
             if (snap.exists()) {
                 try {
-                    // Load all split docs from Firebase
                     const { loadDataFromFirestore } = await import('./storage');
                     const fullData = await loadDataFromFirestore();
-                    const remoteRevision = getSyncRevision(fullData);
-
-                    // ALWAYS accept remote data — Firebase is the source of truth
-                    // If we have pending local changes, merge them ON TOP of remote
-                    // Remote wins for existing data; local only adds what remote doesn't have
                     lastKnownCloudState.current = fullData;
-
-                    if (pendingCloudSave.current && stateRef.current) {
-                        // We have unsaved local changes — LOCAL state wins (user just made changes)
-                        // Accept remote revision number but keep local data
-                        console.log(`[Sync] Cambio remoto (rev ${remoteRevision}) — pero hay cambios locales pendientes, local gana`);
-                        currentRevisionRef.current = Math.max(currentRevisionRef.current, remoteRevision);
-                        // Don't dispatch — keep local state, the pending save will push it to Firestore
-                    } else {
-                        // No pending local changes — accept remote data directly
-                        console.log(`[Sync] Cambio remoto aceptado (rev ${remoteRevision})`);
-                        isFromFirestore.current = true;
-                        dispatch({ type: ACTION_TYPES.SET_DATA, payload: fullData });
-                        saveAppDataLocally(fullData).catch(() => {});
-                        currentRevisionRef.current = remoteRevision;
-                        pendingChangesCount.current = 0;
-                        updateSyncStatus({
-                            pendingChanges: 0,
-                            hasPendingWrites: false,
-                            lastCloudSaveAt: new Date().toISOString(),
-                            lastError: null
-                        });
-                        setPendingLocalChangesFlag(false);
-                    }
-
+                    const remoteRevision = getSyncRevision(fullData);
+                    console.log(`[Sync] Datos remotos aceptados (rev ${remoteRevision})`);
+                    isFromFirestore.current = true;
+                    dispatch({ type: ACTION_TYPES.SET_DATA, payload: fullData });
+                    saveAppDataLocally(fullData).catch(() => {});
+                    currentRevisionRef.current = remoteRevision;
+                    pendingChangesCount.current = 0;
+                    updateSyncStatus({
+                        pendingChanges: 0,
+                        hasPendingWrites: false,
+                        lastCloudSaveAt: new Date().toISOString(),
+                        lastError: null
+                    });
+                    setPendingLocalChangesFlag(false);
                     initialized.current = true;
                 } catch (err) {
                     console.error('Error loading split docs:', err);
                 }
             } else if (!initialized.current) {
-                // Check legacy single doc or localStorage
                 try {
                     const { loadDataFromFirestore } = await import('./storage');
                     const data = await loadDataFromFirestore();
                     lastKnownCloudState.current = data;
-                    dispatch({ type: ACTION_TYPES.SET_DATA, payload: mergeProtectedState(data, mergeBestLocalState()) });
+                    dispatch({ type: ACTION_TYPES.SET_DATA, payload: data || mergeBestLocalState() || DEFAULT_DATA });
                 } catch (e) {
                     const localData = mergeBestLocalState();
                     if (localData) dispatch({ type: ACTION_TYPES.SET_DATA, payload: localData });
@@ -1790,8 +1766,6 @@ export function DataProvider({ children }) {
         }, (error) => {
             console.error('Firestore listener error:', error);
             updateSyncStatus({ lastError: error.message || 'Error de conexion con Firestore' });
-            const localData = mergeBestLocalState();
-            if (localData) dispatch({ type: ACTION_TYPES.SET_DATA, payload: localData });
             initialized.current = true;
         });
 
