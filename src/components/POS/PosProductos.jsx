@@ -565,46 +565,91 @@ export default function PosProductos() {
                     <button className="btn btn-danger btn-sm" onClick={() => setShowBulkConfirm(true)}>
                         <Trash2 size={15} /> Eliminar seleccionados
                     </button>
-                    <button className="btn btn-primary btn-sm" onClick={() => {
+                    <button className="btn btn-primary btn-sm" onClick={(event) => {
                         const selected = productos.filter(p => selectedIds.has(p.id));
                         if (selected.length === 0) return;
                         // Generate catalog HTML
                         // Generate professional catalog
-                        const fetchWooImages = async () => {
+                        const escapeHtml = (value = '') => String(value)
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&#039;');
+                        const normalizeLabel = (value = '') => String(value)
+                            .toLowerCase()
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .trim();
+                        const uniqueLabels = (values = []) => [...new Set(values
+                            .map(v => String(v || '').replace(/<[^>]*>/g, '').trim())
+                            .filter(Boolean))];
+                        const getWooAttributeValues = (product, variations, matchers) => {
+                            const values = [];
+                            (product?.attributes || []).forEach(attr => {
+                                const name = normalizeLabel(attr.name || attr.slug || '');
+                                if (matchers.some(m => name.includes(m))) {
+                                    if (Array.isArray(attr.options)) values.push(...attr.options);
+                                    else if (attr.option) values.push(attr.option);
+                                }
+                            });
+                            (variations || []).forEach(variation => {
+                                (variation.attributes || []).forEach(attr => {
+                                    const name = normalizeLabel(attr.name || attr.slug || '');
+                                    if (matchers.some(m => name.includes(m))) values.push(attr.option);
+                                });
+                            });
+                            return uniqueLabels(values);
+                        };
+                        const getLocalColors = (product) => uniqueLabels((product.stockPorColor || []).map(item => item.color));
+                        const fetchWooCatalogData = async () => {
                             const wooUrl = state.config?.marketing?.wooUrl || 'https://celavie.com.ar';
                             const wooKey = state.config?.marketing?.wooKey;
                             const wooSecret = state.config?.marketing?.wooSecret;
                             if (!wooKey || !wooSecret) return {};
-                            const imageMap = {};
+                            const catalogMap = {};
                             try {
-                                for (const p of selected.slice(0, 30)) {
+                                for (const p of selected) {
                                     const code = (p.codigoInterno || '').replace(/^(ART|Art|art)\s*/i, '');
                                     if (!code) continue;
                                     try {
                                         const res = await fetch(wooUrl + '/wp-json/wc/v3/products?sku=' + encodeURIComponent(code) + '&consumer_key=' + wooKey + '&consumer_secret=' + wooSecret);
                                         const prods = await res.json();
-                                        if (prods?.[0]?.images?.[0]?.src) imageMap[p.id] = prods[0].images[0].src;
+                                        const product = prods?.[0];
+                                        if (!product) continue;
+                                        let variations = [];
+                                        if (product.type === 'variable' && product.id) {
+                                            try {
+                                                const varRes = await fetch(wooUrl + '/wp-json/wc/v3/products/' + product.id + '/variations?per_page=100&consumer_key=' + wooKey + '&consumer_secret=' + wooSecret);
+                                                variations = await varRes.json();
+                                            } catch {}
+                                        }
+                                        catalogMap[p.id] = {
+                                            image: product.images?.[0]?.src || '',
+                                            colors: getWooAttributeValues(product, variations, ['color', 'colour']),
+                                            sizes: getWooAttributeValues(product, variations, ['talle', 'medida', 'size'])
+                                        };
                                     } catch {}
                                 }
                             } catch {}
-                            return imageMap;
+                            return catalogMap;
                         };
-                        const buildCatalog = (wooImages) => {
+                        const buildCatalog = (wooCatalogData) => {
                             const cards = selected.map(p => {
                                 const existingWooImg = Array.isArray(p.imagenes) && p.imagenes.length > 0 ? (p.imagenes[0].url || p.imagenes[0].src || '') : '';
-                                const img = existingWooImg || wooImages[p.id] || p.imagenBibliotecaThumb || p.storageUrl || p.imagenBase64 || '';
-                                const l1 = p.precioVentaL1 ? '$' + Number(p.precioVentaL1).toLocaleString('es-AR') : '-';
-                                const l2 = p.precioVentaL2 ? '$' + Number(p.precioVentaL2).toLocaleString('es-AR') : '';
-                                const l5 = p.precioVentaL5 ? '$' + Number(p.precioVentaL5).toLocaleString('es-AR') : '';
-                                const stockLabel = p.stock > 0 ? '✅ Stock: ' + p.stock : '⚠️ Sin stock';
+                                const wooData = wooCatalogData[p.id] || {};
+                                const img = existingWooImg || wooData.image || p.imagenBibliotecaThumb || p.storageUrl || p.imagenBase64 || '';
+                                const priceValue = p.precioVentaWeb || p.precioVentaL1 || p.precioVentaL2 || p.precioVentaL5 || 0;
+                                const price = priceValue ? '$' + Number(priceValue).toLocaleString('es-AR') : '-';
+                                const colors = uniqueLabels([...(wooData.colors || []), ...getLocalColors(p)]);
+                                const sizes = uniqueLabels(wooData.sizes || []);
                                 return '<div style="break-inside:avoid;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#fff">' +
                                     (img ? '<img src="' + img + '" style="width:100%;height:200px;object-fit:cover" onerror="this.style.display=\'none\'" />' : '<div style="width:100%;height:200px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:40px">📷</div>') +
-                                    '<div style="padding:12px"><div style="font-weight:700;font-size:14px;margin-bottom:4px">' + (p.detalleCorto || 'Sin nombre') + '</div>' +
-                                    '<div style="font-size:11px;color:#6b7280;margin-bottom:8px">Cod: ' + (p.codigoInterno || '-') + '</div>' +
-                                    '<div style="font-size:20px;font-weight:800;color:#1a1a2e">' + l1 + '</div>' +
-                                    (l2 ? '<div style="font-size:12px;color:#6b7280">Minorista: ' + l2 + '</div>' : '') +
-                                    (l5 ? '<div style="font-size:12px;color:#6b7280">Lista 5: ' + l5 + '</div>' : '') +
-                                    '<div style="font-size:11px;margin-top:6px;color:' + (p.stock > 0 ? '#16a34a' : '#dc2626') + '">' + stockLabel + '</div>' +
+                                    '<div style="padding:12px"><div style="font-weight:700;font-size:14px;margin-bottom:4px">' + escapeHtml(p.detalleCorto || 'Sin nombre') + '</div>' +
+                                    '<div style="font-size:11px;color:#6b7280;margin-bottom:8px">Cod: ' + escapeHtml(p.codigoInterno || '-') + '</div>' +
+                                    '<div style="font-size:20px;font-weight:800;color:#1a1a2e;margin-bottom:8px">' + price + '</div>' +
+                                    (colors.length ? '<div style="font-size:11px;color:#374151;margin-top:6px"><strong>Colores disponibles:</strong> ' + escapeHtml(colors.join(', ')) + '</div>' : '') +
+                                    (sizes.length ? '<div style="font-size:11px;color:#374151;margin-top:4px"><strong>Medidas:</strong> ' + escapeHtml(sizes.join(', ')) + '</div>' : '') +
                                     '</div></div>';
                             }).join('');
                             return '<html><head><style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#1a1a2e}' +
@@ -620,8 +665,8 @@ export default function PosProductos() {
                         const loadBtn = event.target;
                         loadBtn.textContent = '⏳ Cargando fotos...';
                         loadBtn.disabled = true;
-                        fetchWooImages().then(wooImages => {
-                            const html = buildCatalog(wooImages);
+                        fetchWooCatalogData().then(wooCatalogData => {
+                            const html = buildCatalog(wooCatalogData);
                             const w = window.open('', '_blank');
                             w.document.write(html);
                             w.document.close();
