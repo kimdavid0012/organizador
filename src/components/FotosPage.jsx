@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, CheckCircle2, Circle, Eye, ImagePlus, Search, Star, Trash2 } from 'lucide-react';
+import { Camera, CheckCircle2, Circle, Eye, ImagePlus, RefreshCw, Search, Star, Trash2 } from 'lucide-react';
 import { useData } from '../store/DataContext';
 import { getProductThumb } from '../utils/helpers';
 import { useAuth } from '../store/AuthContext';
+import { wooService } from '../utils/wooService';
 import {
     deleteArticleLibraryImage,
     getArticleLibraryImageUrl,
@@ -26,6 +27,36 @@ const formatSizeLabel = (bytes) => {
     return `${amount} B`;
 };
 
+const getWooImageUrl = (product) => {
+    if (product.image) return product.image;
+    if (product.storageUrl) return product.storageUrl;
+    const images = product.images || product.imagenes || [];
+    return images.map((image) => (
+        typeof image === 'string' ? image : image?.src || image?.url || ''
+    )).find(Boolean) || '';
+};
+
+const mapWooProductForFotos = (product) => ({
+    id: `woo:${product.id || product.productId || product.sku}`,
+    source: 'woo',
+    wooId: product.id || product.productId,
+    codigoInterno: product.sku || product.codigoInterno || '',
+    detalleCorto: product.name || product.productName || product.detalleCorto || 'Articulo sin nombre',
+    storageUrl: getWooImageUrl(product),
+    imagenes: (product.images || product.imagenes || [])
+        .map((image) => (typeof image === 'string' ? image : image?.src || image?.url || ''))
+        .filter(Boolean),
+    activo: product.status ? product.status !== 'trash' : product.activo !== false
+});
+
+const mapFotosProductToCache = (product) => ({
+    id: product.wooId || product.id,
+    productId: product.wooId || product.id,
+    productName: product.detalleCorto,
+    sku: product.codigoInterno,
+    image: product.storageUrl || getWooImageUrl(product)
+});
+
 export default function FotosPage() {
     const { state, updateConfig, updatePosProduct } = useData();
     const { user } = useAuth();
@@ -34,12 +65,33 @@ export default function FotosPage() {
     const [uploadingProductId, setUploadingProductId] = useState('');
     const [lightboxSrc, setLightboxSrc] = useState('');
     const [loadingImageId, setLoadingImageId] = useState('');
+    const [loadingWooProducts, setLoadingWooProducts] = useState(false);
+    const [wooError, setWooError] = useState('');
     const fileInputRef = useRef(null);
     const searchInputRef = useRef(null);
 
-    const allProducts = state.config.posProductos || [];
+    const posProducts = state.config.posProductos || [];
+    const paginaWebCache = state.config.paginaWebCache || {};
+    const cachedWooProducts = paginaWebCache.fotoProducts || paginaWebCache.allProducts || [];
     const fotoTasks = state.config.fotoTasks || [];
     const imageLibrary = state.config.imageLibrary || [];
+
+    const allProducts = useMemo(() => {
+        const byKey = new Map();
+        const addProduct = (product) => {
+            if (!product?.id) return;
+            const key = product.codigoInterno || product.id;
+            if (!byKey.has(key)) byKey.set(key, product);
+        };
+
+        cachedWooProducts.map(mapWooProductForFotos).forEach(addProduct);
+        posProducts
+            .filter((product) => product.activo !== false)
+            .map((product) => ({ ...product, source: product.source || 'pos' }))
+            .forEach(addProduct);
+
+        return Array.from(byKey.values());
+    }, [cachedWooProducts, posProducts]);
 
     const libraryByProductId = useMemo(() => {
         return imageLibrary.reduce((map, item) => {
@@ -61,7 +113,7 @@ export default function FotosPage() {
                     (product.detalleCorto || '').toLowerCase().includes(normalized)
                 );
             })
-            .slice(0, 120);
+            .slice(0, 500);
     }, [allProducts, search]);
 
     useEffect(() => {
@@ -131,12 +183,43 @@ export default function FotosPage() {
         updateConfig({ fotoTasks: [...nextTasks, nextRecord] });
     };
 
+    const loadWooProducts = async ({ silent = false } = {}) => {
+        if (loadingWooProducts) return;
+        setLoadingWooProducts(true);
+        setWooError('');
+        try {
+            const rawProducts = await wooService.fetchProducts(state.config);
+            const mapped = rawProducts
+                .map(mapWooProductForFotos)
+                .filter((product) => product.id && product.activo !== false);
+            updateConfig({
+                paginaWebCache: {
+                    ...paginaWebCache,
+                    fotoProducts: mapped.map(mapFotosProductToCache),
+                    fotoProductsLoadedAt: new Date().toISOString()
+                }
+            });
+        } catch (error) {
+            const message = `No se pudieron cargar articulos de WooCommerce: ${error.message}`;
+            setWooError(message);
+            if (!silent) alert(message);
+        } finally {
+            setLoadingWooProducts(false);
+        }
+    };
+
+    useEffect(() => {
+        if (allProducts.length || loadingWooProducts || wooError) return;
+        void loadWooProducts({ silent: true });
+    }, [allProducts.length, loadingWooProducts, wooError]);
+
     const openFilePickerForProduct = (productId) => {
         setUploadingProductId(productId);
         fileInputRef.current?.click();
     };
 
     const setProductCover = (product, imageMeta, thumbDataUrl) => {
+        if (product.source === 'woo') return;
         updatePosProduct(product.id, {
             imagenBibliotecaId: imageMeta.id,
             imagenBibliotecaThumb: thumbDataUrl || thumbs[imageMeta.id] || product.imagenBibliotecaThumb || '',
@@ -182,7 +265,7 @@ export default function FotosPage() {
             } else {
                 // Update storageUrl if this is the current cover (re-upload or first-time storage)
                 const isCover = product.imagenBibliotecaId === uploaded[0].metadata.id;
-                if (isCover && uploaded[0].metadata.storageUrl) {
+                if (product.source !== 'woo' && isCover && uploaded[0].metadata.storageUrl) {
                     updatePosProduct(product.id, { storageUrl: uploaded[0].metadata.storageUrl });
                 }
             }
@@ -206,7 +289,7 @@ export default function FotosPage() {
                 return next;
             });
 
-            if (product.imagenBibliotecaId === imageMeta.id) {
+            if (product.source !== 'woo' && product.imagenBibliotecaId === imageMeta.id) {
                 const nextCover = nextLibrary.find((item) => item.productId === product.id);
                 updatePosProduct(product.id, {
                     imagenBibliotecaId: nextCover?.id || '',
@@ -247,8 +330,12 @@ export default function FotosPage() {
         const totalImages = imageLibrary.length;
         const totalSize = imageLibrary.reduce((acc, item) => acc + (Number(item.sizeBytes || 0) || 0), 0);
         const attachedProducts = new Set(imageLibrary.map((item) => item.productId).filter(Boolean)).size;
-        return { totalImages, totalSize, attachedProducts };
-    }, [imageLibrary]);
+        const completedProducts = allProducts.filter((product) => {
+            const record = getTaskRecord(product.id);
+            return FOTO_TASKS.every((task) => isTaskDone(record, task));
+        }).length;
+        return { totalImages, totalSize, attachedProducts, completedProducts };
+    }, [allProducts, fotoTasks, imageLibrary]);
 
     return (
         <div style={{ padding: 'var(--sp-4)', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -268,41 +355,58 @@ export default function FotosPage() {
                             <Camera size={22} /> Biblioteca de Fotos por Artículo
                         </h2>
                         <p style={{ color: 'var(--text-secondary)', margin: 0, maxWidth: 760 }}>
-                            Las fotos grandes quedan guardadas aparte en la memoria local del navegador, y el dashboard solo conserva una referencia liviana para no inflar el sistema.
+                            Articulos de la web con su foto de WooCommerce para marcar que foto falta por tarea.
                         </p>
                     </div>
-                    <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
-                        <div style={{ position: 'relative' }}>
-                            <Search size={16} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
-                            <input
-                                ref={searchInputRef}
-                                className="form-input"
-                                style={{ paddingLeft: 34 }}
-                                value={search}
-                                onChange={(event) => setSearch(event.target.value)}
-                                onKeyDown={(event) => event.stopPropagation()}
-                                onFocus={(event) => event.stopPropagation()}
-                                placeholder="Buscar por codigo o articulo"
-                            />
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button className="btn btn-secondary" onClick={() => loadWooProducts()} disabled={loadingWooProducts}>
+                            <RefreshCw size={16} />
+                            {loadingWooProducts ? 'Cargando...' : 'Actualizar Woo'}
+                        </button>
+                        <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
+                            <div style={{ position: 'relative' }}>
+                                <Search size={16} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
+                                <input
+                                    ref={searchInputRef}
+                                    className="form-input"
+                                    style={{ paddingLeft: 34 }}
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                    onKeyDown={(event) => event.stopPropagation()}
+                                    onFocus={(event) => event.stopPropagation()}
+                                    placeholder="Buscar por codigo o articulo"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 16 }}>
                     <div className="glass-panel" style={{ padding: '12px 14px' }}>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Fotos guardadas</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Articulos web</div>
+                        <div style={{ fontSize: 28, fontWeight: 800 }}>{allProducts.length}</div>
+                    </div>
+                    <div className="glass-panel" style={{ padding: '12px 14px' }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Articulos completos</div>
+                        <div style={{ fontSize: 28, fontWeight: 800 }}>{imageStats.completedProducts}</div>
+                    </div>
+                    <div className="glass-panel" style={{ padding: '12px 14px' }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Fotos subidas al dashboard</div>
                         <div style={{ fontSize: 28, fontWeight: 800 }}>{imageStats.totalImages}</div>
                     </div>
-                    <div className="glass-panel" style={{ padding: '12px 14px' }}>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Artículos con foto</div>
-                        <div style={{ fontSize: 28, fontWeight: 800 }}>{imageStats.attachedProducts}</div>
-                    </div>
-                    <div className="glass-panel" style={{ padding: '12px 14px' }}>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Peso estimado imágenes</div>
-                        <div style={{ fontSize: 28, fontWeight: 800 }}>{formatSizeLabel(imageStats.totalSize)}</div>
-                    </div>
                 </div>
+                {wooError && (
+                    <div style={{ marginTop: 12, color: '#fca5a5', fontSize: 13 }}>
+                        {wooError}
+                    </div>
+                )}
             </div>
+
+            {visibleProducts.length === 0 && (
+                <div className="glass-panel" style={{ padding: 28, textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    {loadingWooProducts ? 'Cargando articulos de WooCommerce...' : 'No hay articulos cargados. Usa Actualizar Woo para traerlos de la web.'}
+                </div>
+            )}
 
             <div style={{ display: 'grid', gap: 12 }}>
                 {visibleProducts.map((product) => {

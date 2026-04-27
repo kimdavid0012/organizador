@@ -102,15 +102,25 @@ export const wooService = {
         if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
 
         const baseUrl = wooUrl.endsWith('/') ? wooUrl : `${wooUrl}/`;
-        // Fetch up to 100 products (adjust if they have more, or implement full pagination)
-        const url = `${baseUrl}wp-json/wc/v3/products?consumer_key=${wooKey}&consumer_secret=${wooSecret}&per_page=100`;
+        let allProducts = [];
+        let page = 1;
+        let hasMore = true;
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Error al traer productos de WooCommerce');
+        while (hasMore) {
+            const url = `${baseUrl}wp-json/wc/v3/products?consumer_key=${wooKey}&consumer_secret=${wooSecret}&per_page=100&page=${page}&orderby=date&order=desc`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Error al traer productos de WooCommerce');
+            }
+            const products = await response.json();
+            allProducts = [...allProducts, ...products];
+            hasMore = products.length === 100;
+            page++;
+            if (page > 10) break;
         }
-        return await response.json();
+
+        return allProducts;
     },
 
     async updateProductStock(config, sku, newStock) {
