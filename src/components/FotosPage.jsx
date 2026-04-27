@@ -29,6 +29,28 @@ const formatSizeLabel = (bytes) => {
     return `${amount} B`;
 };
 
+const normalizeKey = (value) => String(value || '').trim().toLowerCase();
+
+const uniqueKeys = (keys = []) => [...new Set(keys.map(normalizeKey).filter(Boolean))];
+
+const getProductKeys = (product) => uniqueKeys([
+    product?.id,
+    product?.productId,
+    product?.wooId,
+    product?.wooId ? `woo:${product.wooId}` : '',
+    product?.codigoInterno,
+    product?.sku,
+    product?.articuloVenta
+]);
+
+const getLibraryItemKeys = (item) => uniqueKeys([
+    item?.productId,
+    item?.wooId,
+    item?.wooId ? `woo:${item.wooId}` : '',
+    item?.productCode,
+    item?.sku
+]);
+
 const getWooImageUrl = (product) => {
     if (product.image) return product.image;
     if (product.storageUrl) return product.storageUrl;
@@ -97,9 +119,10 @@ export default function FotosPage() {
 
     const libraryByProductId = useMemo(() => {
         return imageLibrary.reduce((map, item) => {
-            const key = item.productId || '';
-            if (!map.has(key)) map.set(key, []);
-            map.get(key).push(item);
+            getLibraryItemKeys(item).forEach((key) => {
+                if (!map.has(key)) map.set(key, []);
+                map.get(key).push(item);
+            });
             return map;
         }, new Map());
     }, [imageLibrary]);
@@ -132,7 +155,7 @@ export default function FotosPage() {
         const visibleIds = Array.from(
             new Set(
                 visibleProducts.flatMap((product) => {
-                    const ids = (libraryByProductId.get(product.id) || []).map((item) => item.id);
+                    const ids = getProductKeys(product).flatMap((key) => (libraryByProductId.get(key) || []).map((item) => item.id));
                     if (product.imagenBibliotecaId) ids.push(product.imagenBibliotecaId);
                     return ids;
                 }).filter(Boolean)
@@ -158,9 +181,23 @@ export default function FotosPage() {
         };
     }, [visibleProducts, libraryByProductId]);
 
-    const getTaskRecord = (productId) =>
-        fotoTasks.find((entry) => entry.productId === productId) || {
-            productId,
+    const isRecordForProduct = (entry, product) => {
+        const productKeys = getProductKeys(product);
+        const entryKeys = uniqueKeys([
+            entry?.productId,
+            entry?.wooId,
+            entry?.wooId ? `woo:${entry.wooId}` : '',
+            entry?.productCode,
+            entry?.sku
+        ]);
+        return entryKeys.some((key) => productKeys.includes(key));
+    };
+
+    const getTaskRecord = (product) =>
+        fotoTasks.find((entry) => isRecordForProduct(entry, product)) || {
+            productId: product?.id,
+            productCode: product?.codigoInterno,
+            wooId: product?.wooId || null,
             states: {},
             updatedAt: null
         };
@@ -170,11 +207,15 @@ export default function FotosPage() {
         return Boolean(states[task.id] || task.aliases?.some((alias) => states[alias]));
     };
 
-    const toggleTask = (productId, taskId) => {
-        const current = getTaskRecord(productId);
-        const nextTasks = fotoTasks.filter((entry) => entry.productId !== productId);
+    const toggleTask = (product, taskId) => {
+        const current = getTaskRecord(product);
+        const nextTasks = fotoTasks.filter((entry) => !isRecordForProduct(entry, product));
         const nextRecord = {
             ...current,
+            productId: product.id,
+            productCode: product.codigoInterno || current.productCode || '',
+            productName: product.detalleCorto || current.productName || '',
+            wooId: product.wooId || current.wooId || null,
             updatedAt: new Date().toISOString(),
             updatedBy: user.email,
             states: {
@@ -243,7 +284,9 @@ export default function FotosPage() {
             for (const file of files) {
                 const { metadata, thumbDataUrl } = await saveArticleLibraryImage(file, {
                     productId: product.id,
+                    wooId: product.wooId || null,
                     productCode: product.codigoInterno,
+                    sku: product.codigoInterno,
                     productName: product.detalleCorto,
                     uploadedBy: user.email
                 });
@@ -333,7 +376,7 @@ export default function FotosPage() {
         const totalSize = imageLibrary.reduce((acc, item) => acc + (Number(item.sizeBytes || 0) || 0), 0);
         const attachedProducts = new Set(imageLibrary.map((item) => item.productId).filter(Boolean)).size;
         const completedProducts = allProducts.filter((product) => {
-            const record = getTaskRecord(product.id);
+            const record = getTaskRecord(product);
             return FOTO_TASKS.every((task) => isTaskDone(record, task));
         }).length;
         return { totalImages, totalSize, attachedProducts, completedProducts };
@@ -412,9 +455,15 @@ export default function FotosPage() {
 
             <div style={{ display: 'grid', gap: 12 }}>
                 {visibleProducts.map((product) => {
-                    const record = getTaskRecord(product.id);
+                    const record = getTaskRecord(product);
                     const completed = FOTO_TASKS.filter((task) => isTaskDone(record, task)).length;
-                    const productImages = (libraryByProductId.get(product.id) || []).sort((left, right) => (right.uploadedAt || '').localeCompare(left.uploadedAt || ''));
+                    const productImages = Array.from(
+                        new Map(
+                            getProductKeys(product)
+                                .flatMap((key) => libraryByProductId.get(key) || [])
+                                .map((item) => [item.id, item])
+                        ).values()
+                    ).sort((left, right) => (right.uploadedAt || '').localeCompare(left.uploadedAt || ''));
                     const coverThumb = product.imagenBibliotecaThumb || thumbs[product.imagenBibliotecaId] || getProductThumb(product.codigoInterno, allProducts) || '';
 
                     return (
@@ -476,7 +525,7 @@ export default function FotosPage() {
                                                             <button
                                                                 key={task.id}
                                                                 className="btn btn-secondary"
-                                                                onClick={() => toggleTask(product.id, task.id)}
+                                                                onClick={() => toggleTask(product, task.id)}
                                                                 style={{
                                                                     flex: '1 1 110px',
                                                                     minWidth: 0,
