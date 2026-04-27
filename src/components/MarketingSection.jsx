@@ -1171,6 +1171,19 @@ export default function MarketingSection() {
                 });
                 const untargetedProvinces = PROVINCIAS.filter(p => !targetedProvinces.has(p));
 
+                const targetingRegionsNormalized = (targetingRegions.regions || []).map(r => normalizeRegion(r));
+                const isWholeCountryTargeting = targetingRegionsNormalized.some(r =>
+                    r === 'argentina' || r.includes('todo el pais') || r.includes('all argentina') || r.includes('entire argentina')
+                );
+                const explicitlyTargetedProvinces = new Set();
+                Object.entries(PROVINCE_ALIASES).forEach(([canonical, aliases]) => {
+                    const matches = targetingRegionsNormalized.some(targetReg =>
+                        aliases.some(alias => targetReg === alias || targetReg.includes(alias) || alias.includes(targetReg))
+                    );
+                    if (matches) explicitlyTargetedProvinces.add(canonical);
+                });
+                const missingTargetingProvinces = PROVINCIAS.filter(p => !explicitlyTargetedProvinces.has(p));
+
                 return (
                     <div style={{ display: 'grid', gap: 16, marginTop: 16 }}>
                         <div style={{ padding: 'var(--sp-4)', borderRadius: 18, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
@@ -1190,6 +1203,23 @@ export default function MarketingSection() {
                                                 </div>
                                             ) : (
                                                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Targeting: Todo Argentina (sin regiones específicas)</span>
+                                            )}
+                                            {missingTargetingProvinces.length > 0 && (
+                                                <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.22)' }}>
+                                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#f59e0b', marginBottom: 6 }}>
+                                                        Provincias que faltan targetear en Meta ({missingTargetingProvinces.length})
+                                                    </div>
+                                                    {isWholeCountryTargeting && (
+                                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                                                            Hay un targeting amplio a Argentina, pero estas provincias no aparecen como segmentacion especifica por provincia.
+                                                        </div>
+                                                    )}
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                                        {missingTargetingProvinces.map(p => (
+                                                            <span key={p} style={{ padding: '3px 10px', borderRadius: 12, background: 'rgba(245,158,11,0.15)', color: '#fbbf24', fontSize: 11, fontWeight: 600 }}>{p}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
                                     )}
