@@ -51,35 +51,120 @@ const getLibraryItemKeys = (item) => uniqueKeys([
     item?.sku
 ]);
 
-const getWooImageUrl = (product) => {
-    if (product.image) return normalizeImageUrl(product.image);
-    if (product.storageUrl) return normalizeImageUrl(product.storageUrl);
-    const images = product.images || product.imagenes || [];
-    return images.map((image) => normalizeImageUrl(
-        typeof image === 'string' ? image : image?.src || image?.url || ''
-    )).find(Boolean) || '';
+const FOTO_PRODUCTS_CACHE_VERSION = 2;
+
+const normalizePossibleImageUrl = (value) => {
+    const url = normalizeImageUrl(value);
+    if (!url) return '';
+    const lowerUrl = url.toLowerCase();
+    const looksLikeUrl = lowerUrl.startsWith('http://')
+        || lowerUrl.startsWith('https://')
+        || lowerUrl.startsWith('data:image/')
+        || lowerUrl.startsWith('blob:')
+        || lowerUrl.startsWith('//');
+    const looksLikeImagePath = /\.(avif|gif|jpe?g|png|webp)(\?|#|$)/i.test(url);
+    return looksLikeUrl || looksLikeImagePath ? url : '';
 };
 
-const mapWooProductForFotos = (product) => ({
-    id: `woo:${product.id || product.productId || product.sku}`,
-    source: 'woo',
-    wooId: product.id || product.productId,
-    codigoInterno: product.sku || product.codigoInterno || '',
-    detalleCorto: product.name || product.productName || product.detalleCorto || 'Articulo sin nombre',
-    storageUrl: getWooImageUrl(product),
-    imagenes: (product.images || product.imagenes || [])
-        .map((image) => normalizeImageUrl(typeof image === 'string' ? image : image?.src || image?.url || ''))
-        .filter(Boolean),
-    activo: product.status ? product.status !== 'trash' : product.activo !== false
-});
+const getImageFromValue = (value) => {
+    if (!value) return '';
+    if (typeof value === 'string') return normalizePossibleImageUrl(value);
+    if (Array.isArray(value)) return value.map(getImageFromValue).find(Boolean) || '';
+    if (typeof value !== 'object') return '';
 
-const mapFotosProductToCache = (product) => ({
-    id: product.wooId || product.id,
-    productId: product.wooId || product.id,
-    productName: product.detalleCorto,
-    sku: product.codigoInterno,
-    image: product.storageUrl || getWooImageUrl(product)
-});
+    const directUrl = [
+        value.src,
+        value.url,
+        value.source_url,
+        value.sourceUrl,
+        value.thumbnail,
+        value.thumbnail_url,
+        value.thumbnailUrl,
+        value.media_url,
+        value.mediaUrl,
+        value.image,
+        value.value,
+        value.guid?.rendered,
+        value.rendered
+    ].map(getImageFromValue).find(Boolean);
+    if (directUrl) return directUrl;
+
+    const sizes = value.sizes || value.media_details?.sizes || {};
+    return Object.values(sizes).map(getImageFromValue).find(Boolean) || '';
+};
+
+const getWooImageUrls = (product = {}) => {
+    const candidates = [
+        product.image,
+        product.storageUrl,
+        product.imagen,
+        product.thumbnail,
+        product.thumbnail_url,
+        product.thumbnailUrl,
+        product.featured_image,
+        product.featuredImage,
+        product.featured_src,
+        product.featuredSrc,
+        product.images,
+        product.imagenes,
+        product.gallery,
+        product.galleryImages,
+        product.meta_data,
+        product.metaData
+    ];
+
+    return [...new Set(
+        candidates
+            .flatMap((candidate) => (Array.isArray(candidate) ? candidate : [candidate]))
+            .map(getImageFromValue)
+            .filter(Boolean)
+    )];
+};
+
+const getWooImageUrl = (product) => getWooImageUrls(product)[0] || '';
+
+const mapWooProductForFotos = (product) => {
+    const imageUrls = getWooImageUrls(product);
+    const wooId = product.wooId || product.productId || product.id;
+    const sku = product.sku || product.codigoInterno || '';
+
+    return {
+        id: `woo:${wooId || sku}`,
+        source: 'woo',
+        wooId,
+        productId: wooId,
+        codigoInterno: sku,
+        detalleCorto: product.name || product.productName || product.detalleCorto || 'Articulo sin nombre',
+        storageUrl: imageUrls[0] || '',
+        image: imageUrls[0] || '',
+        imagenes: imageUrls,
+        images: imageUrls.map((src) => ({ src })),
+        activo: product.status ? product.status !== 'trash' : product.activo !== false
+    };
+};
+
+const mapFotosProductToCache = (product) => {
+    const imageUrls = getWooImageUrls(product);
+    const wooId = product.wooId || product.productId || product.id;
+
+    return {
+        id: wooId,
+        productId: wooId,
+        wooId,
+        productName: product.detalleCorto,
+        name: product.detalleCorto,
+        sku: product.codigoInterno,
+        codigoInterno: product.codigoInterno,
+        detalleCorto: product.detalleCorto,
+        image: imageUrls[0] || '',
+        storageUrl: imageUrls[0] || '',
+        imagenes: imageUrls,
+        images: imageUrls.map((src) => ({ src })),
+        source: 'woo',
+        status: product.activo === false ? 'trash' : 'publish',
+        activo: product.activo !== false
+    };
+};
 
 export default function FotosPage() {
     const { state, updateConfig, updatePosProduct } = useData();
@@ -100,6 +185,14 @@ export default function FotosPage() {
     const cachedWooProducts = paginaWebCache.fotoProducts || paginaWebCache.allProducts || [];
     const fotoTasks = state.config.fotoTasks || [];
     const imageLibrary = state.config.imageLibrary || [];
+    const fotoProductsImageCacheVersion = paginaWebCache.fotoProductsImageCacheVersion || 0;
+    const hasWooImageCache = useMemo(
+        () => cachedWooProducts.some((product) => getWooImageUrls(product).length > 0),
+        [cachedWooProducts]
+    );
+    const needsWooImageCacheRefresh = cachedWooProducts.length > 0
+        && fotoProductsImageCacheVersion !== FOTO_PRODUCTS_CACHE_VERSION
+        && !hasWooImageCache;
 
     const allProducts = useMemo(() => {
         const byKey = new Map();
@@ -240,7 +333,8 @@ export default function FotosPage() {
                 paginaWebCache: {
                     ...paginaWebCache,
                     fotoProducts: mapped.map(mapFotosProductToCache),
-                    fotoProductsLoadedAt: new Date().toISOString()
+                    fotoProductsLoadedAt: new Date().toISOString(),
+                    fotoProductsImageCacheVersion: FOTO_PRODUCTS_CACHE_VERSION
                 }
             });
         } catch (error) {
@@ -253,9 +347,9 @@ export default function FotosPage() {
     };
 
     useEffect(() => {
-        if (allProducts.length || loadingWooProducts || wooError) return;
+        if ((allProducts.length && !needsWooImageCacheRefresh) || loadingWooProducts || wooError) return;
         void loadWooProducts({ silent: true });
-    }, [allProducts.length, loadingWooProducts, wooError]);
+    }, [allProducts.length, needsWooImageCacheRefresh, loadingWooProducts, wooError]);
 
     const openFilePickerForProduct = (productId) => {
         setUploadingProductId(productId);
@@ -469,6 +563,11 @@ export default function FotosPage() {
                         product.imagenBibliotecaThumb,
                         thumbs[product.imagenBibliotecaId],
                         product.storageUrl,
+                        product.image,
+                        product.imagen,
+                        product.thumbnail,
+                        product.featured_image,
+                        product.featuredImage,
                         ...(product.imagenes || []),
                         getProductThumb(product.codigoInterno, allProducts)
                     ].map(normalizeImageUrl).filter(Boolean);
