@@ -1182,7 +1182,9 @@ export default function MarketingSection() {
                     );
                     if (matches) explicitlyTargetedProvinces.add(canonical);
                 });
-                const missingTargetingProvinces = PROVINCIAS.filter(p => !explicitlyTargetedProvinces.has(p));
+                const missingTargetingProvinces = PROVINCIAS.filter(p => (
+                    !explicitlyTargetedProvinces.has(p) && !targetedProvinces.has(p)
+                ));
 
                 return (
                     <div style={{ display: 'grid', gap: 16, marginTop: 16 }}>
