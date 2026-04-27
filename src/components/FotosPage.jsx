@@ -12,13 +12,15 @@ import {
 } from '../store/imageLibrary';
 
 const FOTO_TASKS = [
-    { id: 'foto_web', label: 'Foto de web', aliases: ['web_single', 'web_model'] },
-    { id: 'foto_perchero_web', label: 'Foto de perchero web', aliases: ['web_rack'] },
-    { id: 'foto_colores_web', label: 'Foto de colores web', aliases: ['web_variants'] },
-    { id: 'foto_instagram', label: 'Foto de Instagram', aliases: ['ig_model'] },
-    { id: 'foto_flat_lay_instagram', label: 'Foto de flat lay Instagram', aliases: ['ig_flatlay'] },
-    { id: 'foto_perchero_instagram', label: 'Foto de perchero Instagram', aliases: ['ig_rack'] }
+    { id: 'foto_web', group: 'Web', label: 'Foto principal', aliases: ['web_single', 'web_model'] },
+    { id: 'foto_perchero_web', group: 'Web', label: 'Perchero', aliases: ['web_rack'] },
+    { id: 'foto_colores_web', group: 'Web', label: 'Colores', aliases: ['web_variants'] },
+    { id: 'foto_instagram', group: 'Instagram', label: 'Foto principal', aliases: ['ig_model'] },
+    { id: 'foto_flat_lay_instagram', group: 'Instagram', label: 'Flat lay', aliases: ['ig_flatlay'] },
+    { id: 'foto_perchero_instagram', group: 'Instagram', label: 'Perchero', aliases: ['ig_rack'] }
 ];
+
+const FOTO_TASK_GROUPS = ['Web', 'Instagram'];
 
 const formatSizeLabel = (bytes) => {
     const amount = Number(bytes || 0);
@@ -454,8 +456,8 @@ export default function FotosPage() {
 
                                 <div style={{ minWidth: 280, flex: '1 1 520px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 'var(--fs-md)' }}>{product.detalleCorto}</div>
+                                        <div style={{ minWidth: 0, flex: '1 1 260px' }}>
+                                            <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 'var(--fs-md)', overflowWrap: 'anywhere' }}>{product.detalleCorto}</div>
                                             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{product.codigoInterno || 'Sin codigo'}</div>
                                         </div>
                                         <div style={{ color: completed === FOTO_TASKS.length ? 'var(--success)' : 'var(--text-secondary)', fontWeight: 'var(--fw-semibold)' }}>
@@ -463,31 +465,38 @@ export default function FotosPage() {
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'stretch' }}>
-                                        {FOTO_TASKS.map((task) => {
-                                            const done = isTaskDone(record, task);
-                                            return (
-                                                <button
-                                                    key={task.id}
-                                                    className="btn btn-secondary"
-                                                    onClick={() => toggleTask(product.id, task.id)}
-                                                    style={{
-                                                        flex: '1 1 185px',
-                                                        minWidth: 0,
-                                                        minHeight: 38,
-                                                        justifyContent: 'space-between',
-                                                        gap: 8,
-                                                        padding: '8px 12px',
-                                                        borderColor: done ? 'rgba(52, 211, 153, 0.35)' : 'rgba(248, 113, 113, 0.25)',
-                                                        background: done ? 'rgba(52, 211, 153, 0.12)' : 'rgba(248, 113, 113, 0.08)',
-                                                        color: done ? 'var(--success)' : '#fca5a5'
-                                                    }}
-                                                >
-                                                    <span style={{ minWidth: 0, whiteSpace: 'normal', textAlign: 'left', lineHeight: 1.2 }}>{task.label}</span>
-                                                    <span style={{ flex: '0 0 auto', display: 'flex' }}>{done ? <CheckCircle2 size={16} /> : <Circle size={16} />}</span>
-                                                </button>
-                                            );
-                                        })}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
+                                        {FOTO_TASK_GROUPS.map((group) => (
+                                            <div key={group} style={{ padding: 10, borderRadius: 14, background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', minWidth: 0 }}>
+                                                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>{group}</div>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'stretch' }}>
+                                                    {FOTO_TASKS.filter((task) => task.group === group).map((task) => {
+                                                        const done = isTaskDone(record, task);
+                                                        return (
+                                                            <button
+                                                                key={task.id}
+                                                                className="btn btn-secondary"
+                                                                onClick={() => toggleTask(product.id, task.id)}
+                                                                style={{
+                                                                    flex: '1 1 110px',
+                                                                    minWidth: 0,
+                                                                    minHeight: 38,
+                                                                    justifyContent: 'space-between',
+                                                                    gap: 8,
+                                                                    padding: '8px 10px',
+                                                                    borderColor: done ? 'rgba(52, 211, 153, 0.35)' : 'rgba(248, 113, 113, 0.25)',
+                                                                    background: done ? 'rgba(52, 211, 153, 0.12)' : 'rgba(248, 113, 113, 0.08)',
+                                                                    color: done ? 'var(--success)' : '#fca5a5'
+                                                                }}
+                                                            >
+                                                                <span style={{ minWidth: 0, whiteSpace: 'normal', textAlign: 'left', lineHeight: 1.2 }}>{task.label}</span>
+                                                                <span style={{ flex: '0 0 auto', display: 'flex' }}>{done ? <CheckCircle2 size={16} /> : <Circle size={16} />}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
 
                                     <div>
