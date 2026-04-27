@@ -11,7 +11,7 @@ const KNOWN_USERS = {
     'nadia@celavie.com': { role: 'encargada', name: 'Nadia' },
     'juan@celavie.com': { role: 'pedidos', name: 'Juan' },
     'naara@celavie.com': { role: 'deposito', name: 'Naara' },
-    'erika@celavie.com.ar': { role: 'contenido_instagram', name: 'Erika' }
+    'erika@celavie.com': { role: 'contenido_instagram', name: 'Erika' }
 };
 
 const KNOWN_USER_SECTIONS = {
@@ -19,7 +19,7 @@ const KNOWN_USER_SECTIONS = {
     'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'informes', 'fotoscompartidas'],
     'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia', 'fotoscompartidas'],
     'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia', 'fotoscompartidas'],
-    'erika@celavie.com.ar': ['instagramplanner', 'tiktok', 'fotoscompartidas', 'fotos', 'fotosprendas']
+    'erika@celavie.com': ['instagramplanner', 'tiktok', 'fotoscompartidas', 'fotos', 'fotosprendas']
 };
 
 // All available sections in the app

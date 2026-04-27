@@ -14,7 +14,7 @@ const SYSTEM_ACCOUNTS = [
     { email: 'nadia@celavie.com', role: 'encargada', label: 'Encargada' },
     { email: 'naara@celavie.com', role: 'deposito', label: 'Deposito' },
     { email: 'juan@celavie.com', role: 'pedidos', label: 'Pedidos Online' },
-    { email: 'erika@celavie.com.ar', role: 'contenido_instagram', label: 'Instagram Post / Fotos' }
+    { email: 'erika@celavie.com', role: 'contenido_instagram', label: 'Instagram Post / Fotos' }
 ];
 
 export default function Settings() {
