@@ -282,9 +282,10 @@ function pickRandomBriefs(count, seed) {
     return shuffled.slice(0, count);
 }
 
-function dateToSeed(dateStr) {
-    const parts = dateStr.split('-');
-    return parseInt(parts[0]) * 10000 + parseInt(parts[1]) * 100 + parseInt(parts[2]);
+function dateToSeed(value) {
+    return String(value).split('').reduce((seed, char) => (
+        (seed * 31 + char.charCodeAt(0)) % 233280
+    ), 7);
 }
 
 function generateDayBriefs(dateKey, products) {
@@ -369,13 +370,14 @@ export default function TikTokContentPage() {
     };
 
     const handleRegenerate = (dateKey) => {
-        const briefs = generateDayBriefs(dateKey + '-' + Date.now(), products);
-        // Re-assign IDs with the actual date
-        const fixed = briefs.map((b, i) => ({ ...b, id: `tt-${dateKey}-${i + 1}-r` }));
+        const generatedAt = Date.now();
+        const briefs = generateDayBriefs(`${dateKey}-${generatedAt}`, products);
+        const fixed = briefs.map((b, i) => ({ ...b, id: `tt-${dateKey}-${i + 1}-${generatedAt}` }));
+        setExpandedId(null);
         updateConfig({
             tiktokCalendar: {
                 ...tiktokCalendar,
-                [dateKey]: { options: fixed }
+                [dateKey]: { options: fixed, regeneratedAt: new Date(generatedAt).toISOString() }
             }
         });
     };
