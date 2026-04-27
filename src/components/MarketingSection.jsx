@@ -1162,28 +1162,30 @@ export default function MarketingSection() {
 
                 // Check which provinces have any Meta spend (normalized matching)
                 const metaRegionsNormalized = regionsSorted.map(([r]) => normalizeRegion(r));
-                const targetedProvinces = new Set();
-                Object.entries(PROVINCE_ALIASES).forEach(([canonical, aliases]) => {
-                    const matches = metaRegionsNormalized.some(metaReg =>
-                        aliases.some(alias => metaReg === alias || metaReg.includes(alias) || alias.includes(metaReg))
-                    );
-                    if (matches) targetedProvinces.add(canonical);
-                });
+                const getMatchingProvincesFromRegions = (normalizedRegions) => {
+                    const matched = new Set();
+                    Object.entries(PROVINCE_ALIASES).forEach(([canonical, aliases]) => {
+                        const matches = normalizedRegions.some(metaReg =>
+                            aliases.some(alias => metaReg === alias || metaReg.includes(alias) || alias.includes(metaReg))
+                        );
+                        if (matches) matched.add(canonical);
+                    });
+                    return matched;
+                };
+
+                const targetedProvinces = getMatchingProvincesFromRegions(metaRegionsNormalized);
+                const visiblePerformanceProvinces = getMatchingProvincesFromRegions(
+                    regionsSorted.slice(0, 12).map(([r]) => normalizeRegion(r))
+                );
                 const untargetedProvinces = PROVINCIAS.filter(p => !targetedProvinces.has(p));
 
                 const targetingRegionsNormalized = (targetingRegions.regions || []).map(r => normalizeRegion(r));
                 const isWholeCountryTargeting = targetingRegionsNormalized.some(r =>
                     r === 'argentina' || r.includes('todo el pais') || r.includes('all argentina') || r.includes('entire argentina')
                 );
-                const explicitlyTargetedProvinces = new Set();
-                Object.entries(PROVINCE_ALIASES).forEach(([canonical, aliases]) => {
-                    const matches = targetingRegionsNormalized.some(targetReg =>
-                        aliases.some(alias => targetReg === alias || targetReg.includes(alias) || alias.includes(targetReg))
-                    );
-                    if (matches) explicitlyTargetedProvinces.add(canonical);
-                });
+                const explicitlyTargetedProvinces = getMatchingProvincesFromRegions(targetingRegionsNormalized);
                 const missingTargetingProvinces = PROVINCIAS.filter(p => (
-                    !explicitlyTargetedProvinces.has(p) && !targetedProvinces.has(p)
+                    !explicitlyTargetedProvinces.has(p) && !visiblePerformanceProvinces.has(p)
                 ));
 
                 return (
