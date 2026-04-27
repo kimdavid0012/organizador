@@ -8,13 +8,14 @@ export const wooService = {
         if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
 
         const baseUrl = wooUrl.endsWith('/') ? wooUrl : `${wooUrl}/`;
-        const maxPages = options.maxPages || 20;
+        const maxPages = options.maxPages || 200;
+        const statusParam = options.status ? `&status=${encodeURIComponent(options.status)}` : '';
         let allOrders = [];
         let page = 1;
         let hasMore = true;
 
         while (hasMore) {
-            const url = `${baseUrl}wp-json/wc/v3/orders?consumer_key=${wooKey}&consumer_secret=${wooSecret}&per_page=100&page=${page}&orderby=date&order=desc`;
+            const url = `${baseUrl}wp-json/wc/v3/orders?consumer_key=${wooKey}&consumer_secret=${wooSecret}&per_page=100&page=${page}&orderby=date&order=desc${statusParam}`;
             const response = await fetch(url);
             if (!response.ok) throw new Error('Error al traer pedidos de WooCommerce');
             const orders = await response.json();
@@ -162,11 +163,12 @@ export const wooService = {
     /**
      * Fetch customers from WooCommerce
      */
-    async fetchCustomers(config) {
+    async fetchCustomers(config, options = {}) {
         const { wooUrl, wooKey, wooSecret } = config.marketing || {};
         if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
 
         const baseUrl = wooUrl.endsWith('/') ? wooUrl : `${wooUrl}/`;
+        const maxPages = options.maxPages || 200;
         let allCustomers = [];
         let page = 1;
         let hasMore = true;
@@ -179,7 +181,7 @@ export const wooService = {
             allCustomers = [...allCustomers, ...customers];
             hasMore = customers.length === 100;
             page++;
-            if (page > 10) break; // safety limit
+            if (page > maxPages) break;
         }
         return allCustomers;
     }

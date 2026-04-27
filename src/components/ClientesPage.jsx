@@ -210,10 +210,12 @@ export default function ClientesPage() {
                 }
             });
 
-            // Fallback: if no orders matched but client has WooCommerce total_spent, use that
-            if (total === 0 && !rankMonth && Number(cliente.totalCompras || 0) > 0) {
-                total = Number(cliente.totalCompras);
-                orderCount = Number(cliente.cantidadPedidos || 0) || 1;
+            // WooCommerce totals are the strongest fallback when the local order list is incomplete.
+            const savedWooTotal = Number(cliente.totalCompras || 0);
+            const savedWooOrders = Number(cliente.cantidadPedidos || 0);
+            if (!rankMonth && (savedWooTotal > total || savedWooOrders > orderCount)) {
+                total = Math.max(total, savedWooTotal);
+                orderCount = Math.max(orderCount, savedWooOrders || (savedWooTotal > 0 ? 1 : 0));
                 sources.add('WooCommerce');
             }
 
@@ -336,8 +338,8 @@ export default function ClientesPage() {
         setImportingWoo(true);
         try {
             const [wooCustomers, wooOrders] = await Promise.all([
-                wooService.fetchCustomers(state.config),
-                wooService.fetchOrders(state.config, { maxPages: 50 })
+                wooService.fetchCustomers(state.config, { maxPages: 200 }),
+                wooService.fetchOrders(state.config, { maxPages: 200, status: 'any' })
             ]);
             const orderStats = buildWooOrderStats(wooOrders);
             const nextClientes = [...clientes];
