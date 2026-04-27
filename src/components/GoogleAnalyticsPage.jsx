@@ -12,6 +12,15 @@ const formatGaDate = (date) => {
     return `${date.slice(6, 8)}/${date.slice(4, 6)}`;
 };
 
+const parseAmount = (value) => Number(String(value || 0).replace(/[^\d.-]/g, '')) || 0;
+
+const getOrderDate = (order) => order.fecha || order.date_created || order.createdAt || order.fechaCreacion || '';
+
+const isWebOrder = (order) => {
+    const origin = String(order.origen || '').toLowerCase();
+    return Boolean(order.wooId || origin === 'web' || order.billing || order.line_items);
+};
+
 const StatCard = ({ label, value, hint, icon: Icon, color = '#22c55e' }) => (
     <div style={{ padding: 18, borderRadius: 16, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-color)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 10 }}>
@@ -37,6 +46,39 @@ export default function GoogleAnalyticsPage() {
     const [wooData, setWooData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    const dashboardData = useMemo(() => {
+        const pedidos = config.pedidosOnline || [];
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 30);
+
+        const webOrders = pedidos.filter(isWebOrder);
+        const recentWebOrders = webOrders.filter((order) => {
+            const dateValue = getOrderDate(order);
+            if (!dateValue) return true;
+            const parsed = new Date(dateValue);
+            return Number.isNaN(parsed.getTime()) || parsed >= cutoff;
+        });
+        const sourceCounts = pedidos.reduce((acc, order) => {
+            const source = order.origen || (order.wooId ? 'Web' : 'Otro');
+            acc[source] = (acc[source] || 0) + 1;
+            return acc;
+        }, {});
+        const revenue = recentWebOrders.reduce((sum, order) => sum + parseAmount(order.total ?? order.monto ?? order.totalPedido), 0);
+        const items = recentWebOrders.reduce((sum, order) => (
+            sum + (order.items || order.line_items || []).reduce((itemSum, item) => itemSum + Number(item.cantidad || item.quantity || 1), 0)
+        ), 0);
+
+        return {
+            totalOrders: pedidos.length,
+            webOrders: webOrders.length,
+            recentWebOrders: recentWebOrders.length,
+            revenue,
+            items,
+            sourceCounts,
+            recentOrders: recentWebOrders.slice(0, 8)
+        };
+    }, [config.pedidosOnline]);
 
     const maxDailySessions = useMemo(() => (
         Math.max(...(gaData?.daily || []).map((row) => row.sessions || 0), 1)
@@ -122,6 +164,48 @@ export default function GoogleAnalyticsPage() {
                     </div>
                 </div>
             )}
+
+            <div className="glass-panel" style={{ padding: 18 }}>
+                <h3 style={{ margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <BarChart3 size={18} /> Datos del dashboard
+                </h3>
+                <p style={{ margin: '0 0 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+                    Estos datos salen de los pedidos guardados en el dashboard y se muestran aunque GA4 todavia no tenga permiso de lectura.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+                    <StatCard label="Pedidos web" value={formatNum(dashboardData.webOrders)} hint="Total importado/registrado" icon={ShoppingBag} color="#60a5fa" />
+                    <StatCard label="Pedidos web recientes" value={formatNum(dashboardData.recentWebOrders)} hint="Ultimos 30 dias" icon={TrendingUp} color="#34d399" />
+                    <StatCard label="Venta web registrada" value={formatMoney(dashboardData.revenue)} hint="Segun pedidos del dashboard" icon={ShoppingBag} color="#22c55e" />
+                    <StatCard label="Items web" value={formatNum(dashboardData.items)} hint="Unidades en pedidos" icon={BarChart3} color="#f59e0b" />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(260px, 0.8fr)', gap: 14, marginTop: 14 }}>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>Origen de pedidos</div>
+                        {Object.entries(dashboardData.sourceCounts).map(([source, count]) => (
+                            <div key={source} style={{ display: 'grid', gap: 4 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                                    <span>{source}</span>
+                                    <strong>{formatNum(count)}</strong>
+                                </div>
+                                <div style={{ height: 7, borderRadius: 999, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                                    <div style={{ width: `${Math.min(100, (count / Math.max(dashboardData.totalOrders, 1)) * 100)}%`, height: '100%', background: 'linear-gradient(90deg, #14b8a6, #34d399)' }} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>Ultimos pedidos web</div>
+                        {dashboardData.recentOrders.length === 0 ? (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No hay pedidos web cargados todavia.</div>
+                        ) : dashboardData.recentOrders.map((order) => (
+                            <div key={order.id || order.wooId || order.numeroPedido} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 10px', borderRadius: 10, background: 'rgba(255,255,255,0.035)', fontSize: 12 }}>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.numeroPedido || order.wooId || order.cliente || 'Pedido'}</span>
+                                <strong>{formatMoney(order.total ?? order.monto ?? 0)}</strong>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
 
             {gaReady && (
                 <>
