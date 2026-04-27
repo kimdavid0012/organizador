@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, CheckCircle2, Circle, Eye, ImagePlus, RefreshCw, Search, Star, Trash2 } from 'lucide-react';
 import { useData } from '../store/DataContext';
-import { getProductThumb } from '../utils/helpers';
+import { getProductThumb, normalizeImageUrl } from '../utils/helpers';
 import { useAuth } from '../store/AuthContext';
 import { wooService } from '../utils/wooService';
 import {
@@ -52,10 +52,10 @@ const getLibraryItemKeys = (item) => uniqueKeys([
 ]);
 
 const getWooImageUrl = (product) => {
-    if (product.image) return product.image;
-    if (product.storageUrl) return product.storageUrl;
+    if (product.image) return normalizeImageUrl(product.image);
+    if (product.storageUrl) return normalizeImageUrl(product.storageUrl);
     const images = product.images || product.imagenes || [];
-    return images.map((image) => (
+    return images.map((image) => normalizeImageUrl(
         typeof image === 'string' ? image : image?.src || image?.url || ''
     )).find(Boolean) || '';
 };
@@ -68,7 +68,7 @@ const mapWooProductForFotos = (product) => ({
     detalleCorto: product.name || product.productName || product.detalleCorto || 'Articulo sin nombre',
     storageUrl: getWooImageUrl(product),
     imagenes: (product.images || product.imagenes || [])
-        .map((image) => (typeof image === 'string' ? image : image?.src || image?.url || ''))
+        .map((image) => normalizeImageUrl(typeof image === 'string' ? image : image?.src || image?.url || ''))
         .filter(Boolean),
     activo: product.status ? product.status !== 'trash' : product.activo !== false
 });
@@ -89,6 +89,7 @@ export default function FotosPage() {
     const [uploadingProductId, setUploadingProductId] = useState('');
     const [lightboxSrc, setLightboxSrc] = useState('');
     const [loadingImageId, setLoadingImageId] = useState('');
+    const [imageErrors, setImageErrors] = useState({});
     const [loadingWooProducts, setLoadingWooProducts] = useState(false);
     const [wooError, setWooError] = useState('');
     const fileInputRef = useRef(null);
@@ -464,7 +465,14 @@ export default function FotosPage() {
                                 .map((item) => [item.id, item])
                         ).values()
                     ).sort((left, right) => (right.uploadedAt || '').localeCompare(left.uploadedAt || ''));
-                    const coverThumb = product.imagenBibliotecaThumb || thumbs[product.imagenBibliotecaId] || getProductThumb(product.codigoInterno, allProducts) || '';
+                    const coverCandidates = [
+                        product.imagenBibliotecaThumb,
+                        thumbs[product.imagenBibliotecaId],
+                        product.storageUrl,
+                        ...(product.imagenes || []),
+                        getProductThumb(product.codigoInterno, allProducts)
+                    ].map(normalizeImageUrl).filter(Boolean);
+                    const coverThumb = coverCandidates.find((src) => !imageErrors[`${product.id}:${src}`]) || '';
 
                     return (
                         <div
@@ -486,7 +494,12 @@ export default function FotosPage() {
                                         justifyContent: 'center'
                                     }}>
                                         {coverThumb ? (
-                                            <img src={coverThumb} alt={product.detalleCorto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            <img
+                                                src={coverThumb}
+                                                alt={product.detalleCorto}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                onError={() => setImageErrors((prev) => ({ ...prev, [`${product.id}:${coverThumb}`]: true }))}
+                                            />
                                         ) : (
                                             <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>
                                                 Sin foto de artículo
@@ -559,7 +572,8 @@ export default function FotosPage() {
                                         ) : (
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
                                                 {productImages.map((imageMeta) => {
-                                                    const thumb = thumbs[imageMeta.id] || (product.imagenBibliotecaId === imageMeta.id ? product.imagenBibliotecaThumb : '');
+                                                    const thumb = normalizeImageUrl(thumbs[imageMeta.id] || imageMeta.thumbDataUrl || imageMeta.storageUrl || imageMeta.sharedPreviewUrl || (product.imagenBibliotecaId === imageMeta.id ? product.imagenBibliotecaThumb : ''));
+                                                    const thumbKey = `${imageMeta.id}:${thumb}`;
                                                     const isCover = product.imagenBibliotecaId === imageMeta.id;
                                                     return (
                                                         <div
@@ -572,8 +586,13 @@ export default function FotosPage() {
                                                             }}
                                                         >
                                                             <div style={{ width: '100%', aspectRatio: '1 / 1', background: 'rgba(255,255,255,0.04)' }}>
-                                                                {thumb ? (
-                                                                    <img src={thumb} alt={imageMeta.productName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                {thumb && !imageErrors[thumbKey] ? (
+                                                                    <img
+                                                                        src={thumb}
+                                                                        alt={imageMeta.productName || 'Foto del articulo'}
+                                                                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                                        onError={() => setImageErrors((prev) => ({ ...prev, [thumbKey]: true }))}
+                                                                    />
                                                                 ) : null}
                                                             </div>
                                                             <div style={{ padding: 8, display: 'grid', gap: 6 }}>

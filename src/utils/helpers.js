@@ -76,6 +76,14 @@ export const resizeImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7
 export const MAX_IMAGE_SIZE_MB = 5;
 export const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
+export const normalizeImageUrl = (url) => {
+    const value = (url || '').toString().trim();
+    if (!value) return '';
+    if (value.startsWith('//')) return `https:${value}`;
+    if (value.startsWith('http://')) return value.replace(/^http:\/\//i, 'https://');
+    return value;
+};
+
 // Returns the best available thumbnail for a product (works across all devices since thumbDataUrl is in Firestore)
 export const getProductThumb = (codigoInterno, posProductos = []) => {
     if (!codigoInterno || !posProductos.length) return '';
@@ -97,11 +105,11 @@ export const getProductThumb = (codigoInterno, posProductos = []) => {
         : '';
 
     // Priority: thumb base64 (Firestore) > Firebase Storage URL > WooCommerce image > other fields
-    return product.imagenBibliotecaThumb
+    return normalizeImageUrl(product.imagenBibliotecaThumb
         || product.storageUrl
         || wooImage
         || product.imagen
         || product.image
         || product.thumbnail
-        || '';
+        || '');
 };
