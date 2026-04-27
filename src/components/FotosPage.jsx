@@ -11,12 +11,12 @@ import {
 } from '../store/imageLibrary';
 
 const FOTO_TASKS = [
-    { id: 'web_single', label: '1 prenda web' },
-    { id: 'web_variants', label: 'Perchero colores web' },
-    { id: 'web_model', label: 'Modelo web' },
-    { id: 'ig_flatlay', label: 'Flat lay IG' },
-    { id: 'ig_rack', label: 'Perchero IG' },
-    { id: 'ig_model', label: 'Modelo IG' }
+    { id: 'foto_web', label: 'Foto de web', aliases: ['web_single', 'web_model'] },
+    { id: 'foto_perchero_web', label: 'Foto de perchero web', aliases: ['web_rack'] },
+    { id: 'foto_colores_web', label: 'Foto de colores web', aliases: ['web_variants'] },
+    { id: 'foto_instagram', label: 'Foto de Instagram', aliases: ['ig_model'] },
+    { id: 'foto_flat_lay_instagram', label: 'Foto de flat lay Instagram', aliases: ['ig_flatlay'] },
+    { id: 'foto_perchero_instagram', label: 'Foto de perchero Instagram', aliases: ['ig_rack'] }
 ];
 
 const formatSizeLabel = (bytes) => {
@@ -110,6 +110,11 @@ export default function FotosPage() {
             states: {},
             updatedAt: null
         };
+
+    const isTaskDone = (record, task) => {
+        const states = record.states || {};
+        return Boolean(states[task.id] || task.aliases?.some((alias) => states[alias]));
+    };
 
     const toggleTask = (productId, taskId) => {
         const current = getTaskRecord(productId);
@@ -302,7 +307,7 @@ export default function FotosPage() {
             <div style={{ display: 'grid', gap: 12 }}>
                 {visibleProducts.map((product) => {
                     const record = getTaskRecord(product.id);
-                    const completed = FOTO_TASKS.filter((task) => record.states?.[task.id]).length;
+                    const completed = FOTO_TASKS.filter((task) => isTaskDone(record, task)).length;
                     const productImages = (libraryByProductId.get(product.id) || []).sort((left, right) => (right.uploadedAt || '').localeCompare(left.uploadedAt || ''));
                     const coverThumb = product.imagenBibliotecaThumb || thumbs[product.imagenBibliotecaId] || getProductThumb(product.codigoInterno, allProducts) || '';
 
@@ -356,7 +361,7 @@ export default function FotosPage() {
 
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
                                         {FOTO_TASKS.map((task) => {
-                                            const done = Boolean(record.states?.[task.id]);
+                                            const done = isTaskDone(record, task);
                                             return (
                                                 <button
                                                     key={task.id}

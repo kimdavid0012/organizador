@@ -492,7 +492,7 @@ export default function InstagramPlannerPage() {
                 <div className="glass-panel instagram-planner-sidebar">
                     <h3 style={{ marginTop: 0, marginBottom: 10 }}>Seguimiento visual</h3>
                     <p style={{ color: 'var(--text-secondary)', marginTop: 0 }}>
-                        Esta vista queda fija para Rocío, así puede planificar el orden del contenido sin que desaparezcan las fotos subidas.
+                        Esta vista queda fija para Erika, asi puede planificar el orden del contenido sin que desaparezcan las fotos subidas.
                     </p>
                     <div className="instagram-mini-feed">
                         {plannerSlots.map((slot) => {
@@ -542,3 +542,4 @@ export default function InstagramPlannerPage() {
         </div>
     );
 }
+

@@ -14,7 +14,7 @@ const SYSTEM_ACCOUNTS = [
     { email: 'nadia@celavie.com', role: 'encargada', label: 'Encargada' },
     { email: 'naara@celavie.com', role: 'deposito', label: 'Deposito' },
     { email: 'juan@celavie.com', role: 'pedidos', label: 'Pedidos Online' },
-    { email: 'rocio@celavie.com', role: 'fotos', label: 'Fotos' }
+    { email: 'erika@celavie.com.ar', role: 'contenido_instagram', label: 'Instagram Post / Fotos' }
 ];
 
 export default function Settings() {
@@ -81,13 +81,13 @@ export default function Settings() {
             alert('No hay datos para migrar.');
             return;
         }
-        
+
         const moldesCount = state.moldes?.length || 0;
         const cortesCount = state.config?.cortes?.length || 0;
         const telasCount = state.telas?.length || 0;
-        
+
         if (!window.confirm(`¿Guardar datos a la nube?\n\n- ${moldesCount} moldes\n- ${cortesCount} cortes\n- ${telasCount} telas\n\nLos datos se dividen automáticamente en múltiples documentos para no superar límites.`)) return;
-        
+
         setMigrating(true);
         try {
             const { saveDataToFirestore, saveDataToLocal } = await import('../store/storage');

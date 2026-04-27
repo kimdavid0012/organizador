@@ -603,8 +603,7 @@ function AppContent() {
                                     <option value="deposito">📦 Depósito (Naara)</option>
                                     <option value="pedidos">🌐 Pedidos Online (Juan)</option>
                                     <option value="marketing">📣 Marketing (Gisela)</option>
-                                    <option value="fotos">📸 Fotos (Rocio)</option>
-                                    <option value="contenido_instagram">📷 Instagram (Erica)</option>
+                                    <option value="contenido_instagram">Instagram / Fotos (Erika)</option>
                                 </select>
                             )}
 
@@ -707,9 +706,9 @@ function AppContent() {
                     onClose={() => setEditingMolde(null)}
                 />
             )}
-            {/* For now we'll reuse MoldModal for Tareas but hide specific fields, or ideally build a TaskModal. 
+            {/* For now we'll reuse MoldModal for Tareas but hide specific fields, or ideally build a TaskModal.
                 Wait, building a Task modal is better, but maybe just use the basic fields.
-                Let's use a quick inline prompt or build a simplified Modal if needed. 
+                Let's use a quick inline prompt or build a simplified Modal if needed.
                 Actually, MoldModal has a lot of Mold-specific logic. Let's build TaskModal shortly. */}
             {resolvedEditItem && editType === 'tarea' && (
                 <TaskModal

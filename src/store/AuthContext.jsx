@@ -11,8 +11,7 @@ const KNOWN_USERS = {
     'nadia@celavie.com': { role: 'encargada', name: 'Nadia' },
     'juan@celavie.com': { role: 'pedidos', name: 'Juan' },
     'naara@celavie.com': { role: 'deposito', name: 'Naara' },
-    'rocio@celavie.com': { role: 'fotos', name: 'Rocio' },
-    'erica@celavie.com': { role: 'contenido_instagram', name: 'Erica' }
+    'erika@celavie.com.ar': { role: 'contenido_instagram', name: 'Erika' }
 };
 
 const KNOWN_USER_SECTIONS = {
@@ -20,8 +19,7 @@ const KNOWN_USER_SECTIONS = {
     'nadia@celavie.com': ['kanban', 'pos', 'articulos', 'pedidos', 'clientes', 'talleres', 'empleados', 'paginaweb', 'conteomercaderia', 'saldo', 'informes', 'fotoscompartidas'],
     'juan@celavie.com': ['kanban', 'pedidos', 'conteomercaderia', 'fotoscompartidas'],
     'naara@celavie.com': ['kanban', 'talleres', 'conteomercaderia', 'fotoscompartidas'],
-    'rocio@celavie.com': ['fotos', 'tiktok', 'fotoscompartidas'],
-    'erica@celavie.com': ['instagramplanner', 'fotos', 'fotosprendas', 'library', 'fotoscompartidas']
+    'erika@celavie.com.ar': ['instagramplanner', 'tiktok', 'fotoscompartidas', 'fotos', 'fotosprendas']
 };
 
 // All available sections in the app
@@ -34,8 +32,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
     deposito: ['kanban', 'talleres', 'conteomercaderia', 'fotoscompartidas'],
     pedidos: ['kanban', 'pedidos', 'conteomercaderia', 'fotoscompartidas'],
     marketing: ['pedidos', 'marketing', 'paginaweb', 'settings', 'agents', 'instagramplanner', 'articulos', 'fotoscompartidas', 'googleanalytics'],
-    fotos: ['fotos', 'instagramplanner', 'tiktok', 'fotoscompartidas'],
-    contenido_instagram: ['instagramplanner', 'fotos', 'fotosprendas', 'library'],
+    contenido_instagram: ['instagramplanner', 'tiktok', 'fotoscompartidas', 'fotos', 'fotosprendas'],
     pendiente: [] // New users get no access until admin assigns a role
 };
 
@@ -65,7 +62,6 @@ const SECTION_LABELS = {
     settings: 'Configuración',
     informes: 'Informes',
     saldo: 'Saldo',
-    fotosprendas: 'Fotos Prendas',
     googleanalytics: 'Google Analytics'
 };
 
@@ -140,7 +136,6 @@ export function AuthProvider({ children }) {
                         merged.deposito = [...DEFAULT_ROLE_PERMISSIONS.deposito];
                         merged.pedidos = [...DEFAULT_ROLE_PERMISSIONS.pedidos];
                         merged.marketing = [...DEFAULT_ROLE_PERMISSIONS.marketing];
-                        merged.fotos = [...DEFAULT_ROLE_PERMISSIONS.fotos];
                         merged.contenido_instagram = [...DEFAULT_ROLE_PERMISSIONS.contenido_instagram];
                         setRolePermissions(merged);
                     }

@@ -8,7 +8,7 @@ const DEFAULT_EMPLOYEES = [
     { id: 'emp-nadia', nombre: 'Nadia', puesto: 'Encargada' },
     { id: 'emp-juan', nombre: 'Juan', puesto: 'Pedidos Online' },
     { id: 'emp-naara', nombre: 'Naara', puesto: 'Deposito' },
-    { id: 'emp-rocio', nombre: 'Rocio', puesto: 'Fotos y Atencion' }
+    { id: 'emp-erika', nombre: 'Erika', puesto: 'Instagram Post y Fotos' }
 ];
 
 const BONUS_PRESENTISMO = 20000;

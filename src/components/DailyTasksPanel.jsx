@@ -25,7 +25,7 @@ const generateDailyTasks = (userObj, state) => {
         });
     }
 
-    if (userObj.role === 'contenido_instagram' || userObj.email === 'erica@celavie.com') {
+    if (userObj.role === 'contenido_instagram' || userObj.email === 'erika@celavie.com.ar') {
         const fotosPrendas = state.config.fotosPrendas || [];
         const todayPhotos = fotosPrendas.filter(f => (f.uploadedAt || '').slice(0, 10) === today);
         const recentPhotos = fotosPrendas.slice(0, 10);
@@ -46,7 +46,7 @@ const generateDailyTasks = (userObj, state) => {
         }
     }
 
-    if (userObj.role === 'fotos' || userObj.email === 'rocio@celavie.com') {
+    if (userObj.role === 'contenido_instagram' || userObj.email === 'erika@celavie.com.ar') {
         tasks.push({
             id: `task-tiktok-${today}`,
             text: 'Elegir y grabar opción de TikTok del día',
@@ -71,8 +71,7 @@ const KNOWN_USERS_MAP = {
     'nadia@celavie.com': { role: 'encargada', name: 'Nadia' },
     'juan@celavie.com': { role: 'pedidos', name: 'Juan' },
     'naara@celavie.com': { role: 'deposito', name: 'Naara' },
-    'rocio@celavie.com': { role: 'fotos', name: 'Rocio' },
-    'erica@celavie.com': { role: 'contenido_instagram', name: 'Erica' }
+    'erika@celavie.com.ar': { role: 'contenido_instagram', name: 'Erika' }
 };
 
 export default function DailyTasksPanel() {

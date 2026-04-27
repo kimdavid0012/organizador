@@ -89,7 +89,7 @@ export default function FotosPrendasPage() {
                     <Camera size={22} /> Fotos de Prendas
                 </h2>
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                    David sube fotos de prendas desde el local. Erica las descarga y sube contenido terminado.
+                    David sube fotos de prendas desde el local. Erika las descarga y sube contenido terminado.
                 </p>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                     <button className={`btn ${activeTab === 'prendas' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setActiveTab('prendas')}>
@@ -190,3 +190,4 @@ export default function FotosPrendasPage() {
         </div>
     );
 }
+

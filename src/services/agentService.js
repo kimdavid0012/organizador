@@ -31,7 +31,7 @@ const TEAM = {
   nadia: { name: 'Nadia', role: 'Encargada', areas: 'POS, pedidos, clientes, banco, saldo, operaciones diarias' },
   naara: { name: 'Naara', role: 'Depósito', areas: 'conteo mercadería, inventario, stock' },
   juan: { name: 'Juan', role: 'Pedidos Online', areas: 'pedidos web, envíos, seguimiento' },
-  rocio: { name: 'Rocío', role: 'Fotos + IG Planner', areas: 'fotos de productos, planificación IG' },
+  erika: { name: 'Erika', role: 'Instagram Post + Fotos', areas: 'contenido Instagram/TikTok, fotos de productos, Google Drive, Fotos Prendas' },
 };
 
 const TEAM_CONTEXT = `EQUIPO CELAVIE:
@@ -39,7 +39,7 @@ const TEAM_CONTEXT = `EQUIPO CELAVIE:
 - Nadia: encargada del local (POS, pedidos, clientes, banco, saldo)
 - Naara: depósito (conteo mercadería, inventario)
 - Juan: pedidos online (web, envíos)
-- Rocío: fotos de productos, Instagram Planner
+- Erika: Instagram Post, TikTok, Google Drive, Fotos y Fotos Prendas
 IMPORTANTE: Cuando generes tareas/acciones, SIEMPRE asigná a la persona correcta del equipo.`;
 
 // ─── Didactic explanation rule for all agents ──────────────
@@ -472,7 +472,7 @@ export async function runAnalystAgent(config, state, onProgress) {
   // ─── MULTI-STEP ANALYSIS (3 passes) ─────────────────────────
   // Step 1: Deep Meta Ads analysis
   onProgress?.('Paso 1/3: Analizando Meta Ads...');
-  const step1 = await callLLM(config, 
+  const step1 = await callLLM(config,
     'Sos un analista de Meta Ads. Analizá estos datos y dá un diagnóstico concreto con números. Español rioplatense, bullet points.',
     `DATOS META ADS (account-level 30d): ${safeTruncate(bd.meta)}
 CAMPAÑAS ACTIVAS: ${safeTruncate(bd.campaigns, 2500)}
@@ -545,7 +545,7 @@ Generá un BRIEF EJECUTIVO DEL DÍA con:
 8. **🔴 ALERTAS URGENTES** (stock, budget, performance, web)
 9. **✅ TOP 5 ACCIONES PARA HOY** — SIEMPRE asigná a una persona específica:
 | Acción | Responsable | Deadline |
-(David/Ro=redes, Nadia=encargada/POS, Naara=inventario, Juan=pedidos, Rocío=fotos)
+(David/Ro=redes, Nadia=encargada/POS, Naara=inventario, Juan=pedidos, Erika=fotos)
 10. **📈 PROYECCIÓN SEMANAL** (revenue estimado, metas)`;
 
   const { text, tokens } = await callLLM(config, ANALYST_SYSTEM, prompt, { maxTokens: 4000 });
@@ -1528,7 +1528,7 @@ ASIGNACIÓN DE RESPONSABLES:
 - Nadia: POS, atención al cliente, pedidos físicos, banco, saldo
 - Naara: conteo de mercadería, inventario, stock, depósito
 - Juan: pedidos online, envíos, seguimiento de entregas
-- Rocío: fotografía de productos, Instagram Planner`;
+- Erika: Instagram Post, TikTok, Google Drive, Fotos y Fotos Prendas`;
 
 export async function runMasterAgent(config, allResults, onProgress) {
   const langInst = getLanguageInstruction(config);
@@ -1578,14 +1578,14 @@ REGLA DE TAREAS: Cada tarea debe ser un MINI-INSTRUCTIVO que cualquier persona d
       "decision": "qué se decidió",
       "reason": "por qué, con datos",
       "impact": "qué pasa si no se hace",
-      "owner": "David|Ro|Nadia|Naara|Juan|Rocío"
+      "owner": "David|Ro|Nadia|Naara|Juan|Erika"
     }
   ],
   "tasks": [
     {
       "title": "título corto y claro de la tarea (máx 10 palabras)",
       "description": "INSTRUCCIONES DETALLADAS: 1) Paso a paso qué hacer exactamente. 2) En qué plataforma/herramienta/sección. 3) Por qué es importante en lenguaje simple. 4) Qué resultado se espera. Ejemplo bueno: 'Entrá a Meta Ads Manager → Campañas → Seleccioná las campañas de awareness (las que dicen Alcance/Reconocimiento) → Hacé click en Pausar. Esto es porque estamos gastando $X por día en campañas que no generan ventas directas, y necesitamos redirigir ese presupuesto a retargeting que sí convierte. Resultado esperado: ahorro de $X/día.' Ejemplo malo: 'Pausar campañas de awareness'.",
-      "assignee": "David|Ro|Nadia|Naara|Juan|Rocío",
+      "assignee": "David|Ro|Nadia|Naara|Juan|Erika",
       "priority": "alta|media|baja",
       "deadline": "hoy|mañana|esta semana|próxima semana",
       "source": "nombre del agente que generó esta necesidad",
@@ -2117,3 +2117,4 @@ export function shouldAutoRun(config) {
   const lastRun = config.agentsCache?.lastCEOAutoRun;
   return lastRun !== autoToday;
 }
+

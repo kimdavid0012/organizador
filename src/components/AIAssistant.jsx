@@ -18,7 +18,7 @@ const DEFAULT_EMPLOYEES = [
     { id: 'emp-nadia', nombre: 'Nadia', puesto: 'Encargada' },
     { id: 'emp-juan', nombre: 'Juan', puesto: 'Pedidos Online' },
     { id: 'emp-naara', nombre: 'Naara', puesto: 'Deposito' },
-    { id: 'emp-rocio', nombre: 'Rocio', puesto: 'Fotos y Atencion' }
+    { id: 'emp-erika', nombre: 'Erika', puesto: 'Instagram Post y Fotos' }
 ];
 
 const getNormalizedEmail = (user) => (user?.email || '').toLowerCase().trim();
@@ -644,9 +644,12 @@ JUAN (Pedidos Online):
 - Pedidos: Menú → "Pedidos Online". Ver pedidos web, marcar estados, agregar comentarios de envío.
 - Conteo: Menú → "Conteo Mercadería". Verificar stock disponible para despachar.
 
-ROCÍO (Fotos):
-- Fotos: Menú → "Fotos". Ver lista de artículos que necesitan fotos. Marcar como completado.
-- Instagram: Menú → "Instagram Post". Planificar grid, subir fotos a cada slot del 1 al 9.
+ERIKA (Instagram Post / Fotos):
+- Instagram: Menu -> "Instagram Post". Planificar grid, subir fotos a cada slot del 1 al 9.
+- TikTok: Menu -> "TikTok". Elegir y preparar ideas de videos.
+- Google Drive: Menu -> "Google Drive". Ver carpeta compartida del equipo.
+- Fotos: Menu -> "Fotos". Ver articulos de la web con foto WooCommerce y marcar que foto falta.
+- Fotos Prendas: Menu -> "Fotos Prendas". Descargar prendas y subir contenido terminado.
 
 DAVID (Admin):
 - Todo: Acceso completo. Puede usar Agentes AI → "CEO — Ejecutar Todos" para reporte diario completo.
@@ -742,14 +745,14 @@ export default function AIAssistant() {
             recognition.lang = getLangCode();
             recognition.continuous = false;
             recognition.interimResults = true;
-            
+
             recognition.onresult = (event) => {
                 let transcript = '';
                 for (let i = event.resultIndex; i < event.results.length; i++) {
                     transcript += event.results[i][0].transcript;
                 }
                 setInput(transcript);
-                
+
                 // Si es resultado final, enviar automáticamente
                 if (event.results[event.results.length - 1].isFinal) {
                     setIsListening(false);
@@ -764,7 +767,7 @@ export default function AIAssistant() {
                     }, 500);
                 }
             };
-            
+
             recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
                 setIsListening(false);
@@ -772,11 +775,11 @@ export default function AIAssistant() {
                     alert('⚠️ Necesitás permitir acceso al micrófono para usar voz.');
                 }
             };
-            
+
             recognition.onend = () => {
                 setIsListening(false);
             };
-            
+
             recognitionRef.current = recognition;
         }
     }, []);
@@ -786,7 +789,7 @@ export default function AIAssistant() {
             alert('Tu navegador no soporta reconocimiento de voz. Probá con Chrome.');
             return;
         }
-        
+
         if (isListening) {
             recognitionRef.current.stop();
             setIsListening(false);
@@ -810,7 +813,7 @@ export default function AIAssistant() {
             .replace(/[✅❌⚠️🔴💡🎯📊🤖]/g, '')
             .trim();
         if (!cleanText) return;
-        
+
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = getLangCode();
@@ -822,7 +825,7 @@ export default function AIAssistant() {
     const handleSendFromVoice = async (text) => {
         if (!text.trim() || loading) return;
         if (!apiKey) {
-            setMessages(prev => [...prev, 
+            setMessages(prev => [...prev,
                 { role: 'user', content: text },
                 { role: 'assistant', content: '⚠️ Necesitás configurar la API Key de OpenAI en Configuración.' }
             ]);
@@ -869,7 +872,7 @@ export default function AIAssistant() {
                     const articulos = action.data.articulos || [];
                     const moldeIds = [];
                     const moldesData = [];
-                    
+
                     articulos.forEach(art => {
                         const moldeId = generateId();
                         // Crear el molde si tiene nombre
@@ -912,7 +915,7 @@ export default function AIAssistant() {
                             notas: ''
                         });
                     });
-                    
+
                     const cortes = state.config?.cortes || [];
                     updateConfig({
                         cortes: [...cortes, {
@@ -1006,7 +1009,7 @@ export default function AIAssistant() {
             }
 
             setMessages(prev => [...prev, { role: 'assistant', content: finalText }]);
-            
+
             // Si se usó voz, leer la respuesta en voz alta
             if (isListening || recognitionRef.current) {
                 speakResponse(finalText);
@@ -1022,7 +1025,7 @@ export default function AIAssistant() {
     const handleSend = async () => {
         if (!input.trim() || loading) return;
         if (!apiKey) {
-            setMessages(prev => [...prev, 
+            setMessages(prev => [...prev,
                 { role: 'user', content: input },
                 { role: 'assistant', content: '⚠️ Necesitás configurar la API Key de OpenAI en **Configuración > Asistente IA** para que yo pueda funcionar.' }
             ]);
@@ -1062,7 +1065,7 @@ export default function AIAssistant() {
     return (
         <div style={{
             position: 'fixed', bottom: 20, right: 20, zIndex: 9999,
-            width: isMinimized ? 300 : 380, 
+            width: isMinimized ? 300 : 380,
             height: isMinimized ? 48 : 520,
             borderRadius: 16,
             background: 'var(--bg-card, #1a1a2e)',
@@ -1202,3 +1205,4 @@ export default function AIAssistant() {
         </div>
     );
 }
+
