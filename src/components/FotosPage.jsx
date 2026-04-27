@@ -421,8 +421,8 @@ export default function FotosPage() {
                             className="glass-panel"
                             style={{ padding: 'var(--sp-4)', border: '1px solid rgba(255,255,255,0.06)' }}
                         >
-                            <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', gap: 16, alignItems: 'start' }}>
-                                <div>
+                            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                                <div style={{ width: 120, flex: '0 0 120px' }}>
                                     <div style={{
                                         width: 120,
                                         aspectRatio: '1 / 1',
@@ -452,7 +452,7 @@ export default function FotosPage() {
                                     </button>
                                 </div>
 
-                                <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                <div style={{ minWidth: 280, flex: '1 1 520px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                                         <div>
                                             <div style={{ fontWeight: 'var(--fw-bold)', fontSize: 'var(--fs-md)' }}>{product.detalleCorto}</div>
@@ -463,7 +463,7 @@ export default function FotosPage() {
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'stretch' }}>
                                         {FOTO_TASKS.map((task) => {
                                             const done = isTaskDone(record, task);
                                             return (
@@ -472,14 +472,19 @@ export default function FotosPage() {
                                                     className="btn btn-secondary"
                                                     onClick={() => toggleTask(product.id, task.id)}
                                                     style={{
+                                                        flex: '1 1 185px',
+                                                        minWidth: 0,
+                                                        minHeight: 38,
                                                         justifyContent: 'space-between',
+                                                        gap: 8,
+                                                        padding: '8px 12px',
                                                         borderColor: done ? 'rgba(52, 211, 153, 0.35)' : 'rgba(248, 113, 113, 0.25)',
                                                         background: done ? 'rgba(52, 211, 153, 0.12)' : 'rgba(248, 113, 113, 0.08)',
                                                         color: done ? 'var(--success)' : '#fca5a5'
                                                     }}
                                                 >
-                                                    <span>{task.label}</span>
-                                                    {done ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                                                    <span style={{ minWidth: 0, whiteSpace: 'normal', textAlign: 'left', lineHeight: 1.2 }}>{task.label}</span>
+                                                    <span style={{ flex: '0 0 auto', display: 'flex' }}>{done ? <CheckCircle2 size={16} /> : <Circle size={16} />}</span>
                                                 </button>
                                             );
                                         })}
