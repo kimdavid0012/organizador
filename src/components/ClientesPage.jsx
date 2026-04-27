@@ -57,8 +57,75 @@ const normalizeWooProvince = (billing = {}, shipping = {}) => {
     return province || city || '';
 };
 
+const parseWooAmount = (value) => Number(String(value || 0).replace(/[^\d.-]/g, '')) || 0;
+
+const normalizeWooCustomerName = (billing = {}, shipping = {}, fallback = '') => (
+    `${billing.first_name || shipping.first_name || ''} ${billing.last_name || shipping.last_name || ''}`.trim() ||
+    fallback ||
+    'Sin nombre'
+);
+
+const getClientMatchKeys = ({ wooId, email, telefono, nombre }) => [
+    wooId && String(wooId) !== '0' ? `woo:${String(wooId).trim()}` : '',
+    email ? `email:${String(email).toLowerCase().trim()}` : '',
+    telefono ? `phone:${normalizeWooPhone(telefono)}` : '',
+    nombre && nombre !== 'Sin nombre' ? `name:${normalizeClientMatch(nombre)}` : ''
+].filter(Boolean);
+
+const findClientIndex = (clientes, keys) => clientes.findIndex((cliente) => {
+    const clientKeys = getClientMatchKeys(cliente);
+    return keys.some((key) => clientKeys.includes(key));
+});
+
+const buildWooOrderStats = (orders = []) => {
+    const byKey = new Map();
+    const records = [];
+    const excludedStatuses = new Set(['cancelled', 'failed', 'refunded', 'trash']);
+
+    orders.forEach((order) => {
+        if (excludedStatuses.has(String(order.status || '').toLowerCase())) return;
+        const billing = order.billing || {};
+        const shipping = order.shipping || {};
+        const record = {
+            wooId: order.customer_id || order.wooCustomerId || '',
+            nombre: normalizeWooCustomerName(billing, shipping, billing.email || order.email),
+            email: billing.email || order.email || '',
+            telefono: normalizeWooPhone(billing.phone || shipping.phone || order.telefono || ''),
+            provincia: normalizeWooProvince(billing, shipping),
+            direccion: billing.address_1 || shipping.address_1 || '',
+            totalCompras: 0,
+            cantidadPedidos: 0,
+            ultimaCompra: ''
+        };
+        const keys = getClientMatchKeys(record);
+        if (!keys.length) return;
+
+        let existing = keys.map((key) => byKey.get(key)).find(Boolean);
+        if (!existing) {
+            existing = record;
+            records.push(existing);
+        }
+        keys.forEach((key) => byKey.set(key, existing));
+
+        const amount = parseWooAmount(order.total || order.totalAmount || order.monto);
+        const date = order.date_created || order.fecha || order.createdAt || '';
+        existing.totalCompras += amount;
+        existing.cantidadPedidos += 1;
+        if (date && (!existing.ultimaCompra || new Date(date) > new Date(existing.ultimaCompra))) {
+            existing.ultimaCompra = date;
+        }
+        if (!existing.email && record.email) existing.email = record.email;
+        if (!existing.telefono && record.telefono) existing.telefono = record.telefono;
+        if (!existing.provincia && record.provincia) existing.provincia = record.provincia;
+        if (!existing.direccion && record.direccion) existing.direccion = record.direccion;
+        if ((!existing.nombre || existing.nombre === 'Sin nombre') && record.nombre) existing.nombre = record.nombre;
+    });
+
+    return records;
+};
+
 export default function ClientesPage() {
-    const { state, addCliente, updateCliente, deleteCliente } = useData();
+    const { state, addCliente, updateCliente, deleteCliente, updateConfig } = useData();
     const { clientes = [], posVentas = [], pedidosOnline = [] } = state.config;
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCliente, setEditingCliente] = useState(null);
@@ -268,63 +335,85 @@ export default function ClientesPage() {
     const handleImportFromWoo = async () => {
         setImportingWoo(true);
         try {
-            const wooCustomers = await wooService.fetchCustomers(state.config);
+            const [wooCustomers, wooOrders] = await Promise.all([
+                wooService.fetchCustomers(state.config),
+                wooService.fetchOrders(state.config, { maxPages: 50 })
+            ]);
+            const orderStats = buildWooOrderStats(wooOrders);
+            const nextClientes = [...clientes];
             let imported = 0;
             let updated = 0;
+
+            const upsertWooClient = (clientData) => {
+                const keys = getClientMatchKeys(clientData);
+                const existingIndex = findClientIndex(nextClientes, keys);
+
+                if (existingIndex === -1 && clientData.nombre !== 'Sin nombre') {
+                    nextClientes.unshift({
+                        id: generateId(),
+                        createdAt: new Date().toISOString(),
+                        cuit: '',
+                        expreso: '',
+                        descuento: 0,
+                        origen: 'WooCommerce',
+                        ...clientData
+                    });
+                    imported++;
+                    return;
+                }
+
+                if (existingIndex >= 0) {
+                    const exists = nextClientes[existingIndex];
+                    const changes = {};
+                    if (!exists.telefono && clientData.telefono) changes.telefono = clientData.telefono;
+                    if (!exists.email && clientData.email) changes.email = clientData.email;
+                    if (!exists.provincia && clientData.provincia) changes.provincia = clientData.provincia;
+                    if (!exists.direccion && clientData.direccion) changes.direccion = clientData.direccion;
+                    if (!exists.wooId && clientData.wooId) changes.wooId = clientData.wooId;
+                    if (!exists.origen) changes.origen = 'WooCommerce';
+
+                    const newTotal = Math.max(Number(exists.totalCompras || 0), Number(clientData.totalCompras || 0));
+                    const newOrders = Math.max(Number(exists.cantidadPedidos || 0), Number(clientData.cantidadPedidos || 0));
+                    if (newTotal !== Number(exists.totalCompras || 0)) changes.totalCompras = newTotal;
+                    if (newOrders !== Number(exists.cantidadPedidos || 0)) changes.cantidadPedidos = newOrders;
+                    if (clientData.ultimaCompra && clientData.ultimaCompra !== exists.ultimaCompra) changes.ultimaCompra = clientData.ultimaCompra;
+
+                    if (Object.keys(changes).length > 0) {
+                        nextClientes[existingIndex] = { ...exists, ...changes };
+                        updated++;
+                    }
+                }
+            };
+
             wooCustomers.forEach(wc => {
                 const nombre = `${wc.first_name || ''} ${wc.last_name || ''}`.trim() || wc.email || 'Sin nombre';
                 const telefono = normalizeWooPhone(wc.billing?.phone || wc.shipping?.phone || '');
                 const provincia = normalizeWooProvince(wc.billing, wc.shipping);
                 const direccion = wc.billing?.address_1 || wc.shipping?.address_1 || '';
-                // Check if already exists by email
-                const exists = clientes.find(c => 
-                    (wc.email && c.email && c.email.toLowerCase() === wc.email.toLowerCase()) || 
-                    (wc.id && c.wooId && String(c.wooId) === String(wc.id)) ||
-                    (telefono && c.telefono && normalizeWooPhone(c.telefono) === telefono) ||
-                    (nombre !== 'Sin nombre' && c.nombre?.toLowerCase() === nombre.toLowerCase())
-                );
-                if (!exists && nombre !== 'Sin nombre') {
-                    addCliente({
-                        id: generateId(),
-                        nombre,
-                        email: wc.email || '',
-                        telefono,
-                        cuit: '',
-                        provincia,
-                        expreso: '',
-                        descuento: 0,
-                        direccion,
-                        origen: 'WooCommerce',
-                        wooId: wc.id,
-                        totalCompras: parseFloat(wc.total_spent || 0),
-                        cantidadPedidos: parseInt(wc.orders_count || 0)
-                    });
-                    imported++;
-                } else if (exists) {
-                    const changes = {};
-                    if (!exists.telefono && telefono) changes.telefono = telefono;
-                    if (!exists.email && wc.email) changes.email = wc.email;
-                    if (!exists.provincia && provincia) changes.provincia = provincia;
-                    if (!exists.direccion && direccion) changes.direccion = direccion;
-                    if (!exists.wooId && wc.id) changes.wooId = wc.id;
-                    // Always update totalCompras and cantidadPedidos from WooCommerce
-                    const newTotal = parseFloat(wc.total_spent || 0);
-                    const newOrders = parseInt(wc.orders_count || 0, 10);
-                    if (newTotal !== Number(exists.totalCompras || 0)) {
-                        changes.totalCompras = newTotal;
-                    }
-                    if (newOrders !== Number(exists.cantidadPedidos || 0)) {
-                        changes.cantidadPedidos = newOrders;
-                    }
-                    if (Object.keys(changes).length > 0) {
-                        updateCliente(exists.id, changes);
-                        updated++;
-                    }
-                }
+                const stats = orderStats.find((record) => (
+                    (wc.id && record.wooId && String(wc.id) === String(record.wooId)) ||
+                    (wc.email && record.email && wc.email.toLowerCase() === record.email.toLowerCase()) ||
+                    (telefono && record.telefono && telefono === record.telefono)
+                ));
+
+                upsertWooClient({
+                    nombre,
+                    email: wc.email || stats?.email || '',
+                    telefono: telefono || stats?.telefono || '',
+                    provincia: provincia || stats?.provincia || '',
+                    direccion: direccion || stats?.direccion || '',
+                    wooId: wc.id,
+                    totalCompras: Math.max(parseWooAmount(wc.total_spent), Number(stats?.totalCompras || 0)),
+                    cantidadPedidos: Math.max(parseInt(wc.orders_count || 0, 10), Number(stats?.cantidadPedidos || 0)),
+                    ultimaCompra: stats?.ultimaCompra || ''
+                });
             });
-            alert(`✅ WooCommerce sincronizado: ${imported} clientes nuevos, ${updated} clientes completados/actualizados, ${wooCustomers.length} encontrados en total.`);
+
+            orderStats.forEach((stats) => upsertWooClient(stats));
+            updateConfig({ clientes: nextClientes });
+            alert(`WooCommerce sincronizado: ${imported} clientes nuevos, ${updated} clientes actualizados, ${wooCustomers.length} clientes y ${wooOrders.length} pedidos revisados.`);
         } catch (err) {
-            alert(`❌ Error al importar clientes: ${err.message}`);
+            alert(`Error al importar clientes: ${err.message}`);
         } finally {
             setImportingWoo(false);
         }

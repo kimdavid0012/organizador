@@ -3,11 +3,12 @@
  */
 
 export const wooService = {
-    async fetchOrders(config) {
+    async fetchOrders(config, options = {}) {
         const { wooUrl, wooKey, wooSecret } = config.marketing || {};
         if (!wooUrl || !wooKey || !wooSecret) throw new Error('Faltan credenciales de WooCommerce');
 
         const baseUrl = wooUrl.endsWith('/') ? wooUrl : `${wooUrl}/`;
+        const maxPages = options.maxPages || 20;
         let allOrders = [];
         let page = 1;
         let hasMore = true;
@@ -20,7 +21,7 @@ export const wooService = {
             allOrders = [...allOrders, ...orders];
             hasMore = orders.length === 100;
             page++;
-            if (page > 5) break; // max 500 orders
+            if (page > maxPages) break;
         }
         return allOrders;
     },

@@ -13,6 +13,7 @@ const GRID_SIZE = 9;
 
 const buildDefaultSlots = () => Array.from({ length: GRID_SIZE }, (_, index) => ({
     slot: index + 1,
+    images: [],
     imageId: '',
     thumbDataUrl: '',
     storageUrl: '',
@@ -21,6 +22,22 @@ const buildDefaultSlots = () => Array.from({ length: GRID_SIZE }, (_, index) => 
     uploadedBy: '',
     note: ''
 }));
+
+const getSlotImages = (slot = {}) => {
+    const images = Array.isArray(slot.images)
+        ? slot.images.filter((image) => image?.imageId || image?.storageUrl || image?.thumbDataUrl)
+        : [];
+    if (images.length) return images;
+    if (!slot.imageId && !slot.storageUrl && !slot.thumbDataUrl) return [];
+    return [{
+        imageId: slot.imageId || '',
+        thumbDataUrl: slot.thumbDataUrl || '',
+        storageUrl: slot.storageUrl || '',
+        storagePath: slot.storagePath || '',
+        uploadedAt: slot.uploadedAt || '',
+        uploadedBy: slot.uploadedBy || ''
+    }];
+};
 
 export default function InstagramPlannerPage() {
     const { state, updateConfig } = useData();
@@ -69,25 +86,33 @@ export default function InstagramPlannerPage() {
     const plannerSlots = useMemo(() => {
         const stored = Array.isArray(state.config.instagramPlanner) ? state.config.instagramPlanner : [];
         const bySlot = new Map(stored.map((item) => [Number(item.slot), item]));
-        return buildDefaultSlots().map((slot) => ({ ...slot, ...(bySlot.get(slot.slot) || {}) }));
+        return buildDefaultSlots().map((slot) => {
+            const storedSlot = { ...slot, ...(bySlot.get(slot.slot) || {}) };
+            return { ...storedSlot, images: getSlotImages(storedSlot) };
+        });
     }, [state.config.instagramPlanner]);
 
-    const filledCount = plannerSlots.filter((slot) => slot.imageId || slot.storageUrl || slot.thumbDataUrl).length;
+    const filledCount = plannerSlots.filter((slot) => getSlotImages(slot).length > 0).length;
 
     const updateSlots = (nextSlots) => {
         updateConfig({
             instagramPlanner: nextSlots
-                .map((slot) => ({
-                    slot: slot.slot,
-                    imageId: slot.imageId || '',
-                    thumbDataUrl: slot.thumbDataUrl || '',
-                    storageUrl: slot.storageUrl || '',
-                    storagePath: slot.storagePath || '',
-                    uploadedAt: slot.uploadedAt || '',
-                    uploadedBy: slot.uploadedBy || '',
-                    note: slot.note || ''
-                }))
-                .filter((slot) => slot.imageId || slot.thumbDataUrl || slot.storageUrl || slot.note)
+                .map((slot) => {
+                    const images = getSlotImages(slot);
+                    const firstImage = images[0] || {};
+                    return {
+                        slot: slot.slot,
+                        images,
+                        imageId: firstImage.imageId || '',
+                        thumbDataUrl: firstImage.thumbDataUrl || '',
+                        storageUrl: firstImage.storageUrl || '',
+                        storagePath: firstImage.storagePath || '',
+                        uploadedAt: firstImage.uploadedAt || '',
+                        uploadedBy: firstImage.uploadedBy || '',
+                        note: slot.note || ''
+                    };
+                })
+                .filter((slot) => slot.images.length || slot.note)
         });
     };
 
@@ -97,35 +122,31 @@ export default function InstagramPlannerPage() {
     };
 
     const handleUpload = async (event) => {
-        const file = event.target.files?.[0];
+        const files = Array.from(event.target.files || []);
         event.target.value = '';
-        if (!file || !targetSlot) return;
-
-        const currentSlot = plannerSlots.find((slot) => slot.slot === targetSlot);
+        if (!files.length || !targetSlot) return;
 
         try {
-            const { metadata, thumbDataUrl } = await saveArticleLibraryImage(file, {
-                productId: `instagram-planner-slot-${targetSlot}`,
-                productCode: `IG-${targetSlot}`,
-                productName: `Instagram Slot ${targetSlot}`,
-                uploadedBy: user?.email || ''
-            });
-
-            if (currentSlot?.imageId) {
-                await deleteArticleLibraryImage(currentSlot.imageId, currentSlot.storagePath);
-            }
+            const uploadedImages = await Promise.all(files.map(async (file, index) => {
+                const { metadata, thumbDataUrl } = await saveArticleLibraryImage(file, {
+                    productId: `instagram-planner-slot-${targetSlot}`,
+                    productCode: `IG-${targetSlot}`,
+                    productName: `Instagram Slot ${targetSlot} imagen ${index + 1}`,
+                    uploadedBy: user?.email || ''
+                });
+                return {
+                    imageId: metadata.id,
+                    thumbDataUrl,
+                    storageUrl: metadata.storageUrl || metadata.sharedPreviewUrl || '',
+                    storagePath: metadata.storagePath || '',
+                    uploadedAt: metadata.uploadedAt || new Date().toISOString(),
+                    uploadedBy: metadata.uploadedBy || user?.email || ''
+                };
+            }));
 
             updateSlots(plannerSlots.map((slot) => (
                 slot.slot === targetSlot
-                    ? {
-                        ...slot,
-                        imageId: metadata.id,
-                        thumbDataUrl,
-                        storageUrl: metadata.storageUrl || metadata.sharedPreviewUrl || '',
-                        storagePath: metadata.storagePath || '',
-                        uploadedAt: metadata.uploadedAt || new Date().toISOString(),
-                        uploadedBy: metadata.uploadedBy || user?.email || ''
-                    }
+                    ? { ...slot, images: [...getSlotImages(slot), ...uploadedImages] }
                     : slot
             )));
         } catch (error) {
@@ -137,13 +158,14 @@ export default function InstagramPlannerPage() {
 
     const handleDelete = async (slotNumber) => {
         const currentSlot = plannerSlots.find((slot) => slot.slot === slotNumber);
-        if (!currentSlot?.imageId && !currentSlot?.note) return;
-        if (!window.confirm('¿Borrar esta foto del planner de Instagram?')) return;
+        const images = getSlotImages(currentSlot);
+        if (!images.length && !currentSlot?.note) return;
+        if (!window.confirm('Borrar este post del planner de Instagram?')) return;
 
         try {
-            if (currentSlot.imageId) {
-                await deleteArticleLibraryImage(currentSlot.imageId, currentSlot.storagePath);
-            }
+            await Promise.all(images.map((image) => (
+                image.imageId ? deleteArticleLibraryImage(image.imageId, image.storagePath) : Promise.resolve()
+            )));
             updateSlots(plannerSlots.map((slot) => (
                 slot.slot === slotNumber
                     ? { ...buildDefaultSlots()[slotNumber - 1], note: '' }
@@ -154,16 +176,33 @@ export default function InstagramPlannerPage() {
         }
     };
 
-    const handlePreview = async (slot) => {
-        if (!slot?.imageId && !slot?.storageUrl) return;
-        setLoadingImageId(slot.imageId || `slot-${slot.slot}`);
+    const handleDeleteImage = async (slotNumber, imageId) => {
+        const currentSlot = plannerSlots.find((slot) => slot.slot === slotNumber);
+        const image = getSlotImages(currentSlot).find((item) => item.imageId === imageId);
+        if (!image) return;
         try {
-            const localUrl = slot.imageId ? await getArticleLibraryImageUrl(slot.imageId) : '';
-            const fallbackUrl = slot.storageUrl || '';
+            if (image.imageId) await deleteArticleLibraryImage(image.imageId, image.storagePath);
+            updateSlots(plannerSlots.map((slot) => (
+                slot.slot === slotNumber
+                    ? { ...slot, images: getSlotImages(slot).filter((item) => item.imageId !== imageId) }
+                    : slot
+            )));
+        } catch (error) {
+            alert(`No se pudo borrar la imagen: ${error.message}`);
+        }
+    };
+
+    const handlePreview = async (slot, image = null) => {
+        const targetImage = image || getSlotImages(slot)[0];
+        if (!targetImage?.imageId && !targetImage?.storageUrl) return;
+        setLoadingImageId(targetImage.imageId || `slot-${slot.slot}`);
+        try {
+            const localUrl = targetImage.imageId ? await getArticleLibraryImageUrl(targetImage.imageId) : '';
+            const fallbackUrl = targetImage.storageUrl || '';
             if (localUrl || fallbackUrl) setLightboxSrc(localUrl || fallbackUrl);
         } catch (error) {
-            if (slot.storageUrl) {
-                setLightboxSrc(slot.storageUrl);
+            if (targetImage.storageUrl) {
+                setLightboxSrc(targetImage.storageUrl);
             } else {
                 alert(`No se pudo abrir la imagen: ${error.message}`);
             }
@@ -193,6 +232,7 @@ export default function InstagramPlannerPage() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                multiple
                 style={{ display: 'none' }}
                 onChange={handleUpload}
             />
@@ -433,13 +473,14 @@ export default function InstagramPlannerPage() {
                 <div className="glass-panel instagram-planner-grid-wrap">
                     <div className="instagram-planner-grid">
                         {plannerSlots.map((slot) => {
-                            const previewSrc = slot.thumbDataUrl || slot.storageUrl || '';
+                            const images = getSlotImages(slot);
+                            const previewSrc = images[0]?.thumbDataUrl || images[0]?.storageUrl || '';
                             return (
                                 <div key={slot.slot} className="instagram-slot-card">
                                     <div className="instagram-slot-header">
                                         <span>{`Post ${slot.slot}`}</span>
-                                        {slot.uploadedAt ? (
-                                            <small>{new Date(slot.uploadedAt).toLocaleDateString('es-AR')}</small>
+                                        {images.length ? (
+                                            <small>{images.length} imagen{images.length !== 1 ? 'es' : ''}</small>
                                         ) : (
                                             <small>Vacío</small>
                                         )}
@@ -456,8 +497,8 @@ export default function InstagramPlannerPage() {
                                     </div>
                                     <div className="instagram-slot-actions">
                                         <button className="btn btn-sm btn-primary" onClick={() => openUploadForSlot(slot.slot)}>
-                                            {previewSrc ? <RefreshCw size={14} /> : <ImagePlus size={14} />}
-                                            {previewSrc ? 'Reemplazar' : 'Subir'}
+                                            <ImagePlus size={14} />
+                                            {previewSrc ? 'Agregar' : 'Subir'}
                                         </button>
                                         <button
                                             className="btn btn-sm btn-secondary"
@@ -465,17 +506,41 @@ export default function InstagramPlannerPage() {
                                             disabled={!previewSrc}
                                         >
                                             <Eye size={14} />
-                                            {loadingImageId === (slot.imageId || `slot-${slot.slot}`) ? 'Abriendo...' : 'Ver'}
+                                            {loadingImageId === (images[0]?.imageId || `slot-${slot.slot}`) ? 'Abriendo...' : 'Ver'}
                                         </button>
                                         <button
                                             className="btn btn-sm btn-ghost"
                                             onClick={() => handleDelete(slot.slot)}
-                                            disabled={!previewSrc && !slot.note}
+                                            disabled={!images.length && !slot.note}
                                         >
                                             <Trash2 size={14} />
                                             Borrar
                                         </button>
                                     </div>
+                                    {images.length > 1 && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 8 }}>
+                                            {images.map((image, index) => {
+                                                const src = image.thumbDataUrl || image.storageUrl || '';
+                                                return (
+                                                    <button
+                                                        key={image.imageId || `${slot.slot}-${index}`}
+                                                        type="button"
+                                                        onClick={() => handlePreview(slot, image)}
+                                                        style={{ position: 'relative', aspectRatio: '1', border: '1px solid var(--border-color)', borderRadius: 8, overflow: 'hidden', padding: 0, background: 'var(--bg-input)', cursor: 'pointer' }}
+                                                    >
+                                                        {src && <img src={src} alt={`Imagen ${index + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                        <span style={{ position: 'absolute', left: 4, top: 4, fontSize: 10, background: 'rgba(0,0,0,0.6)', color: 'white', borderRadius: 999, padding: '1px 5px' }}>{index + 1}</span>
+                                                        <span
+                                                            onClick={(event) => { event.stopPropagation(); handleDeleteImage(slot.slot, image.imageId); }}
+                                                            style={{ position: 'absolute', right: 3, top: 3, width: 18, height: 18, borderRadius: 999, background: 'rgba(0,0,0,0.65)', color: 'white', display: 'grid', placeItems: 'center', fontSize: 12 }}
+                                                        >
+                                                            x
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                     <textarea
                                         className="form-textarea"
                                         rows={2}
@@ -496,10 +561,16 @@ export default function InstagramPlannerPage() {
                     </p>
                     <div className="instagram-mini-feed">
                         {plannerSlots.map((slot) => {
-                            const previewSrc = slot.thumbDataUrl || slot.storageUrl || '';
+                            const images = getSlotImages(slot);
+                            const previewSrc = images[0]?.thumbDataUrl || images[0]?.storageUrl || '';
                             return (
-                                <div key={`mini-${slot.slot}`} className="instagram-mini-slot">
-                                    {previewSrc ? <img src={previewSrc} alt={`Mini slot ${slot.slot}`} /> : <span>{slot.slot}</span>}
+                                <div key={`mini-${slot.slot}`} className="instagram-mini-slot" style={{ position: 'relative' }}>
+                                    {previewSrc ? (
+                                        <>
+                                            <img src={previewSrc} alt={`Mini slot ${slot.slot}`} />
+                                            {images.length > 1 && <small style={{ position: 'absolute', right: 3, bottom: 2, background: 'rgba(0,0,0,0.65)', color: 'white', borderRadius: 999, padding: '0 4px', fontSize: 9 }}>{images.length}</small>}
+                                        </>
+                                    ) : <span>{slot.slot}</span>}
                                 </div>
                             );
                         })}
@@ -507,7 +578,7 @@ export default function InstagramPlannerPage() {
                     <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-secondary)', display: 'grid', gap: 8 }}>
                         <div>Los cuadros quedan en blanco hasta que subas una foto.</div>
                         <div>La imagen grande se guarda fuera del dashboard para cuidar memoria.</div>
-                        <div>Podés reemplazar una casilla sin tocar las demás.</div>
+                        <div>Podes agregar varias fotos al mismo post para preparar carruseles.</div>
                     </div>
                 </div>
             </div>}
